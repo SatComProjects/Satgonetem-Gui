@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/traffic.css">
+{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Traffic Generator</h2>
+
+<div class="traffic-layout">
+  <section class="card traffic-form-card">
+    <h3 class="card-title">New Flow</h3>
+    <div class="traffic-form">
+      <div class="form-row">
+        <label>Tool
+          <select id="tg-tool" onchange="tgToggleTool()">
+            <option value="iperf3">iperf3 (Throughput)</option>
+            <option value="ping">Ping (ICMP)</option>
+            <option value="hping3">hping3 (Custom)</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label>Source
+          <select id="tg-src"></select>
+        </label>
+        <label>Destination
+          <select id="tg-dst"></select>
+        </label>
+      </div>
+
+      <!-- iperf3 options -->
+      <div id="tg-iperf3-opts">
+        <div class="form-row">
+          <label>Protocol
+            <select id="tg-proto" onchange="tgToggleProto()">
+              <option value="TCP">TCP</option>
+              <option value="UDP">UDP</option>
+            </select>
+          </label>
+          <label>Duration (s)
+            <input type="number" id="tg-duration" value="10" min="1">
+          </label>
+          <label>Port
+            <input type="number" id="tg-port" value="5201" min="1" max="65535">
+          </label>
+        </div>
+        <div class="form-row">
+          <label>Bandwidth (Mbps)
+            <input type="number" id="tg-bandwidth" value="0" min="0" step="1">
+          </label>
+          <label>Parallel
+            <input type="number" id="tg-parallel" value="1" min="1" max="64">
+          </label>
+          <label>Interval (s)
+            <input type="number" id="tg-interval" value="1" min="0.1" step="0.1">
+          </label>
+        </div>
+        <div class="form-row" id="tg-tcp-opts">
+          <label>Congestion Control
+            <select id="tg-cc">
+              <option value="bbr">bbr</option>
+              <option value="cubic">cubic</option>
+              <option value="reno">reno</option>
+              <option value="">default</option>
+            </select>
+          </label>
+          <label>Window Size
+            <input type="text" id="tg-window" placeholder="e.g. 256K">
+          </label>
+          <label class="inline">
+            <input type="checkbox" id="tg-bidir"> Bidirectional
+          </label>
+        </div>
+        <div class="form-row" id="tg-udp-opts" style="display:none">
+          <label class="inline">
+            <input type="checkbox" id="tg-bidir-udp"> Bidirectional
+          </label>
+        </div>
+      </div>
+
+      <!-- ping options -->
+      <div id="tg-ping-opts" style="display:none">
+        <div class="form-row">
+          <label>Count
+            <input type="number" id="tg-ping-count" value="10" min="1">
+          </label>
+          <label>Timeout (s)
+            <input type="number" id="tg-ping-timeout" value="1" min="0.1" step="0.1">
+          </label>
+          <label>Interval (s)
+            <input type="number" id="tg-ping-interval" value="0.2" min="0.01" step="0.01">
+          </label>
+          <label>Packet Size (bytes)
+            <input type="number" id="tg-ping-size" value="56" min="0">
+          </label>
+        </div>
+      </div>
+
+      <!-- hping3 options -->
+      <div id="tg-hping3-opts" style="display:none">
+        <div class="form-row">
+          <label>Protocol
+            <select id="tg-hping-proto">
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+              <option value="icmp">ICMP</option>
+            </select>
+          </label>
+          <label>Destination Port
+            <input type="number" id="tg-hping-dport" value="80" min="0" max="65535">
+          </label>
+          <label>Count
+            <input type="number" id="tg-hping-count" value="100" min="1">
+          </label>
+          <label>Size (bytes)
+            <input type="number" id="tg-hping-size" value="0" min="0">
+          </label>
+        </div>
+        <div class="form-row">
+          <label>Rate
+            <select id="tg-hping-rate" onchange="tgToggleHpingRate()">
+              <option value="interval">Interval (-i)</option>
+              <option value="fast">--fast</option>
+              <option value="faster">--faster</option>
+              <option value="flood">--flood</option>
+            </select>
+          </label>
+          <label id="tg-hping-interval-wrap">Interval
+            <input type="text" id="tg-hping-interval" value="u10000" placeholder="e.g. u10000">
+          </label>
+        </div>
+      </div>
+
+      <div class="form-row actions-row">
+        <label>Delay (s)
+          <input type="number" id="tg-delay" value="0" min="0" max="3600">
+        </label>
+        <button type="button" class="button secondary" onclick="tgAddToQueue()">Add to Queue</button>
+        <button type="button" class="button" onclick="tgRunNow()">Run Now</button>
+        <span id="tg-msg" class="muted"></span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="/static/traffic.js"></script>
+{% endblock %}

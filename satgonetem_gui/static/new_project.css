@@ -1,0 +1,126 @@
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.grid.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 900px) {
+  .form-grid,
+  .grid.two {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inline-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+label.inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+label.inline > input,
+label.inline > select {
+  margin: 0;
+}
+
+.list {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 10px;
+}
+
+.list li {
+  padding: 6px 8px;
+  border: 1px solid #2a394b;
+  border-radius: 8px;
+  margin: 6px 0;
+  background: #0f1620;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.list li span {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.button.secondary {
+  background: #101823;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #0f1620;
+  border-radius: 4px;
+  border: 1px solid #2a394b;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #5dbcff);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.loading-label {
+  min-width: 120px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.loading-status {
+  min-width: 60px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+code {
+  color: #c1ddff;
+  background: #0c131c;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid #1f2a37;
+  font-size: 0.85rem;
+}
+
+.gs-browse-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gs-count {
+  min-width: 160px;
+}

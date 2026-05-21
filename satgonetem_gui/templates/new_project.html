@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/new_project.css">
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h2>{% if request.query_params.get('edit') %}Modify Project: {{ request.query_params.get('edit') }}{% else %}Create New Project{% endif %}</h2>
+  <form id="newProjectForm" class="form-grid">
+    <input type="hidden" name="next" value="{{ request.query_params.get('next') or '' }}">
+    <label>Name
+      <input type="text" name="name" value="Constellation" required>
+    </label>
+    <label>Update interval (s)
+      <input type="number" name="update_time" min="1" value="5" required>
+    </label>
+    <label>Start date (dd/mm/YYYY HH:MM:SS)
+      <input type="text" name="start_date" value="01/01/2024 00:00:00" required>
+    </label>
+    <label>End date (dd/mm/YYYY HH:MM:SS)
+      <input type="text" name="end_date" value="01/01/2024 00:01:00" required>
+    </label>
+    <label>Save to (directory or file path)
+      <input type="text" name="save_path" placeholder="/home/user/projects">
+    </label>
+    <input type="hidden" name="protocol" value="IPv4">
+    <label>ISL capacity (Kbps)
+      <input type="number" name="isl_capacity" min="1" value="100000" required>
+    </label>
+    <label>G/S capacity (Kbps)
+      <input type="number" name="gs_capacity" min="1" value="100000" required>
+    </label>
+
+    <input type="hidden" name="ground_objects_properties_json" id="ground_objects_properties_json">
+    <input type="hidden" name="walker_shells_json" id="walker_shells_json">
+    <input type="hidden" name="phy_configuration_json" id="phy_configuration_json">
+    <input type="hidden" name="export_mode" id="export_mode" value="configs">
+  </form>
+</section>
+
+<section id="create-status" class="card" style="display:none; margin-top:12px;">
+  <h3>Creating Project...</h3>
+  <div class="row">
+    <span id="create-progress-label" class="loading-label">Constellation</span>
+    <div class="progress-bar"><div id="create-progress-fill" class="progress-fill" style="width:0%"></div></div>
+    <span id="create-progress-text" class="loading-status"></span>
+  </div>
+  <div id="create-msg" class="muted" style="margin-top:6px"></div>
+  <div class="row" style="margin-top:8px;">
+    <span class="muted">Please keep this tab open until completion.</span>
+  </div>
+</section>
+
+<div class="grid two">
+  <div class="card">
+    <h3>Orbit Shells (Satellites)</h3>
+    <div class="inline-form">
+      <label class="inline" for="sh_id">ID
+        <input id="sh_id" placeholder="e.g. LEO-1">
+      </label>
+      <label class="inline" for="sh_type">Type
+        <select id="sh_type">
+          <option value="delta">delta</option>
+          <option value="star">star</option>
+        </select>
+      </label>
+      <label class="inline" for="sh_planes">Planes
+        <input id="sh_planes" type="number" min="1" value="12">
+      </label>
+      <label class="inline" for="sh_sats_plane">Sats/plane
+        <input id="sh_sats_plane" type="number" min="1" value="22">
+      </label>
+      <label class="inline" for="sh_incl">Incl (deg)
+        <input id="sh_incl" type="number" step="0.1" min="0" max="180" value="70">
+      </label>
+      <label class="inline" for="sh_rev">Rev/day
+        <input id="sh_rev" type="number" step="0.1" min="0" max="30" value="14.4">
+      </label>
+      <button id="add_shell_btn" type="button">Add shell</button>
+    </div>
+    <ul id="shell_list" class="list"></ul>
+    <p class="muted">These become <code>walker_shells</code> in the project config.</p>
+  </div>
+
+  <div class="card">
+    <h3>Ground Objects</h3>
+    <div class="inline-form">
+      <label class="inline" for="g_id">ID
+        <input id="g_id" value="Ground Stations">
+      </label>
+      <span class="inline gs-browse-wrap">
+        <span id="gs_count_label" class="muted gs-count">No stations selected</span>
+        <a href="/ground_stations" id="browse_gs_btn" class="button">Browse stations</a>
+      </span>
+      <label class="inline" for="g_type">Type
+        <select id="g_type">
+          <option value="ground_station">ground_station</option>
+          <option value="user_terminal">user_terminal</option>
+        </select>
+      </label>
+      <label class="inline" for="g_elev">Elev (deg)
+        <input id="g_elev" type="number" min="0" max="90" value="10">
+      </label>
+      <label class="inline" for="g_maxconn">Max conn
+        <input id="g_maxconn" type="number" min="1" value="3">
+      </label>
+      <label class="inline" for="g_strategy">Strategy
+        <select id="g_strategy">
+          <option>weighted-connection</option>
+          <option>longest-connection-time-strategy</option>
+          <option>best-angle-until-disconnection</option>
+          <option selected>everything-visible</option>
+          <option>everything-in-range</option>
+          <option>best-range-until-disconnection</option>
+          <option>best-multi-angle-until-disconnection</option>
+          <option>one-link-per-layer</option>
+        </select>
+      </label>
+      <button id="add_ground_btn" type="button">Add object</button>
+    </div>
+    <ul id="ground_list" class="list"></ul>
+    <p class="muted">These become <code>ground_objects_properties</code> in the project config.</p>
+  </div>
+</div>
+
+<section class="card" style="margin-top:16px;">
+  <div class="actions">
+    <button id="createBtn" type="button">Create</button>
+    <a class="button secondary" href="/">Cancel</a>
+  </div>
+</section>
+
+<script src="/static/new_project.js"></script>
+{% endblock %}

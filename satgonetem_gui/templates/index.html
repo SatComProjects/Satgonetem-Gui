@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/dashboard.css">
+{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Dashboard</h2>
+
+<div class="dashboard-grid">
+
+  <section class="card" id="card-constellation">
+    <h3 class="card-title">Constellation</h3>
+    <dl class="stat-list">
+      <div class="stat-row">
+        <dt>Status</dt>
+        <dd>
+          <span class="status-dot" id="dot-loaded"></span>
+          <span id="label-loaded">Not loaded</span>
+        </dd>
+      </div>
+      <div class="stat-row">
+        <dt>Satellites</dt>
+        <dd><span id="val-satellites">-</span></dd>
+      </div>
+      <div class="stat-row">
+        <dt>Ground Stations</dt>
+        <dd><span id="val-ground-stations">-</span></dd>
+      </div>
+      <div class="stat-row">
+        <dt>Links</dt>
+        <dd><span id="val-links">-</span></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="card" id="card-gonetem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 class="card-title" style="margin:0">Docker Containers</h3>
+      <button id="btn-gonetem">Start</button>
+    </div>
+    <dl class="stat-list">
+      <div class="stat-row">
+        <dt>Status</dt>
+        <dd>
+          <span class="status-dot" id="dot-gonetem"></span>
+          <span id="label-gonetem">Stopped</span>
+        </dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="card" id="card-simulation">
+    <h3 class="card-title">Simulation</h3>
+    <dl class="stat-list">
+      <div class="stat-row">
+        <dt>Status</dt>
+        <dd>
+          <span class="status-dot" id="dot-running"></span>
+          <span id="label-running">Idle</span>
+        </dd>
+      </div>
+      <div class="stat-row">
+        <dt>Current Step</dt>
+        <dd><span id="val-step">-</span></dd>
+      </div>
+      <div class="stat-row">
+        <dt>Current Time</dt>
+        <dd><span id="val-time">-</span></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="card" id="card-routing-status">
+    <h3 class="card-title">Routing Status</h3>
+    <dl class="stat-list">
+      <div class="stat-row">
+        <dt>Containers</dt>
+        <dd>
+          <span class="status-dot" id="dot-routing-gonetem"></span>
+          <span id="label-routing-gonetem">Unknown</span>
+        </dd>
+      </div>
+      <div class="stat-row">
+        <dt>Addressing</dt>
+        <dd>
+          <span class="status-dot" id="dot-addressing"></span>
+          <span id="label-addressing">Not applied</span>
+        </dd>
+      </div>
+      <div class="stat-row">
+        <dt>Routing</dt>
+        <dd>
+          <span class="status-dot" id="dot-routing"></span>
+          <span id="label-routing">Not applied</span>
+        </dd>
+      </div>
+      <div class="stat-row">
+        <dt>Current Method</dt>
+        <dd><span id="val-method">-</span></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="card" id="card-routing-control">
+    <h3 class="card-title">Configure Routing</h3>
+    <div class="form-group">
+      <label for="routing-method">Routing Method</label>
+      <select id="routing-method">
+        <option value="static">Static (Dijkstra)</option>
+        <option value="dynamic-ospf">Dynamic OSPF (Bird2)</option>
+        <option value="dynamic-isis">Dynamic IS-IS (Bird2 SR)</option>
+        <option value="sr-mpls">SR-MPLS</option>
+      </select>
+    </div>
+    <div class="button-row">
+      <button id="btn-apply">Apply Addressing &amp; Routing</button>
+      <button id="btn-delete">Delete Routing</button>
+    </div>
+    <p class="muted" id="routing-msg"></p>
+  </section>
+
+</div>
+
+<script src="/static/dashboard.js?v=3"></script>
+{% endblock %}

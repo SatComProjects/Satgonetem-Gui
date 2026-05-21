@@ -1,0 +1,196 @@
+/* Floating queue panel */
+.floating-queue {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 360px;
+  z-index: 1000;
+}
+
+.floating-queue .card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.floating-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.floating-queue-header .card-title {
+  margin: 0;
+}
+
+.jq-badge {
+  display: none;
+  font-size: 0.75rem;
+  background: var(--accent);
+  color: #fff;
+  padding: 1px 7px;
+  border-radius: 10px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.jq-toggle-icon {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.floating-queue-body {
+  padding: 0 14px 14px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.floating-queue.collapsed .floating-queue-body {
+  display: none;
+}
+
+/* Queue list & items */
+.queue-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.queue-item {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.queue-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-kind {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border: 1px solid #2a394b;
+  border-radius: 6px;
+  opacity: 0.9;
+  text-transform: uppercase;
+}
+
+.queue-label {
+  flex: 1;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-status {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.queue-item-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.modal-content {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 90vw;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header .spacer {
+  flex: 1;
+}
+
+.results-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.result-metric {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.result-metric dt {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.result-metric dd {
+  margin: 4px 0 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.chart-container {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}

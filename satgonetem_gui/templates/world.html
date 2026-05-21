@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Widgets/widgets.css">
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Cesium.js"></script>
+<style>
+  .container { max-width: none; padding: 0 16px; }
+
+  #world {
+    width: 100%;
+    height: 78vh;
+    position: relative;
+    border: 1px solid #1d2733;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  #world:fullscreen,
+  #world:-webkit-full-screen {
+    width: 100vw !important;
+    height: 100vh !important;
+  }
+
+  .plot-controls {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.82);
+    border-radius: 8px;
+    z-index: 1000;
+    min-width: 240px;
+    max-width: 300px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    transition: min-width 0.25s ease, max-width 0.25s ease;
+  }
+
+  .plot-controls.collapsed {
+    min-width: 40px;
+    max-width: 40px;
+  }
+
+  .plot-controls-header {
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #fff;
+    font-weight: 500;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .plot-controls.collapsed .plot-controls-header {
+    padding: 8px;
+    border-radius: 8px;
+    border-bottom: none;
+    justify-content: center;
+  }
+
+  .plot-controls-title {
+    overflow: hidden;
+    transition: visibility 0s;
+  }
+
+  .plot-controls-toggle {
+    color: #aaa;
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  .plot-controls.collapsed .plot-controls-toggle {
+    color: #fff;
+    margin-left: 0;
+  }
+
+  .plot-controls-content {
+    padding: 12px 14px;
+    color: #e2e8f0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: 60vh;
+    transition: max-height 0.25s ease, opacity 0.25s ease, padding 0.25s ease;
+  }
+
+  .plot-controls-content.collapsed {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    overflow: hidden;
+  }
+
+  .plot-controls-content::-webkit-scrollbar { width: 5px; }
+  .plot-controls-content::-webkit-scrollbar-track { background: rgba(255,255,255,0.08); border-radius: 3px; }
+  .plot-controls-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 3px; }
+
+  .ctrl-section {
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .ctrl-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .ctrl-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+    margin-bottom: 8px;
+  }
+
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+
+  .ctrl-row:last-child { margin-bottom: 0; }
+
+  .ctrl-row input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #3da9fc;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .ctrl-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .ctrl-label { cursor: pointer; flex: 1; }
+
+  .legend-note {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 4px;
+    margin-left: 22px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #coverage-opts {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .ctrl-slider-group {
+    margin-bottom: 8px;
+  }
+
+  .ctrl-slider-group:last-child {
+    margin-bottom: 0;
+  }
+
+  .ctrl-slider-label {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-bottom: 3px;
+  }
+
+  .ctrl-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ctrl-slider {
+    flex: 1;
+    min-width: 0;
+    accent-color: #eab308;
+    cursor: pointer;
+  }
+
+  .ctrl-slider-val {
+    font-size: 12px;
+    color: #e2e8f0;
+    min-width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom:4px;">World View</h2>
+
+<div id="world">
+  <div class="plot-controls collapsed" id="plot-controls">
+    <div class="plot-controls-header" id="plot-controls-header">
+      <span class="plot-controls-title" id="plot-controls-title">Plot Controls</span>
+      <span class="plot-controls-toggle" id="plot-controls-toggle">▶</span>
+    </div>
+    <div class="plot-controls-content collapsed" id="plot-controls-content">
+
+      <div class="ctrl-section">
+        <div class="ctrl-section-title">Nodes</div>
+        <div class="ctrl-row">
+          <input type="checkbox" id="cb-satellites" checked>
+          <span class="ctrl-dot" style="background:#3b82f6;"></span>
+          <label class="ctrl-label" for="cb-satellites">Satellites</label>
+        </div>
+        <div class="ctrl-row">
+          <input type="checkbox" id="cb-ground-stations" checked>
+          <label class="ctrl-label" for="cb-ground-stations">Ground Stations</label>
+        </div>
+        <div class="legend-note">
+          <span class="ctrl-dot" style="background:#22c55e;"></span> Connected
+        </div>
+        <div class="legend-note">
+          <span class="ctrl-dot" style="background:#dc2626;"></span> Disconnected
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-section-title">Links</div>
+        <div class="ctrl-row">
+          <input type="checkbox" id="cb-gsl">
+          <span class="ctrl-dot" style="background:#16a34a;"></span>
+          <label class="ctrl-label" for="cb-gsl">Ground Station Links (GSL)</label>
+        </div>
+        <div class="ctrl-row">
+          <input type="checkbox" id="cb-orbital">
+          <span class="ctrl-dot" style="background:#1e40af;"></span>
+          <label class="ctrl-label" for="cb-orbital">Orbital ISL</label>
+        </div>
+        <div class="ctrl-row">
+          <input type="checkbox" id="cb-adjacent">
+          <span class="ctrl-dot" style="background:#dc2626;"></span>
+          <label class="ctrl-label" for="cb-adjacent">Adjacent ISL</label>
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-section-title">Coverage</div>
+        <div class="ctrl-row">
+          <input type="checkbox" id="cb-coverage">
+          <span class="ctrl-dot" style="background:#eab308;"></span>
+          <label class="ctrl-label" for="cb-coverage">Show Coverage</label>
+        </div>
+        <div id="coverage-opts">
+          <div class="ctrl-slider-group">
+            <div class="ctrl-slider-label">Min. Elevation (deg)</div>
+            <div class="ctrl-slider-row">
+              <input type="range" id="sl-elevation" class="ctrl-slider" min="0" max="90" step="1" value="10">
+              <span class="ctrl-slider-val" id="sl-elevation-val">10</span>
+            </div>
+          </div>
+          <div class="ctrl-slider-group">
+            <div class="ctrl-slider-label">Opacity</div>
+            <div class="ctrl-slider-row">
+              <input type="range" id="sl-opacity" class="ctrl-slider" min="0" max="100" step="1" value="40">
+              <span class="ctrl-slider-val" id="sl-opacity-val">40%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/static/world.js"></script>
+{% endblock %}

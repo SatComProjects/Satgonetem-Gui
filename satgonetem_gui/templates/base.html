@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SatGoNetem Web Control</title>
+  <link rel="stylesheet" href="/static/base.css">
+  <link rel="stylesheet" href="/static/queue.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+  <header class="site-header">
+    <span class="site-title">SatGoNetem</span>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/world">World View</a>
+      <a href="/nodes">Nodes</a>
+      <a href="/traffic">Traffic</a>
+      <a href="/new_project">New Project</a>
+      <a href="#" id="loadProjectLink">Load Project</a>
+      <a href="#" id="saveProjectLink">Save Project</a>
+      <a href="/docs" target="_blank">Docs</a>
+    </nav>
+    <input type="file" id="loadProjectInput" accept=".json" style="display:none">
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <small>SatGoNetem Web Control</small>
+  </footer>
+
+<script>
+(function () {
+  "use strict";
+  var loadLink = document.getElementById("loadProjectLink");
+  var loadInput = document.getElementById("loadProjectInput");
+  if (!loadLink || !loadInput) return;
+
+  loadLink.addEventListener("click", function (e) {
+    e.preventDefault();
+    loadInput.click();
+  });
+
+  loadInput.addEventListener("change", async function () {
+    var file = loadInput.files[0];
+    if (!file) return;
+    var originalText = loadLink.textContent;
+    loadLink.textContent = "Loading…";
+    try {
+      var text = await file.text();
+      JSON.parse(text);
+      var r = await fetch("/api/project/load", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text }),
+      });
+      var j = await r.json().catch(function () { return {}; });
+      if (!r.ok || !j.ok) {
+        alert("Failed to load project: " + (j.error || "Unknown error"));
+      } else {
+        window.location.href = "/";
+      }
+    } catch (err) {
+      alert("Error: " + String(err.message || err));
+    } finally {
+      loadLink.textContent = originalText;
+      loadInput.value = "";
+    }
+  });
+})();
+
+(function () {
+  "use strict";
+  var saveLink = document.getElementById("saveProjectLink");
+  if (!saveLink) return;
+
+  saveLink.addEventListener("click", async function (e) {
+    e.preventDefault();
+    var originalText = saveLink.textContent;
+    saveLink.textContent = "Saving…";
+    try {
+      var r = await fetch("/api/project/save");
+      var j = await r.json().catch(function () { return {}; });
+      if (!r.ok || !j.ok) {
+        alert("Failed to save project: " + (j.error || "Unknown error"));
+        return;
+      }
+      var blob = new Blob([j.content], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = j.filename || "project.json";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+        a.remove();
+      }, 0);
+    } catch (err) {
+      alert("Error: " + String(err.message || err));
+    } finally {
+      saveLink.textContent = originalText;
+    }
+  });
+})();
+</script>
+
+<!-- Floating Job Queue -->
+<div id="floating-queue" class="floating-queue collapsed">
+  <div class="card">
+    <div class="floating-queue-header" onclick="jqToggleCollapsed()">
+      <span class="card-title">Job Queue <span id="jq-badge" class="jq-badge">0</span></span>
+      <span id="jq-toggle-icon" class="jq-toggle-icon">&#9650;</span>
+    </div>
+    <div class="floating-queue-body">
+      <div class="queue-actions">
+        <button type="button" class="button small" onclick="jqStartAll()">Start All</button>
+        <button type="button" class="button small secondary" onclick="jqClear()">Clear</button>
+      </div>
+      <div id="job-queue-list" class="queue-list">
+        <div class="muted">No jobs queued.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Results Modal -->
+<div id="results-modal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span id="results-title">Traffic Results</span>
+      <div class="spacer"></div>
+      <button type="button" class="button small" onclick="closeResults()">Close</button>
+    </div>
+    <div id="results-body" class="results-body">
+      <div class="muted">Loading results...</div>
+    </div>
+  </div>
+  <div class="modal-backdrop" onclick="closeResults()"></div>
+</div>
+
+<script src="/static/queue.js"></script>
+</body>
+</html>

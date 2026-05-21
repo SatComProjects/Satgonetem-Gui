@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/nodes.css">
+{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Nodes</h2>
+
+<div id="nodes-msg" class="muted" style="margin-bottom: 16px;"></div>
+
+<div class="nodes-grid">
+
+  <section class="card" id="card-satellites">
+    <h3 class="card-title">Satellites</h3>
+    <div id="satellites-list" class="node-list">
+      <div class="muted">Loading...</div>
+    </div>
+  </section>
+
+  <section class="card" id="card-ground-stations">
+    <h3 class="card-title">Ground Stations</h3>
+    <div id="ground-stations-list" class="node-list">
+      <div class="muted">Loading...</div>
+    </div>
+  </section>
+
+</div>
+
+<script src="/static/nodes.js?v=1"></script>
+{% endblock %}

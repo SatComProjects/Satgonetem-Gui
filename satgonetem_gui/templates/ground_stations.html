@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/ground_stations.css">
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h2>Select Ground Stations</h2>
+  <p class="muted">Pick stations from a preset file and add custom entries. Click "Apply" to return to the project form.</p>
+
+  <div class="gs-toolbar">
+    <label class="inline">Preset file
+      <select id="preset_select"></select>
+    </label>
+    <button type="button" id="select_all_btn">Select all</button>
+    <button type="button" id="deselect_all_btn">Deselect all</button>
+    <span id="selected_count" class="muted">0 selected</span>
+  </div>
+
+  <div class="gs-table-wrap">
+    <table class="gs-table" id="station_table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="check_all" title="Toggle all visible"></th>
+          <th>Index</th>
+          <th>Name</th>
+          <th>Latitude</th>
+          <th>Longitude</th>
+          <th>Elevation (km)</th>
+        </tr>
+      </thead>
+      <tbody id="station_tbody"></tbody>
+    </table>
+    <p id="table_empty" class="muted" style="display:none;">No stations in this file.</p>
+  </div>
+</section>
+
+<section class="card gs-section-gap">
+  <h3>Add Custom Station</h3>
+  <div class="inline-form">
+    <label class="inline">Name
+      <input id="c_name" type="text" placeholder="Station name">
+    </label>
+    <label class="inline">Latitude
+      <input id="c_lat" type="number" step="0.0001" min="-90" max="90" placeholder="0.0">
+    </label>
+    <label class="inline">Longitude
+      <input id="c_lon" type="number" step="0.0001" min="-180" max="180" placeholder="0.0">
+    </label>
+    <label class="inline">Elevation (km)
+      <input id="c_elev" type="number" step="0.001" min="0" value="0.0">
+    </label>
+    <button type="button" id="add_custom_btn">Add</button>
+  </div>
+  <ul id="custom_list" class="list"></ul>
+</section>
+
+<section class="card gs-section-gap">
+  <div class="actions">
+    <button id="apply_btn" type="button">Apply selection</button>
+    <a class="button secondary" href="/new_project">Cancel</a>
+  </div>
+</section>
+
+<script src="/static/ground_stations.js"></script>
+{% endblock %}
