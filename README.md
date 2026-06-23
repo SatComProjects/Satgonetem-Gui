@@ -67,10 +67,8 @@ satgonetem_gui/
 ├── main.py             # Entry point (uvicorn runner)
 ├── state.py            # Global application state (TopologyManager, jobs, etc.)
 ├── static/             # CSS and JavaScript assets
-├── static_back/        # Previous version of static assets (backup)
 ├── templates/          # Jinja2 HTML templates
 │   └── base.html       # Shared layout with navigation
-├── templates_back/     # Previous version of templates (backup)
 satgonetem_gui.egg-info/
 docs/                   # Project documentation (placeholder)
 resources/              # Sample configuration and ground station data
