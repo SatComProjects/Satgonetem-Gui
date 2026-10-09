@@ -838,7 +838,7 @@ def _clean_numeric(val: Any) -> Any:
         if f != f or f == float("inf") or f == float("-inf"):
             return None
         return f
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return str(val) if val is not None else None
 
 
