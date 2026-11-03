@@ -38,7 +38,7 @@ function addOptions(select, nodes) {
   for (const node of nodes) {
     const option = document.createElement("option");
     option.value = node.name;
-    option.textContent = `${node.name} (${node.type})`;
+    option.textContent = node.label || node.name;
     select.appendChild(option);
   }
 }

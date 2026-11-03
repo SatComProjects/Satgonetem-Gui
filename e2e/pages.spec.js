@@ -91,9 +91,10 @@ test("edit page populates an existing project", async ({ page, request }) => {
   await expect(page.locator("#val-satellites")).toHaveText("100");
 
   await page.goto("/traffic");
-  await expect(page.locator("#tg-src option")).toHaveCount(101);
-  await page.selectOption("#tg-src", "Sat0");
-  await page.selectOption("#tg-dst", "Sat1");
+  await expect(page.locator("#tg-src option")).toHaveCount(1);
+  await expect(page.locator("#tg-src option").first()).toHaveText("Gnd100 (Berlin)");
+  await page.selectOption("#tg-src", "Gnd100");
+  await page.selectOption("#tg-dst", "Gnd100");
   await page.click("#tg-add-queue");
   await expect(page.locator(".queue-item")).toHaveCount(1);
 });
