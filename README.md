@@ -63,12 +63,16 @@ FastAPI auto-generated API documentation can be found at **http://localhost:8000
 
 ```
 satgonetem_gui/
-├── app.py              # FastAPI application (routes & API endpoints)
+├── app.py              # create_app factory and composition root
 ├── main.py             # Entry point (uvicorn runner + settings)
+├── dependencies.py     # FastAPI service injection
 ├── config.py           # Host, port, and save-root settings
 ├── schemas.py          # Pydantic request/response models
 ├── errors.py           # Shared API error envelope
-├── state.py            # Project session, jobs, and runtime state
+├── state.py            # Per-application project/runtime state
+├── routes/             # Page, project, topology, routing, traffic APIs
+├── services/           # Use-case orchestration and job registry
+├── adapters/           # SatGoNetem topology and traffic adapters
 ├── ground_stations.py  # Ground-station CSV parsing/writing
 ├── serializers.py      # Traffic result shaping
 ├── storage.py          # Data-file and save-path policy

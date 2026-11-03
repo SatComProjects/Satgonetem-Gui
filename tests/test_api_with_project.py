@@ -154,13 +154,11 @@ def test_routing_apply_requires_gonetem(project_client) -> None:
     assert response.status_code == 409
 
 
-def test_gonetem_start_and_stop_with_fake_manager(project_client, monkeypatch) -> None:
+def test_gonetem_start_and_stop_with_fake_manager(project_client, services, monkeypatch) -> None:
     """The start/stop routes can be exercised without launching Docker."""
-    from satgonetem_gui.state import app_state
-
-    manager = app_state.topology_manager
-    monkeypatch.setattr(manager, "start_gonetem", lambda: None)
-    monkeypatch.setattr(manager, "stop_gonetem", lambda: None)
+    controller = services.routing.controller
+    monkeypatch.setattr(controller, "start_gonetem", lambda _topology: None)
+    monkeypatch.setattr(controller, "stop_gonetem", lambda _topology: None)
 
     start_response = project_client.post("/api/gonetem/start")
     stop_response = project_client.post("/api/gonetem/stop")
@@ -227,17 +225,17 @@ def test_project_config_returns_editable_fields(project_client) -> None:
     assert grounds[0]["stations"][0]["name"] == "Berlin"
 
 
-def test_config_returns_preserved_save_path(client, tmp_path, monkeypatch) -> None:
+def test_config_returns_preserved_save_path(client, settings) -> None:
     """The session keeps the save path entered on the create form."""
-    import satgonetem_gui.app as app_module
-    from tests.factories import build_project
+    payload = project_payload("WithPath", save_path=str(settings.save_root))
 
-    monkeypatch.setattr(app_module, "SAVE_ROOT", tmp_path)
-    build_project(name="WithPath", save_path=str(tmp_path))
+    create_response = client.post("/api/project/create", json=payload)
+    assert create_response.status_code == 200
+    wait_for_project_state(client, {"loaded"})
     response = client.get("/api/project/config?name=WithPath")
 
     assert response.status_code == 200
-    assert response.json()["save_path"] == str(tmp_path)
+    assert response.json()["save_path"] == str(settings.save_root)
 
 
 def test_edit_round_trip_preserves_ground_stations(project_client) -> None:

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from satgonetem_gui.state import ProjectResult, app_state
+from satgonetem_gui.state import ProjectResult
 from tests.factories import project_payload
 from tests.helpers import wait_for_project_state
 
@@ -118,13 +118,13 @@ def test_project_create_requires_a_name(client) -> None:
     assert response.status_code == 422
 
 
-def test_project_create_is_single_flight(client) -> None:
+def test_project_create_is_single_flight(client, services) -> None:
     """A second create request is rejected while a build is marked active."""
-    assert app_state.project.begin("First", save_path="/tmp/first", operation="create")
+    assert services.runtime.project.begin("First", save_path="/tmp/first", operation="create")
     try:
         response = client.post("/api/project/create", json=project_payload("Second"))
     finally:
-        app_state.project.reset()
+        services.runtime.project.reset()
 
     assert response.status_code == 409
 
@@ -141,10 +141,8 @@ def test_project_create_dispatches_a_real_build(client) -> None:
     assert exists == {"exists": True}
 
 
-def test_concurrent_create_and_load_are_rejected(client, monkeypatch) -> None:
+def test_concurrent_create_and_load_are_rejected(client, services, monkeypatch) -> None:
     """Create and load both participate in the single-flight guard."""
-    import satgonetem_gui.app as app_module
-
     started = threading.Event()
     release = threading.Event()
 
@@ -157,7 +155,7 @@ def test_concurrent_create_and_load_are_rejected(client, monkeypatch) -> None:
             "",
         )
 
-    monkeypatch.setattr(app_module, "_create_project", blocking_create)
+    monkeypatch.setattr(services.project.gateway, "build", blocking_create)
     first = client.post("/api/project/create", json=project_payload("First"))
     assert first.status_code == 200
     assert started.wait(timeout=2)

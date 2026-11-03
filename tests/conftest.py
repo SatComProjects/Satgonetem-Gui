@@ -10,29 +10,47 @@ os.environ.setdefault("MPLCONFIGDIR", tempfile.mkdtemp(prefix="satgonetem-mpl-")
 import pytest
 from fastapi.testclient import TestClient
 
-from satgonetem_gui.app import app
-from satgonetem_gui.state import app_state
-
-
-def _reset_state() -> None:
-    """Restore the process-global app state to its startup values."""
-    app_state.reset()
+from satgonetem_gui.app import create_app
+from satgonetem_gui.config import Settings
+from tests.helpers import wait_for_project_state
 
 
 @pytest.fixture()
-def client():
-    """Provide a TestClient with a clean global state for each test."""
-    _reset_state()
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+def settings(tmp_path) -> Settings:
+    """Use an isolated save root for every test."""
+    return Settings(
+        host="127.0.0.1",
+        port=8000,
+        save_root=tmp_path / "projects",
+    )
+
+
+@pytest.fixture()
+def application(settings):
+    """Create a fresh FastAPI app with isolated runtime state."""
+    return create_app(settings=settings)
+
+
+@pytest.fixture()
+def client(application):
+    """Provide a TestClient for one isolated application instance."""
+    with TestClient(application, raise_server_exceptions=False) as test_client:
         yield test_client
-    _reset_state()
+
+
+@pytest.fixture()
+def services(application):
+    """Return the service container attached to the test application."""
+    return application.state.services
 
 
 @pytest.fixture()
 def project_client(client):
     """Provide a client with a real 10x10 topology loaded."""
-    from tests.factories import build_project
+    from tests.factories import project_payload
 
-    build_project()
-    assert app_state.topology_manager is not None, "10x10 project fixture failed to load"
+    response = client.post("/api/project/create", json=project_payload())
+    assert response.status_code == 200
+    status = wait_for_project_state(client, {"loaded"})
+    assert status["loaded"] is True
     return client
