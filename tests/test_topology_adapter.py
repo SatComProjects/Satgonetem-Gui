@@ -1,8 +1,31 @@
 """Contract tests for the real satgonetem topology adapter."""
 
+from types import SimpleNamespace
+
 from satgonetem_gui.adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from satgonetem_gui.schemas import ProjectCreateRequest
 from tests.factories import PROJECT_NAME, project_payload
+
+
+def _traffic_endpoint(
+    name: str,
+    node_id: int,
+    *,
+    interfaces: int = 1,
+    city: str | None = None,
+    addressable: bool | None = None,
+) -> SimpleNamespace:
+    """Build a node stand-in with the fields traffic_nodes reads."""
+    node = SimpleNamespace(
+        name=name,
+        id=node_id,
+        interfaces=[object()] * interfaces,
+    )
+    if city is not None:
+        node.city = city
+    if addressable is not None:
+        node.is_addressable = lambda: addressable
+    return node
 
 
 def test_topology_adapter_round_trips_a_project(settings) -> None:
@@ -30,6 +53,35 @@ def test_topology_adapter_round_trips_a_project(settings) -> None:
     reloaded = adapter.load(content)
     assert reloaded.project_name == PROJECT_NAME
     assert adapter.status(reloaded.topology_manager)["satellites"] == 100
+
+
+def test_traffic_nodes_filters_and_orders_endpoints(settings) -> None:
+    """Only addressable endpoints with interfaces are returned, ground stations first."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = SimpleNamespace(
+        ground_stations={
+            10: _traffic_endpoint("Gnd10", 10, city="Oslo"),
+            5: _traffic_endpoint("Gnd5", 5),
+            8: _traffic_endpoint("Gnd8", 8, city="Rome", interfaces=0),
+        },
+        satellites={
+            12: _traffic_endpoint("Sat12", 12, addressable=True),
+            3: _traffic_endpoint("Sat3", 3, addressable=True, interfaces=2),
+            7: _traffic_endpoint("Sat7", 7, addressable=False),
+            9: _traffic_endpoint("Sat9", 9, addressable=True, interfaces=0),
+        },
+    )
+
+    assert adapter.traffic_nodes(topology) == [
+        {"name": "Gnd5", "type": "ground_station", "label": "Gnd5"},
+        {
+            "name": "Gnd10",
+            "type": "ground_station",
+            "label": "Gnd10 (Oslo)",
+        },
+        {"name": "Sat3", "type": "satellite", "label": "Sat3"},
+        {"name": "Sat12", "type": "satellite", "label": "Sat12"},
+    ]
 
 
 def test_display_name_strips_timestamp_suffixes(settings) -> None:

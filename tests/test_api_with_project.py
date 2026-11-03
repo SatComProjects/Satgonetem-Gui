@@ -123,13 +123,19 @@ def test_routing_status_without_containers(project_client) -> None:
 
 
 def test_traffic_nodes(project_client) -> None:
-    """Traffic endpoints include satellites and ground stations."""
+    """Traffic endpoints are addressable nodes that have interfaces."""
     response = project_client.get("/api/traffic/nodes")
 
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
-    assert len(data["nodes"]) == PLANES * SATELLITES_PER_PLANE + 1
+    assert data["nodes"] == [
+        {
+            "name": "Gnd100",
+            "type": "ground_station",
+            "label": "Gnd100 (Berlin)",
+        }
+    ]
 
 
 @pytest.mark.parametrize(

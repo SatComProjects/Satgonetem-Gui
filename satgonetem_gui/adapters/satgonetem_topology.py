@@ -298,16 +298,41 @@ class SatGoNetemTopologyAdapter:
         return topology.get_node_by_name(name)
 
     def traffic_nodes(self, topology: Any) -> list[dict[str, str]]:
-        """Return traffic endpoint options."""
-        nodes = [
-            {"name": satellite.name, "type": "satellite"}
-            for satellite in topology.satellites.values()
-        ]
-        nodes.extend(
-            {"name": station.name, "type": "ground_station"}
-            for station in topology.ground_stations.values()
-        )
-        return nodes
+        """Return addressable traffic endpoints that have at least one interface."""
+        stations: list[tuple[int, dict[str, str]]] = []
+        for station in topology.ground_stations.values():
+            if not station.interfaces:
+                continue
+            city = getattr(station, "city", None)
+            stations.append(
+                (
+                    station.id,
+                    {
+                        "name": station.name,
+                        "type": "ground_station",
+                        "label": f"{station.name} ({city})" if city else station.name,
+                    },
+                )
+            )
+
+        satellites: list[tuple[int, dict[str, str]]] = []
+        for satellite in topology.satellites.values():
+            if not satellite.is_addressable() or not satellite.interfaces:
+                continue
+            satellites.append(
+                (
+                    satellite.id,
+                    {
+                        "name": satellite.name,
+                        "type": "satellite",
+                        "label": satellite.name,
+                    },
+                )
+            )
+
+        stations.sort(key=lambda item: item[0])
+        satellites.sort(key=lambda item: item[0])
+        return [node for _, node in stations + satellites]
 
     def gonetem_is_on(self, topology: Any) -> bool:
         """Return whether containers are running."""
