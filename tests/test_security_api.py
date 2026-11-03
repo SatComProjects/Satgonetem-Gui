@@ -1,8 +1,11 @@
 """API behavior for the security lab before a project is loaded."""
 
+import json
+
 from fastapi.testclient import TestClient
 
 from satgonetem_gui.app import create_app
+from tests.helpers import wait_for_project_state
 
 
 def test_security_range_without_project_is_empty(client) -> None:
@@ -22,6 +25,37 @@ def test_security_range_without_project_is_empty(client) -> None:
     assert data["nodes"] == []
     assert data["links"] == []
     assert data["captures"] == []
+
+
+def test_security_preset_is_a_valid_create_payload(client) -> None:
+    """The bundled range can be submitted directly to the project builder."""
+    response = client.get("/api/security/preset")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["name"] == "SatSecRange"
+    assert payload["isl_capacity"] == 5000
+    assert payload["gs_capacity"] == 5000
+    walkers = json.loads(payload["walker_shells_json"])
+    grounds = json.loads(payload["ground_objects_properties_json"])
+    assert walkers
+    assert len(grounds[0]["stations"]) == 3
+
+
+def test_security_preset_builds_a_range(client) -> None:
+    """The bundled preset is accepted by the real project builder."""
+    payload = client.get("/api/security/preset").json()
+
+    response = client.post("/api/project/create", json=payload)
+    assert response.status_code == 200
+    status = wait_for_project_state(client, {"loaded"})
+    assert status["project_name"] == "SatSecRange"
+
+    range_data = client.get("/api/security/range").json()
+    assert range_data["readiness"]["project_loaded"] is True
+    assert len(range_data["links"]) > 0
+    assert len(range_data["nodes"]) >= 3
+    assert all(link["capacity_kbps"] == 5000 for link in range_data["links"])
 
 
 def test_security_capture_start_requires_a_project(client) -> None:

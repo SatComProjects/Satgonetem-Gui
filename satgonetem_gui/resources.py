@@ -13,3 +13,4 @@ def package_path(*parts: str) -> Path:
 
 
 GROUND_STATIONS_DIR = package_path("data", "ground_stations")
+SECURITY_DIR = package_path("data", "security")

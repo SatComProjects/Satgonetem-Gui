@@ -56,7 +56,7 @@ class SatGoNetemSecurityAdapter:
         path = f"/tmp/satsec_{token}.pcap"
         command = (
             f"timeout {int(duration_sec)} tcpdump -i {shlex.quote(iface)} "
-            f"-s 0 -c {int(packet_limit)} -w {shlex.quote(path)}"
+            f"-s 256 -c {int(packet_limit)} -w {shlex.quote(path)}"
         )
         try:
             target.execute_command(["sh", "-lc", command], detach=True)
@@ -67,7 +67,7 @@ class SatGoNetemSecurityAdapter:
     def stop_capture(self, topology: Any, node: str, path: str) -> None:
         """Stop the tcpdump process associated with a capture path."""
         target = self._resolve_node(topology, node)
-        marker = f"tcpdump.*{shlex.quote(path)}"
+        marker = f"[t]cpdump.*{shlex.quote(path)}"
         try:
             target.execute_command(
                 ["sh", "-lc", f"pkill -f {marker} 2>/dev/null || true"]
@@ -86,7 +86,7 @@ class SatGoNetemSecurityAdapter:
         quoted = shlex.quote(path)
         command = (
             f"size=0; [ -f {quoted} ] && size=$(stat -c %s {quoted}); "
-            f"if pgrep -f {shlex.quote('tcpdump.*' + path)} >/dev/null 2>&1; "
+            f"if pgrep -f {shlex.quote('[t]cpdump.*' + path)} >/dev/null 2>&1; "
             "then running=1; else running=0; fi; "
             'echo "$size $running"'
         )

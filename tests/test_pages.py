@@ -63,6 +63,7 @@ def test_openapi_schema_contains_all_public_routes(client) -> None:
         "/api/traffic/status",
         "/api/traffic/cancel",
         "/api/security/range",
+        "/api/security/preset",
         "/api/security/links/{key}/fail",
         "/api/security/reset",
         "/api/security/captures",

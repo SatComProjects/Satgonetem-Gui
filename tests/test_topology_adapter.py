@@ -41,6 +41,7 @@ def test_topology_adapter_round_trips_a_project(settings) -> None:
     assert len(adapter.satellites(topology)) == 100
     assert len(adapter.ground_stations(topology)) == 1
     assert len(adapter.links(topology)) >= 200
+    assert all(link["capacity_kbps"] == 100000 for link in adapter.links(topology))
     assert adapter.node_detail(topology, "Sat0")["type"] == "satellite"
     assert adapter.find_node(topology, "Sat0") is not None
     assert adapter.find_node(topology, "Missing") is None

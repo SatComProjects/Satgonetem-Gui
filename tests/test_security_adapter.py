@@ -114,6 +114,19 @@ def test_capture_status_and_read() -> None:
     assert payload == b""
 
 
+def test_capture_stop_and_status_avoid_pkill_self_match() -> None:
+    """The process pattern must not match the shell running pkill/pgrep."""
+    adapter = SatGoNetemSecurityAdapter()
+    node = _node()
+    topology = _topology(node)
+
+    adapter.stop_capture(topology, "Sat0", "/tmp/satsec_test.pcap")
+    adapter.capture_status(topology, "Sat0", "/tmp/satsec_test.pcap")
+
+    commands = [str(call[0]) for call in node.calls]
+    assert any("[t]cpdump" in command for command in commands)
+
+
 def test_capture_start_maps_dependency_failure() -> None:
     """Container command failures become NetworkOperationError."""
     adapter = SatGoNetemSecurityAdapter()

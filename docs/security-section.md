@@ -1,8 +1,24 @@
 # Security section: teaching cybersecurity in space with SatGoNetEm
 
-Status: proposal. Tracking issue:
-[#10](https://github.com/SatComProjects/Satgonetem-Gui/issues/10). Nothing in
-this document is implemented yet.
+Status: implemented on `feat-SatSec`; tracking issue
+[#10](https://github.com/SatComProjects/Satgonetem-Gui/issues/10) with phase
+sub-issues [#15](https://github.com/SatComProjects/Satgonetem-Gui/issues/15)
+through [#20](https://github.com/SatComProjects/Satgonetem-Gui/issues/20).
+
+## Implementation status
+
+| Unit | Code |
+|---|---|
+| Reconnaissance | `/security` page, readiness strip, link inventory (`links.py`, `satgonetem_topology.py`) |
+| DDoS | `static/security.js` + `static/security_model.js` over the existing traffic jobs |
+| Resilience | `SecurityService.fail_link/reset`, `SatGoNetemSecurityAdapter.fail_link`, route diff in the page |
+| Confidentiality | `SecurityService` capture lifecycle, `SatGoNetemSecurityAdapter` tcpdump/base64 path, capture download route |
+| Trust / spoofing | `Hping3Request` spoof fields, traffic adapter pass-through, trust panel capture evidence |
+
+The five labs require a running GoNetEm network for capture, link failure, and
+traffic actions. The default test suite uses fakes; the real-container path is
+documented as an opt-in verification. The tabletop and capstone units remain
+out of scope for this implementation.
 
 ## Purpose
 
@@ -369,30 +385,48 @@ operations. Do not block the event loop on container calls; use
 
 Ship a dedicated security range rather than asking students to build one:
 
-- 2-3 ground stations, 12-24 satellites, one Walker shell.
-- Low link capacity (5-10 Mbps; the project form uses Kbps) and realistic
-  delays.
+- 3 ground stations (Berlin, Madrid, Rome), 24 satellites, one Walker shell.
+- Low link capacity (5000 Kbps) and realistic delays.
 - Static routing by default; OSPF/IS-IS selectable for unit 3.
 - A documented "attacker" node and "victim" service so every student starts
   from the same topology.
-- Save it as packaged JSON under `data/security/`, with a README that explains
-  the topology and the intended targets.
+- The preset lives at `satgonetem_gui/data/security/range.json` and is exposed
+  through `GET /api/security/preset`; the page's **Load SatSec range** button
+  submits it to the existing project builder.
 
 The existing project builder can create it; no new constellation code is needed.
 
 ## Implementation phases
 
-| Phase | Contents | Value |
+| Phase | Contents | Status |
 |---|---|---|
-| 1 | Static `/security` page: threat model, attack taxonomy, real incidents, links to existing Traffic/Nodes pages | Useful for a lecture immediately; no backend risk |
-| 2 | Range readiness, link inventory, and the DDoS lab runner (reuse traffic jobs) | The core hands-on lesson |
-| 3 | Link failure, route diff, and reset | Resilience lesson; needs the most care |
-| 4 | Capture retrieval and spoofing controls | Strongest evidence and trust lessons |
-| 5 | Instructor mode, capstone scoring, report export | Turns the section into a course |
+| A | `/security` page shell, readiness, link inventory, reconnaissance | Implemented (#15) |
+| B | DDoS baseline/attack runner over existing traffic jobs | Implemented (#16) |
+| C | Link failure, route diff, reset, routing comparison | Implemented (#17) |
+| D | Capture lifecycle and pcap download | Implemented (#18) |
+| E | Spoofing fields, trust lab, capture evidence | Implemented (#19) |
+| F | Docs, browser coverage, real-container verification | This phase (#20) |
 
-Recommended first cut for a single class: phase 1 plus phase 2, with unit 3 on
-the existing dashboard (routing method comparison) and unit 6 as a tabletop.
-That is enough for a 90-minute session without building a full cyber range.
+The five labs share the bundled range through **Load SatSec range**. The
+default suite covers their orchestration with fakes. The destructive reset and
+capture paths were verified against a real GoNetEm server with the opt-in test
+below.
+
+## Real-container verification
+
+With a running GoNetEm server and Docker:
+
+```bash
+SATGONETEM_RUN_CONTAINER_TESTS=1 .venv/bin/pytest \
+  tests/test_security_container_contract.py -s
+```
+
+The test builds the 24-satellite SatSec range, starts the containers, applies
+static routing, fails one inter-satellite link, captures a pcap on `Sat0`,
+stops the capture, resets the range, and checks that the failed-link list is
+empty and the original link count is restored. A separate manual run after the
+reset completed a 3-packet ping with 3/3 replies, confirming that the rebuilt
+addressing and routing were usable.
 
 ## Class formats
 
@@ -415,8 +449,8 @@ That is enough for a 90-minute session without building a full cyber range.
   Cap duration and packet count, prefer low-capacity links, and test the
   classroom hardware before the session.
 - **Reset semantics.** Link failure is destructive to the topology object.
-  Validate the reset path with a real container run before relying on it in
-  class.
+  The opt-in container test verifies the stop/rebuild/start reset, but re-run it
+  on the classroom host because container startup time and image state vary.
 - **No authentication.** The GUI is a local teaching tool, not a multi-user
   range. Do not expose it to students over an untrusted network without an
   authenticating proxy.

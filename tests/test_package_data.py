@@ -3,7 +3,15 @@
 from importlib.resources import files
 
 from satgonetem_gui.ground_stations import parse_ground_station_file
-from satgonetem_gui.resources import GROUND_STATIONS_DIR
+from satgonetem_gui.resources import GROUND_STATIONS_DIR, SECURITY_DIR
+
+
+def test_security_range_preset_is_bundled() -> None:
+    """The SatSec classroom range ships with the package."""
+    preset = SECURITY_DIR / "range.json"
+
+    assert preset.is_file()
+    assert "SatSecRange" in preset.read_text(encoding="utf-8")
 
 
 def test_ground_station_presets_are_bundled() -> None:

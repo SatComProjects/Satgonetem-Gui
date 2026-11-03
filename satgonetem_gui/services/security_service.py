@@ -1,5 +1,6 @@
 """Security lab orchestration: range state, link failure, reset, and capture."""
 
+import json
 import logging
 import time
 import uuid
@@ -7,7 +8,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..errors import APIError
-from ..schemas import CaptureStartRequest
+from ..resources import SECURITY_DIR
+from ..schemas import CaptureStartRequest, ProjectCreateRequest
 from .ports import NetworkOperationError, SecurityGateway
 from .project_service import ProjectService
 from .routing_service import RoutingService
@@ -69,6 +71,28 @@ class SecurityService:
         self._snapshot: str | None = None
         self._failed_links: list[str] = []
         self._captures: dict[str, CaptureState] = {}
+
+    def preset(self) -> dict[str, Any]:
+        """Return the bundled SatSec range as a project-create payload."""
+        try:
+            data = json.loads((SECURITY_DIR / "range.json").read_text("utf-8"))
+            request = ProjectCreateRequest(
+                name=data["name"],
+                start_date=data["start_date"],
+                end_date=data["end_date"],
+                update_time=data.get("update_time", 5),
+                isl_capacity=data.get("isl_capacity", 5000),
+                gs_capacity=data.get("gs_capacity", 5000),
+                save_path=data.get("save_path", ""),
+                walker_shells_json=json.dumps(data["walker_shells"]),
+                ground_objects_properties_json=json.dumps(
+                    data["ground_objects_properties"]
+                ),
+            )
+        except Exception as exc:
+            logger.exception("Could not read the SatSec range preset.")
+            raise APIError(500, "Could not read the SatSec range preset.") from exc
+        return request.model_dump()
 
     def range(self) -> dict[str, Any]:
         """Return readiness, addressable targets, links, and captures."""

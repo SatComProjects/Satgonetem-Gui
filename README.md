@@ -11,6 +11,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Node Explorer** | Browse all satellites and ground stations with detailed status. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between nodes with a queued job system. |
 | **Routing Control** | Apply Static/Dijkstra, OSPF, IS-IS, or SR-MPLS routing across the emulated topology. |
+| **Security Lab** | Teach satellite cybersecurity with reconnaissance, DDoS, link-failure, packet-capture, and spoofing exercises. |
 | **GoNetem Integration** | Start and stop Dockerised network nodes directly from the web UI. |
 | **Save / Load** | Export and import projects as JSON files. |
 
@@ -69,10 +70,11 @@ satgonetem_gui/
 ├── schemas.py          # Pydantic request/response models
 ├── errors.py           # Shared API error envelope
 ├── state.py            # Per-application project/runtime state
-├── routes/             # Page, project, topology, routing, traffic APIs
+├── routes/             # Page, project, topology, routing, traffic, security APIs
 ├── services/           # Use-case orchestration and job registry
-├── adapters/           # SatGoNetem topology and traffic adapters
+├── adapters/           # SatGoNetem topology, traffic, and security adapters
 ├── ground_stations.py  # Ground-station CSV parsing/writing
+├── links.py            # Stable link keys shared by APIs and adapters
 ├── serializers.py      # Traffic result shaping
 ├── storage.py          # Data-file and save-path policy
 ├── data/               # Bundled presets and sample GoNetem config
@@ -94,6 +96,7 @@ package.json            # Frontend test/tooling manifest
 | `/world` | 3D Globe — real-time satellite and ground station visualisation |
 | `/nodes` | Node Explorer — list and inspect all topology nodes |
 | `/traffic` | Traffic Generator — create and queue traffic jobs |
+| `/security` | Security Lab — guided reconnaissance, DDoS, resilience, capture, and spoofing exercises |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
 | `/docs` | API Documentation — auto-generated Swagger UI |
@@ -118,6 +121,12 @@ The GUI has no authentication and is intended for trusted local use. It binds
 `127.0.0.1` by default, constrains project saves to `SATGONETEM_GUI_SAVE_ROOT`,
 and does not expose a public API. Do not bind it to a public interface without
 placing it behind an authenticating reverse proxy.
+
+The `/security` page is a classroom training range. Its actions are confined to
+the emulated constellation: no arbitrary shell is exposed, attack flows are
+bounded, and the page warns against pointing the tools at real networks. Packet
+captures and destructive link-failure experiments require a running GoNetEm
+network and are intended for an isolated lab host.
 
 ## Development
 
@@ -151,9 +160,17 @@ npm run test:e2e
 ```
 
 The default Python suite builds a 10x10 Walker constellation in-process and
-does not require Docker or a running GoNetem server. See
-[`docs/architecture.md`](docs/architecture.md) for the test strategy, target
-module boundaries, and the current coverage baseline.
+does not require Docker or a running GoNetem server. To verify the security
+lab's link-failure, capture, and reset paths against a real GoNetEm server:
+
+```bash
+SATGONETEM_RUN_CONTAINER_TESTS=1 .venv/bin/pytest \
+  tests/test_security_container_contract.py -s
+```
+
+See [`docs/architecture.md`](docs/architecture.md) for the test strategy, target
+module boundaries, and the current coverage baseline. The SatSec design and
+classroom notes are in [`docs/security-section.md`](docs/security-section.md).
 
 ## License
 

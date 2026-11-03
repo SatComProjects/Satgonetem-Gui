@@ -32,10 +32,12 @@ and adapter graph for each app.
 
 - `app.py` - `create_app()`, service composition, routers, static mount.
 - `dependencies.py` - injects `ApplicationServices` from `app.state`.
-- `routes/` - pages, projects, topology, routing, traffic routers.
-- `services/` - project lifecycle, topology views, routing, traffic jobs.
+- `routes/` - pages, projects, topology, routing, traffic, and security
+  routers.
+- `services/` - project lifecycle, topology views, routing, traffic jobs, and
+  the security lab.
 - `adapters/` - the only modules importing `TopologyManager` or concrete flow
-  classes.
+  classes; includes the security capture/link-failure adapter.
 - `state.py` - `ProjectSession`, `ProjectTaskManager`, `RuntimeState`.
 - `schemas.py` - Pydantic request/response models.
 - `errors.py` - API exceptions and the common error envelope.
@@ -152,6 +154,19 @@ not import those dependency internals.
 - Added an installed-wheel smoke test in CI and a package-data unit test.
 - Added a WebGL-unavailable fallback for World View, covered by Playwright.
 - Added an 85% coverage gate and completed the documentation/security notes.
+
+## Phase 8 changes (security lab)
+
+- Added `routes/security.py`, `services/security_service.py`, and
+  `adapters/satgonetem_security.py` behind a `SecurityGateway` port.
+- Added the `/security` page and the bundled `data/security/range.json`
+  preset with three ground stations and 24 satellites.
+- Extended link responses with stable keys, capacity, delay, and state.
+- Added capture lifecycle and download endpoints, bounded link-failure and
+  reset operations, and spoofing fields on the hping3 request.
+- The five units are reconnaissance, availability (DDoS), resilience,
+  confidentiality, and trust/spoofing. Tabletop and capstone units remain out
+  of scope.
 
 ## Test strategy
 

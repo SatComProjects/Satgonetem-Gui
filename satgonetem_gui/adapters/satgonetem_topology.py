@@ -82,6 +82,11 @@ class SatGoNetemTopologyAdapter:
                 gnd_link_capacity=payload.gs_capacity,
             )
         )
+        self._apply_link_capacities(
+            topology,
+            isl_kbps=payload.isl_capacity,
+            gs_kbps=payload.gs_capacity,
+        )
         topology.set_status(True)
 
         save_target = resolve_save_path(
@@ -98,6 +103,27 @@ class SatGoNetemTopologyAdapter:
             project_name=name,
             save_path=str(payload.save_path or "").strip(),
         )
+
+    @staticmethod
+    def _apply_link_capacities(
+        topology: Any,
+        *,
+        isl_kbps: int,
+        gs_kbps: int,
+    ) -> None:
+        """Apply the project capacities to links created before the config.
+
+        ``TopologyManager.from_satcom`` creates links with the dependency's
+        default capacity. The network configuration is applied afterwards, so
+        the existing links must be refreshed before the GoNetEm project file is
+        generated.
+        """
+        for link in topology.links.values():
+            if getattr(link, "use_budget", False):
+                continue
+            capacity = gs_kbps if link.type == "GroundStationLink" else isl_kbps
+            link.default_capacity_kbps = capacity
+            link.update_link_capacities()
 
     def load(self, content: str) -> ProjectResult:
         """Load a saved topology from raw JSON."""

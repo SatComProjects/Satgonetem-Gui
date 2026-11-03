@@ -6,6 +6,7 @@ const pages = [
   ["/", "Dashboard"],
   ["/nodes", "Nodes"],
   ["/traffic", "Traffic Generator"],
+  ["/security", "Space Security Lab"],
   ["/new_project", "Create New Project"],
   ["/ground_stations", "Select Ground Stations"],
 ];
@@ -22,6 +23,22 @@ for (const [path, heading] of pages) {
     await expect(page.locator("[onclick], [onchange]")).toHaveCount(0);
   });
 }
+
+test("security page exposes all five units", async ({ page }) => {
+  await page.goto("/security");
+  await page.waitForLoadState("networkidle");
+
+  for (const label of [
+    "Reconnaissance",
+    "Availability / DDoS",
+    "Resilience",
+    "Confidentiality",
+    "Trust / spoofing",
+  ]) {
+    await expect(page.getByRole("button", { name: new RegExp(label) })).toBeVisible();
+  }
+});
+
 
 test("world page shell renders", async ({ page }) => {
   const response = await page.goto("/world");

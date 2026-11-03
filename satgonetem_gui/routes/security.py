@@ -9,6 +9,16 @@ from ..services.container import ApplicationServices
 router = APIRouter(tags=["security"])
 
 
+@router.get(
+    "/api/security/preset",
+    response_model=schemas.ProjectCreateRequest,
+)
+async def api_security_preset(
+    services: ApplicationServices = Depends(get_services),
+) -> dict:
+    return services.security.preset()
+
+
 @router.get("/api/security/range", response_model=schemas.SecurityRangeResponse)
 async def api_security_range(
     services: ApplicationServices = Depends(get_services),
@@ -65,7 +75,18 @@ async def api_security_stop_capture(
     return services.security.stop_capture(capture_id)
 
 
-@router.get("/api/security/captures/{capture_id}")
+@router.get(
+    "/api/security/captures/{capture_id}",
+    responses={
+        200: {
+            "content": {
+                "application/vnd.tcpdump.pcap": {
+                    "schema": {"type": "string", "format": "binary"}
+                }
+            }
+        }
+    },
+)
 async def api_security_download_capture(
     capture_id: str,
     services: ApplicationServices = Depends(get_services),

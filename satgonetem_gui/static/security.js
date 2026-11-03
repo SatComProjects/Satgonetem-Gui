@@ -126,7 +126,7 @@ function renderRecon(range) {
     body.replaceChildren();
     if (links.length === 0) {
       const row = document.createElement("tr");
-      row.innerHTML = '<td colspan="6" class="muted">No links. Load a project first.</td>';
+      row.innerHTML = '<td colspan="5" class="muted">No links. Load a project first.</td>';
       body.appendChild(row);
     } else {
       const sorted = [...links].sort((a, b) => {
@@ -137,9 +137,8 @@ function renderRecon(range) {
       for (const link of sorted) {
         const row = document.createElement("tr");
         row.innerHTML =
-          `<td title="${escapeHtml(link.key)}">${escapeHtml(link.key.slice(0, 36))}</td>` +
-          `<td>${escapeHtml(link.src)} → ${escapeHtml(link.dst)}</td>` +
-          `<td>${escapeHtml(link.type)}</td>` +
+          `<td title="${escapeHtml(link.key)}">${escapeHtml(link.src)} → ${escapeHtml(link.dst)}</td>` +
+          `<td>${escapeHtml(shortLinkType(link.type))}</td>` +
           `<td>${escapeHtml(fmtCapacity(link.capacity_kbps))}</td>` +
           `<td>${escapeHtml(fmt(link.delay_ms))} ms</td>` +
           `<td>${escapeHtml(link.state || "-")}</td>`;
@@ -202,6 +201,10 @@ function renderTargetSelects(range) {
     if (attacker) attacker.value = nodes[nodes.length - 1].value;
     const target = byId("ddos-target");
     if (target) target.value = nodes[1].value;
+    const trustAttacker = byId("trust-attacker");
+    if (trustAttacker) trustAttacker.value = nodes[nodes.length - 1].value;
+    const trustTarget = byId("trust-target");
+    if (trustTarget) trustTarget.value = nodes[1].value;
     const spoof = byId("trust-spoof");
     if (spoof) spoof.value = nodes[0].value;
   }
@@ -210,12 +213,12 @@ function renderTargetSelects(range) {
 function renderLinkSelect(range) {
   const options = (range?.links || []).map((link) => ({
     value: link.key,
-    label: `${link.src} → ${link.dst} (${lockType(link.type)})`,
+    label: `${link.src} → ${link.dst} (${shortLinkType(link.type)})`,
   }));
   fillSelect("res-link", options);
 }
 
-function lockType(type) {
+function shortLinkType(type) {
   return String(type || "").replace("Link", "");
 }
 
@@ -596,12 +599,18 @@ async function fetchRouteTable(node) {
 async function loadAllNodes() {
   try {
     const nodes = await api.get("/api/nodes");
-    const options = (nodes || []).map((node) => ({
-      value: node.name,
-      label: `${node.name} (${node.type})`,
-    }));
+    const options = (nodes || [])
+      .map((node) => ({
+        value: node.name,
+        label: `${node.name} (${node.type})`,
+        type: node.type,
+      }))
+      .sort((a, b) => (a.type === "satellite" ? 0 : 1) - (b.type === "satellite" ? 0 : 1));
     fillSelect("res-node", options);
     fillSelect("conf-node", options);
+    if (state.range?.readiness?.project_loaded) {
+      await refreshResRoute();
+    }
     await loadConfInterfaces();
   } catch {
     /* no project yet */
@@ -784,6 +793,40 @@ async function resetSecurityRange() {
   }
 }
 
+async function waitForProjectLoaded(timeoutMs = 120000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const status = await api.get("/api/project/status");
+    if (status.state === "loaded") return status;
+    if (status.state === "error") {
+      throw new Error(status.error || "The range project failed to build.");
+    }
+    await sleep(1000);
+  }
+  throw new Error("Timed out waiting for the range project to build.");
+}
+
+async function loadSatSecRange() {
+  const button = byId("recon-load-range");
+  if (button) button.disabled = true;
+  setMessage("Building the SatSec range project...");
+  try {
+    const preset = await api.get("/api/security/preset");
+    await api.post("/api/project/create", preset);
+    const status = await waitForProjectLoaded();
+    await loadRange();
+    await loadAllNodes();
+    await refreshTrustIp();
+    setMessage(
+      `SatSec range loaded as ${status.project_name || "SatSecRange"}. Start containers and apply routing from the dashboard.`,
+    );
+  } catch (error) {
+    setMessage(error.message || "Could not load the SatSec range.", true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function resolveNodeIp(name) {
   if (!name) return "";
   const data = await api.get(`/api/nodes/${encodeURIComponent(name)}`);
@@ -961,6 +1004,7 @@ for (const button of document.querySelectorAll(".sec-unit-button[data-unit]")) {
   button.addEventListener("click", () => activateUnit(button.dataset.unit));
 }
 byId("sec-refresh")?.addEventListener("click", loadRange);
+byId("recon-load-range")?.addEventListener("click", loadSatSecRange);
 byId("recon-export")?.addEventListener("click", exportNotes);
 byId("ddos-run")?.addEventListener("click", runDdos);
 byId("ddos-stop")?.addEventListener("click", stopDdos);

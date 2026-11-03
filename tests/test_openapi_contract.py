@@ -16,6 +16,9 @@ def test_every_api_route_declares_a_json_success_schema(client) -> None:
             responses = operation.get("responses", {})
             assert "200" in responses, f"{method.upper()} {path} has no 200 response"
             content = responses["200"].get("content", {})
+            if path == "/api/security/captures/{capture_id}":
+                assert "application/vnd.tcpdump.pcap" in content
+                continue
             assert "application/json" in content, f"{method.upper()} {path} is not JSON"
             assert content["application/json"].get("schema"), (
                 f"{method.upper()} {path} has no response schema"
@@ -32,6 +35,7 @@ def test_every_api_route_declares_a_json_success_schema(client) -> None:
         "/api/traffic/ping",
         "/api/traffic/hping3",
         "/api/traffic/cancel",
+        "/api/security/captures",
     ],
 )
 def test_post_routes_declare_request_schemas(client, path: str) -> None:

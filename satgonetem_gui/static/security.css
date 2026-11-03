@@ -115,9 +115,17 @@
 }
 
 .sec-table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 420px;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.sec-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  z-index: 1;
 }
 
 .sec-table {
@@ -186,6 +194,11 @@
 
 .sec-actions button {
   min-width: 120px;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .sec-log,

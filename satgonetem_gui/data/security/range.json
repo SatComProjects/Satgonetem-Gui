@@ -1,0 +1,73 @@
+{
+  "name": "SatSecRange",
+  "start_date": "01/01/2024 00:00:00",
+  "end_date": "01/01/2024 00:10:00",
+  "update_time": 5,
+  "isl_capacity": 5000,
+  "gs_capacity": 5000,
+  "save_path": "",
+  "walker_shells": [
+    {
+      "type": "delta",
+      "constellation_property": {
+        "identifier": "LEO",
+        "amount_of_orbit_plane": 8,
+        "amount_of_satellite_per_orbit_plane": 3,
+        "inclination": 70,
+        "phase_difference_between_satellites": true,
+        "mean_revolution_per_day": 14.4
+      },
+      "orbital_connectivity_property": {
+        "adjacent_inter_satellite_shifting": 0,
+        "maximum_inter_satellite_count": 4,
+        "maximum_inter_satellite_range_distance": 1500.0,
+        "maximum_ground_station_range": 2000.0,
+        "maximum_user_terminal_range": 1000.0,
+        "maximum_connected_ground_object": 10000,
+        "maximum_connected_user_terminal": 500,
+        "maximum_connected_ground_station": 10
+      },
+      "ground_object_white_list": [
+        "Ground Stations"
+      ]
+    }
+  ],
+  "ground_objects_properties": [
+    {
+      "identifier": "Ground Stations",
+      "stations": [
+        {
+          "index": 0,
+          "name": "Berlin",
+          "latitude": 52.52,
+          "longitude": 13.405,
+          "elevation_km": 0.034
+        },
+        {
+          "index": 1,
+          "name": "Madrid",
+          "latitude": 40.4168,
+          "longitude": -3.7038,
+          "elevation_km": 0.667
+        },
+        {
+          "index": 2,
+          "name": "Rome",
+          "latitude": 41.9028,
+          "longitude": 12.4964,
+          "elevation_km": 0.021
+        }
+      ],
+      "type": "ground_station",
+      "connectivity_properties": {
+        "ground_to_space_connections_strategy": "everything-visible",
+        "elevation_above_horizon": 10,
+        "maximum_satellite_range_distance": 2000.0,
+        "shell_white_lists": [
+          "LEO"
+        ],
+        "maximum_connected_satellites": 3
+      }
+    }
+  ]
+}
