@@ -23,6 +23,7 @@ from satgonetem.utils.satcom_fix import apply_satcom_fix
 from ..config import Settings
 from ..ground_stations import parse_ground_station_file, write_stations_to_temp
 from ..schemas import ProjectCreateRequest
+from ..services.ports import NetworkOperationError
 from ..state import ProjectResult
 from ..storage import resolve_data_file, resolve_save_path
 
@@ -313,33 +314,45 @@ class SatGoNetemTopologyAdapter:
         return topology.get_gonetem_status()
 
     def routing_status(self, topology: Any) -> dict[str, Any]:
-        """Return routing and addressing state."""
-        gonetem_on = topology.get_gonetem_status()
+        """Return routing and container state without guessing addressing state."""
         return {
             "ok": True,
-            "gonetem_is_on": gonetem_on,
-            "addressing_applied": gonetem_on,
+            "gonetem_is_on": topology.get_gonetem_status(),
             "routing_initiated": topology.get_routing_initiated(),
             "routing_method": topology.routing,
         }
 
-    def apply_routing(self, topology: Any, method: str) -> None:
-        """Apply addressing and initialize routing."""
-        topology.set_ip_addresses()
-        topology.init_routing(routing_method=method)
+    def apply_addressing(self, topology: Any) -> None:
+        """Apply IP addresses and raise if the dependency reports failure."""
+        result = topology.set_ip_addresses()
+        if result is not None and result < 0:
+            raise NetworkOperationError("IP addressing failed.")
+
+    def init_routing(self, topology: Any, method: str) -> None:
+        """Initialize routing and map the dependency's negative return code."""
+        result = topology.init_routing(routing_method=method)
+        if result is not None and result < 0:
+            raise NetworkOperationError("Routing initialization failed.")
 
     def delete_routing(self, topology: Any) -> None:
-        """Delete routing state."""
-        topology.delete_routing()
+        """Delete routing state; a no-op when routing was never initialized."""
+        if not topology.get_routing_initiated():
+            return
+        result = topology.delete_routing()
+        if result is not None and result < 0:
+            raise NetworkOperationError("Routing deletion failed.")
 
     def start_gonetem(self, topology: Any) -> None:
-        """Start emulated containers."""
+        """Start emulated containers and verify the dependency state."""
         topology.start_gonetem()
+        if not topology.get_gonetem_status():
+            raise NetworkOperationError("GoNetEm failed to start.")
 
     def stop_gonetem(self, topology: Any) -> None:
-        """Stop emulated containers, preserving the loaded-project flag."""
+        """Stop emulated containers without faking the loaded-project status."""
         topology.stop_gonetem()
-        topology.set_status(True)
+        if topology.get_gonetem_status():
+            raise NetworkOperationError("GoNetEm failed to stop.")
 
     @staticmethod
     def _sync_positions(topology: Any) -> None:

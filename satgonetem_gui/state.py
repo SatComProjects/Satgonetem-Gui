@@ -49,6 +49,7 @@ class ProjectSession:
     operation: Optional[str] = None
     pending_name: Optional[str] = None
     error: Optional[str] = None
+    addressing_applied: bool = False
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @property
@@ -93,6 +94,7 @@ class ProjectSession:
             self.state = ProjectState.LOADED
             self.pending_name = None
             self.error = None
+            self.addressing_applied = False
 
     def fail(self, error: str) -> None:
         """Mark an operation failed while preserving any previously loaded project."""
@@ -131,6 +133,11 @@ class ProjectSession:
                 "error": self.error,
             }
 
+    def set_addressing_applied(self, applied: bool) -> None:
+        """Record whether IP addressing has been applied to this project."""
+        with self._lock:
+            self.addressing_applied = applied
+
     def reset(self) -> None:
         """Clear all project state. Intended for tests and startup."""
         with self._lock:
@@ -141,6 +148,7 @@ class ProjectSession:
             self.operation = None
             self.pending_name = None
             self.error = None
+            self.addressing_applied = False
 
 
 def _format_exception(exc: BaseException) -> str:

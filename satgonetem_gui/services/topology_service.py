@@ -35,7 +35,9 @@ class TopologyService:
                 "current_step": None,
                 "current_time": None,
             }
-        return self.reader.status(topology)
+        status = self.reader.status(topology)
+        status["constellation_loaded"] = self.session.loaded
+        return status
 
     def satellites(self) -> list[dict]:
         """Return satellite positions."""
@@ -71,3 +73,12 @@ class TopologyService:
     def gonetem_is_on(self) -> bool:
         """Return whether the containers are running."""
         return self.reader.gonetem_is_on(self.require_topology())
+
+    @property
+    def addressing_applied(self) -> bool:
+        """Return whether IP addressing was applied to the current project."""
+        return self.session.addressing_applied
+
+    def set_addressing_applied(self, applied: bool) -> None:
+        """Record addressing state for the current project."""
+        self.session.set_addressing_applied(applied)

@@ -315,3 +315,18 @@ def test_cancel_api_rejects_a_finished_job(project_client, services) -> None:
 
     assert response.status_code == 409
     assert response.json()["ok"] is False
+
+
+def test_stop_clears_addressing_without_unloading_project(
+    project_client, services, monkeypatch
+) -> None:
+    """Stopping containers clears address state but keeps the project loaded."""
+    services.topology.set_addressing_applied(True)
+    monkeypatch.setattr(services.routing.controller, "stop_gonetem", lambda _topology: None)
+
+    response = project_client.post("/api/gonetem/stop")
+    routing = project_client.get("/api/routing/status").json()
+
+    assert response.status_code == 200
+    assert routing["addressing_applied"] is False
+    assert services.topology.status()["constellation_loaded"] is True

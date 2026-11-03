@@ -89,3 +89,18 @@ def test_reset_returns_to_idle() -> None:
         "loaded": False,
         "error": None,
     }
+
+
+def test_new_project_clears_addressing_state() -> None:
+    """Addressing belongs to one loaded project, not the process."""
+    session = ProjectSession()
+    session.succeed(_fake_manager(), "First", "")
+    session.set_addressing_applied(True)
+
+    session.succeed(_fake_manager(), "Second", "")
+
+    assert session.addressing_applied is False
+
+    session.set_addressing_applied(True)
+    session.reset()
+    assert session.addressing_applied is False

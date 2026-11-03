@@ -41,12 +41,18 @@ class TopologyReader(Protocol):
     def gonetem_is_on(self, topology: Any) -> bool: ...
 
 
+class NetworkOperationError(RuntimeError):
+    """Raised when a GoNetEm operation reports failure via a return code."""
+
+
 class NetworkController(Protocol):
     """Routing and container lifecycle operations."""
 
     def routing_status(self, topology: Any) -> dict[str, Any]: ...
 
-    def apply_routing(self, topology: Any, method: str) -> None: ...
+    def apply_addressing(self, topology: Any) -> None: ...
+
+    def init_routing(self, topology: Any, method: str) -> None: ...
 
     def delete_routing(self, topology: Any) -> None: ...
 
