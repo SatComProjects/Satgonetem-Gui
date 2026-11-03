@@ -21,7 +21,7 @@ async def api_traffic_iperf3(
     payload: schemas.Iperf3Request,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.TrafficStartResponse:
-    job_id = services.traffic.start_iperf3(payload)
+    job_id = services.traffic.start("iperf3", payload)
     return schemas.TrafficStartResponse(job_id=job_id)
 
 
@@ -30,7 +30,7 @@ async def api_traffic_ping(
     payload: schemas.PingRequest,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.TrafficStartResponse:
-    job_id = services.traffic.start_ping(payload)
+    job_id = services.traffic.start("ping", payload)
     return schemas.TrafficStartResponse(job_id=job_id)
 
 
@@ -39,7 +39,7 @@ async def api_traffic_hping3(
     payload: schemas.Hping3Request,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.TrafficStartResponse:
-    job_id = services.traffic.start_hping3(payload)
+    job_id = services.traffic.start("hping3", payload)
     return schemas.TrafficStartResponse(job_id=job_id)
 
 

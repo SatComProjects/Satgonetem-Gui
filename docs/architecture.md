@@ -1,12 +1,13 @@
 # Architecture and test baseline
 
-Status: Phase 3 complete. The refactor is tracked in
+Status: Phase 4 complete. The refactor is tracked in
 [issue #1](https://github.com/SatComProjects/Satgonetem-Gui/issues/1);
 completed phases are
 [#2](https://github.com/SatComProjects/Satgonetem-Gui/issues/2),
 [#3](https://github.com/SatComProjects/Satgonetem-Gui/issues/3),
-[#4](https://github.com/SatComProjects/Satgonetem-Gui/issues/4), and
-[#5](https://github.com/SatComProjects/Satgonetem-Gui/issues/5).
+[#4](https://github.com/SatComProjects/Satgonetem-Gui/issues/4),
+[#5](https://github.com/SatComProjects/Satgonetem-Gui/issues/5), and
+[#6](https://github.com/SatComProjects/Satgonetem-Gui/issues/6).
 
 ## Current shape
 
@@ -85,6 +86,23 @@ not import those dependency internals.
   singleton, and route-handler size.
 - Added an app-factory isolation test and a real topology-adapter contract test.
 
+## Phase 4 changes
+
+- Added a traffic strategy registry keyed by `iperf3`, `ping`, and `hping3`.
+  Each strategy carries its typed request model and starter.
+- The service and adapter each use one start/status dispatch path keyed by the
+  job kind; no if/elif chain over concrete flow classes remains.
+- Replaced the simple job dictionary with a bounded `JobRegistry`:
+  - per-job locks;
+  - immutable terminal transitions (`done`, `error`, `cancelled`);
+  - TTL cleanup of finished jobs;
+  - a maximum job count, with 429 when only running jobs remain.
+- Cancel now calls `TrafficGateway.stop()`; finished jobs return 409, failed
+  stops return 500, and cancelled jobs are never polled again.
+- A flow rejected by the capacity limit is stopped rather than leaked.
+- Added tests for strategy registration, terminal transitions, TTL cleanup,
+  capacity eviction, cancel success/failure, and API cancel behavior.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -93,12 +111,13 @@ not import those dependency internals.
   no GoNetem server, and no containers are required for the default suite.
 - API tests use `create_app()` per test with an isolated save root.
 - Unit tests cover serializers, storage, traffic-flow normalization, routing
-  guards, and project lifecycle transitions.
+  guards, project lifecycle transitions, the job registry, and cancellation.
 - A structural test asserts `TopologyManager` and concrete flow classes appear
   only in their adapters, private dependency hooks appear only in adapters, and
   route handlers stay small.
 - Docker-backed routing and traffic happy paths are not part of the default
-  suite. They will be covered by optional contract tests.
+  suite. The fake traffic gateway exercises start/status/cancel without
+  containers.
 
 ## Current measurements
 
@@ -108,23 +127,23 @@ Measured on 2026-11-03 with Python 3.15.0, pytest 9.2.0, and coverage 7.17.1:
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **119 passed** in about 1.7 s.
+Result: **131 passed** in about 1.7 s.
 
 | Module | Statements | Coverage |
 |---|---:|---:|
 | `adapters/satgonetem_topology.py` | 154 | 86% |
-| `adapters/satgonetem_traffic.py` | 77 | 77% |
+| `adapters/satgonetem_traffic.py` | 76 | 76% |
 | `services/project_service.py` | 73 | 86% |
 | `services/routing_service.py` | 45 | 68% |
 | `services/topology_service.py` | 37 | 98% |
-| `services/traffic_service.py` | 80 | 85% |
+| `services/traffic_service.py` | 155 | 88% |
 | `state.py` | 117 | 95% |
 | `schemas.py` | 120 | 98% |
 | `storage.py` | 29 | 95% |
-| **Total** | **1075** | **89%** |
+| **Total** | **1149** | **89%** |
 
-Branch coverage is enabled. No coverage threshold is enforced yet; Phase 4
-will add the job-registry guarantees and traffic cancellation tests.
+Branch coverage is enabled. No coverage threshold is enforced yet. Phase 5
+will cover routing/GoNetEm failure mapping and container lifecycle semantics.
 
 ## Tooling decisions
 
@@ -145,6 +164,5 @@ will add the job-registry guarantees and traffic cancellation tests.
 
 ## Next phase
 
-Phase 4 adds the flow-strategy registry, a bounded job repository with
-per-job synchronization, and real traffic cancellation. See issue #1 for the
-full plan.
+Phase 5 maps routing/GoNetEm return codes to API errors and separates
+"project loaded" from "containers running". See issue #1 for the full plan.

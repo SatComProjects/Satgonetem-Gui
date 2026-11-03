@@ -276,3 +276,42 @@ def test_payload_factory_uses_10x10() -> None:
 
     assert properties["amount_of_orbit_plane"] == 10
     assert properties["amount_of_satellite_per_orbit_plane"] == 10
+
+
+def test_cancel_api_stops_a_fake_job(project_client, services) -> None:
+    """The cancel endpoint stops the flow and reports a terminal status."""
+
+    class FakeFlow:
+        def __init__(self) -> None:
+            self.stopped = False
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    flow = FakeFlow()
+    job = services.traffic.jobs.create("ping", flow, "Sat0", "Sat1")
+
+    cancel = project_client.post(
+        "/api/traffic/cancel",
+        json={"job_id": job.job_id},
+    )
+    status = project_client.get(f"/api/traffic/status?job_id={job.job_id}")
+
+    assert cancel.status_code == 200
+    assert flow.stopped is True
+    assert status.status_code == 200
+    assert status.json()["status"] == "cancelled"
+
+
+def test_cancel_api_rejects_a_finished_job(project_client, services) -> None:
+    """Cancelling a terminal job returns 409 with the error envelope."""
+    job = services.traffic.jobs.create("ping", object(), "Sat0", "Sat1")
+    job.transition("done")
+
+    response = project_client.post(
+        "/api/traffic/cancel",
+        json={"job_id": job.job_id},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["ok"] is False

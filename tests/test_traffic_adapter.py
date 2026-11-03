@@ -78,18 +78,18 @@ def test_poll_running_for_all_flow_types() -> None:
     """Running flows normalize to the common running state."""
     adapter = SatGoNetemTrafficAdapter()
 
-    assert adapter.poll(_flow(Iperf3Flow, FlowStatus.RUNNING)).status == "running"
-    assert adapter.poll(_flow(PingFlow, PingStatus.RUNNING)).status == "running"
-    assert adapter.poll(_flow(Hping3Flow, Hping3Status.RUNNING)).status == "running"
+    assert adapter.poll("iperf3", _flow(Iperf3Flow, FlowStatus.RUNNING)).status == "running"
+    assert adapter.poll("ping", _flow(PingFlow, PingStatus.RUNNING)).status == "running"
+    assert adapter.poll("hping3", _flow(Hping3Flow, Hping3Status.RUNNING)).status == "running"
 
 
 def test_poll_done_serializes_results() -> None:
     """Completed flows return their serialized result payloads."""
     adapter = SatGoNetemTrafficAdapter()
 
-    iperf = adapter.poll(_flow(Iperf3Flow, FlowStatus.DONE, _iperf_result()))
-    ping = adapter.poll(_flow(PingFlow, PingStatus.DONE, _ping_result()))
-    hping = adapter.poll(_flow(Hping3Flow, Hping3Status.DONE, _hping_result()))
+    iperf = adapter.poll("iperf3", _flow(Iperf3Flow, FlowStatus.DONE, _iperf_result()))
+    ping = adapter.poll("ping", _flow(PingFlow, PingStatus.DONE, _ping_result()))
+    hping = adapter.poll("hping3", _flow(Hping3Flow, Hping3Status.DONE, _hping_result()))
 
     assert iperf.status == "done"
     assert iperf.results is not None and iperf.results["protocol"] == "TCP"
@@ -101,7 +101,7 @@ def test_poll_error_reports_the_flow_error() -> None:
     """Failed flows surface the error from the result object."""
     adapter = SatGoNetemTrafficAdapter()
 
-    poll = adapter.poll(_flow(Iperf3Flow, FlowStatus.ERROR))
+    poll = adapter.poll("iperf3", _flow(Iperf3Flow, FlowStatus.ERROR))
 
     assert poll.status == "error"
     assert poll.error == "flow failed"
@@ -140,7 +140,7 @@ def test_start_methods_build_and_start_flows(monkeypatch) -> None:
     assert iperf.stopped is True
 
 
-def test_poll_rejects_unknown_flow_types() -> None:
-    """Unexpected flow objects are an explicit type error."""
-    with pytest.raises(TypeError):
-        SatGoNetemTrafficAdapter().poll(object())
+def test_poll_rejects_unknown_kinds() -> None:
+    """Unknown job kinds are an explicit error."""
+    with pytest.raises(ValueError):
+        SatGoNetemTrafficAdapter().poll("unknown", object())
