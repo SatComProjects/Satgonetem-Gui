@@ -425,7 +425,7 @@ function poll() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function startWorld() {
     initCesium();
 
     const cbMap = [
@@ -510,4 +510,10 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("plot-controls-header").addEventListener("click", togglePanel);
 
     poll();
-});
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startWorld);
+} else {
+    startWorld();
+}
