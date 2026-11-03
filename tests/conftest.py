@@ -16,11 +16,7 @@ from satgonetem_gui.state import app_state
 
 def _reset_state() -> None:
     """Restore the process-global app state to its startup values."""
-    app_state.topology_manager = None
-    app_state.project_name = None
-    app_state.creating = False
-    with app_state.jobs_lock:
-        app_state.jobs.clear()
+    app_state.reset()
 
 
 @pytest.fixture()

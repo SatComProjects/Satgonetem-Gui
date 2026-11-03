@@ -5,6 +5,7 @@ import json
 import pytest
 
 from tests.factories import PLANES, PROJECT_NAME, SATELLITES_PER_PLANE, project_payload
+from tests.helpers import wait_for_project_state
 
 pytestmark = pytest.mark.integration
 
@@ -96,6 +97,18 @@ def test_project_exists_after_build(project_client) -> None:
     assert response.json() == {"exists": True}
 
 
+def test_project_status_reports_loaded(project_client) -> None:
+    """The lifecycle endpoint exposes the loaded project and its name."""
+    response = project_client.get("/api/project/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["state"] == "loaded"
+    assert data["project_name"] == PROJECT_NAME
+    assert data["loaded"] is True
+    assert data["error"] is None
+
+
 def test_routing_status_without_containers(project_client) -> None:
     """Routing is not applied until GoNetem is running."""
     response = project_client.get("/api/routing/status")
@@ -184,10 +197,6 @@ def test_save_load_round_trip_restores_topology(project_client) -> None:
     assert status["ground_stations"] == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="D4: load uses the timestamp-suffixed tm.project_name; see #1",
-)
 def test_load_preserves_user_facing_name(project_client) -> None:
     """Loading a saved project keeps the name the user submitted."""
     saved = project_client.get("/api/project/save").json()
@@ -196,27 +205,58 @@ def test_load_preserves_user_facing_name(project_client) -> None:
 
     assert response.status_code == 200
     assert response.json()["name"] == PROJECT_NAME
+    saved_again = project_client.get("/api/project/save").json()
+    assert saved_again["filename"] == f"{PROJECT_NAME}.json"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="D1: /api/project/config reads a nonexistent attribute; see #1",
-)
 def test_project_config_returns_editable_fields(project_client) -> None:
     """The edit form can read back the submitted project configuration."""
     response = project_client.get(f"/api/project/config?name={PROJECT_NAME}")
 
     assert response.status_code == 200
     data = response.json()
-    for key in (
-        "name",
-        "update_time",
-        "isl_capacity",
-        "gs_capacity",
-        "walker_shells",
-        "ground_objects_properties",
-    ):
-        assert key in data
+    assert data["name"] == PROJECT_NAME
+    assert data["update_time"] == 5
+    assert data["isl_capacity"] == 100000
+    assert data["gs_capacity"] == 100000
+    assert data["save_path"] == ""
+    assert len(data["walker_shells"]) == 1
+    grounds = data["ground_objects_properties"]
+    assert len(grounds) == 1
+    assert len(grounds[0]["stations"]) == 1
+    assert grounds[0]["stations"][0]["name"] == "Berlin"
+
+
+def test_config_returns_preserved_save_path(client, tmp_path) -> None:
+    """The session keeps the save path entered on the create form."""
+    from tests.factories import build_project
+
+    build_project(name="WithPath", save_path=str(tmp_path))
+    response = client.get("/api/project/config?name=WithPath")
+
+    assert response.status_code == 200
+    assert response.json()["save_path"] == str(tmp_path)
+
+
+def test_edit_round_trip_preserves_ground_stations(project_client) -> None:
+    """The config payload can be submitted back through the create form."""
+    config = project_client.get(f"/api/project/config?name={PROJECT_NAME}").json()
+    payload = project_payload("Phase1Edited")
+    payload["update_time"] = str(config["update_time"])
+    payload["isl_capacity"] = str(config["isl_capacity"])
+    payload["gs_capacity"] = str(config["gs_capacity"])
+    payload["save_path"] = config["save_path"]
+    payload["walker_shells_json"] = json.dumps(config["walker_shells"])
+    payload["ground_objects_properties_json"] = json.dumps(config["ground_objects_properties"])
+
+    response = project_client.post("/api/project/create", json=payload)
+
+    assert response.status_code == 200
+    status = wait_for_project_state(project_client, {"loaded"})
+    assert status["project_name"] == "Phase1Edited"
+    stations = project_client.get("/api/ground_stations").json()
+    assert len(stations) == 1
+    assert stations[0]["city"] == "Berlin"
 
 
 @pytest.mark.xfail(

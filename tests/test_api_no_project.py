@@ -1,8 +1,14 @@
 """Characterization tests for routes that require no loaded project."""
 
+import json
+import threading
+from types import SimpleNamespace
+
 import pytest
 
-from satgonetem_gui.state import app_state
+from satgonetem_gui.state import ProjectResult, app_state
+from tests.factories import project_payload
+from tests.helpers import wait_for_project_state
 
 
 @pytest.mark.parametrize(
@@ -49,6 +55,21 @@ def test_status_without_project_has_empty_counts(client) -> None:
         "simulation_updating": False,
         "current_step": None,
         "current_time": None,
+    }
+
+
+def test_project_status_is_idle_without_project(client) -> None:
+    """The create page can read an explicit idle state before starting."""
+    response = client.get("/api/project/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "state": "idle",
+        "operation": None,
+        "project_name": None,
+        "pending_name": None,
+        "loaded": False,
+        "error": None,
     }
 
 
@@ -101,23 +122,82 @@ def test_project_create_rejects_invalid_json(client) -> None:
     assert response.status_code == 400
 
 
-def test_project_create_is_single_flight(client) -> None:
-    """The current guard rejects a second request while a build is marked active."""
-    app_state.creating = True
+def test_project_create_requires_a_name(client) -> None:
+    """A create request without a name is rejected before a thread starts."""
+    response = client.post("/api/project/create", json={})
 
-    response = client.post("/api/project/create", json={"name": "Second"})
+    assert response.status_code == 400
+
+
+def test_project_create_is_single_flight(client) -> None:
+    """A second create request is rejected while a build is marked active."""
+    assert app_state.project.begin("First", save_path="/tmp/first", operation="create")
+    try:
+        response = client.post("/api/project/create", json={"name": "Second"})
+    finally:
+        app_state.project.reset()
 
     assert response.status_code == 409
 
 
-def test_project_create_dispatches_a_background_build(client, monkeypatch) -> None:
-    """The endpoint returns immediately after dispatching the build."""
-    import satgonetem_gui.app as app_module
-
-    received: list[dict] = []
-    monkeypatch.setattr(app_module, "_build_topology", received.append)
-
-    response = client.post("/api/project/create", json={"name": "Dispatched"})
+def test_project_create_dispatches_a_real_build(client) -> None:
+    """A valid create request moves the session to loaded."""
+    response = client.post("/api/project/create", json=project_payload("Phase1Created"))
 
     assert response.status_code == 200
-    assert response.json() == {"ok": True}
+    status = wait_for_project_state(client, {"loaded"})
+    assert status["project_name"] == "Phase1Created"
+    assert status["loaded"] is True
+    exists = client.get("/api/project/exists?name=Phase1Created").json()
+    assert exists == {"exists": True}
+
+
+def test_concurrent_create_and_load_are_rejected(client, monkeypatch) -> None:
+    """Create and load both participate in the single-flight guard."""
+    import satgonetem_gui.app as app_module
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocking_create(payload: dict) -> ProjectResult:
+        started.set()
+        release.wait(timeout=5)
+        return ProjectResult(
+            SimpleNamespace(set_status=lambda _value: None),
+            payload["name"],
+            "",
+        )
+
+    monkeypatch.setattr(app_module, "_create_project", blocking_create)
+    first = client.post("/api/project/create", json=project_payload("First"))
+    assert first.status_code == 200
+    assert started.wait(timeout=2)
+
+    second = client.post("/api/project/create", json=project_payload("Second"))
+    load = client.post("/api/project/load", json={"content": "{}"})
+    release.set()
+
+    assert second.status_code == 409
+    assert load.status_code == 409
+    status = wait_for_project_state(client, {"loaded"})
+    assert status["project_name"] == "First"
+
+
+def test_invalid_build_reports_error(client) -> None:
+    """An invalid constellation ends in an explicit error instead of polling forever."""
+    payload = project_payload("Broken")
+    shell = json.loads(payload["walker_shells_json"])[0]
+    shell["constellation_property"]["amount_of_orbit_plane"] = 1
+    shell["constellation_property"]["amount_of_satellite_per_orbit_plane"] = 2
+    payload["walker_shells_json"] = json.dumps([shell])
+
+    response = client.post("/api/project/create", json=payload)
+
+    assert response.status_code == 200
+    status = wait_for_project_state(client, {"error"})
+    assert status["state"] == "error"
+    assert status["error"]
+    assert status["pending_name"] is None
+    assert status["loaded"] is False
+    exists = client.get("/api/project/exists?name=Broken").json()
+    assert exists == {"exists": False}

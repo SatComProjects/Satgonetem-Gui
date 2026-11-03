@@ -4,8 +4,8 @@ import asyncio
 import json
 import logging
 import os
+import re
 import tempfile
-import threading
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -34,7 +34,7 @@ from satgonetem.utils.satcom_fix import apply_satcom_fix
 
 apply_satcom_fix()
 
-from .state import app_state
+from .state import ProjectResult, app_state
 
 BASE_DIR = Path(__file__).parent
 SATGONETEM_DIR = BASE_DIR.parent / "satgonetem"
@@ -123,11 +123,8 @@ def _write_stations_to_tmp(identifier: str, stations: List[Dict[str, Any]]) -> s
     return str(path)
 
 
-def _build_topology(payload: Dict[str, Any]) -> None:
-    """Build a TopologyManager from form payload and store it in app_state.
-
-    Runs in a background thread. Sets app_state.creating while running and
-    clears it when done regardless of outcome.
+def _build_topology(payload: Dict[str, Any]) -> TopologyManager:
+    """Build a TopologyManager from a create-form payload.
 
     Args:
         payload: Parsed JSON body from the /api/project/create endpoint.
@@ -135,58 +132,80 @@ def _build_topology(payload: Dict[str, Any]) -> None:
             path where the topology JSON should be written via to_file().
             Ground objects may carry an inline 'stations' list instead of a
             'data_file' path.
+
+    Returns:
+        The initialised TopologyManager.
+
+    Raises:
+        Exception: Any validation or topology-building error is propagated to
+            the caller, which records it in the project session.
     """
-    app_state.creating = True
-    try:
-        shells_raw: list = json.loads(payload["walker_shells_json"])
-        grounds_raw: list = json.loads(payload["ground_objects_properties_json"])
+    shells_raw: list = json.loads(payload["walker_shells_json"])
+    grounds_raw: list = json.loads(payload["ground_objects_properties_json"])
 
-        shells = [WalkerShellProperty(**s) for s in shells_raw]
+    shells = [WalkerShellProperty(**s) for s in shells_raw]
 
-        ground_props = []
-        for g in grounds_raw:
-            g = dict(g)
-            if g.get("stations"):
-                g["data_file"] = _write_stations_to_tmp(
-                    g.get("identifier", "gs"), g.pop("stations")
-                )
-            else:
-                g.pop("stations", None)
-                g["data_file"] = _resolve_data_file(g["data_file"])
-            ground_props.append(GroundObjectProperty(**g))
+    ground_props = []
+    for g in grounds_raw:
+        g = dict(g)
+        if g.get("stations"):
+            g["data_file"] = _write_stations_to_tmp(
+                g.get("identifier", "gs"), g.pop("stations")
+            )
+        else:
+            g.pop("stations", None)
+            g["data_file"] = _resolve_data_file(g["data_file"])
+        ground_props.append(GroundObjectProperty(**g))
 
-        sim_prop = SimulationProperty(
-            simulation_name=payload["name"],
-            start_date=payload["start_date"],
-            end_date=payload["end_date"],
-            walker_shells=shells,
-            ground_objects_properties=ground_props,
-        )
+    sim_prop = SimulationProperty(
+        simulation_name=payload["name"],
+        start_date=payload["start_date"],
+        end_date=payload["end_date"],
+        walker_shells=shells,
+        ground_objects_properties=ground_props,
+    )
 
-        tm = TopologyManager.from_satcom(sim_prop)
-        net_cfg = NetworkConfig(
-            project_name=payload["name"],
-            update_time=int(payload.get("update_time", 5)),
-            isl_link_capacity=int(payload.get("isl_capacity", 100000)),
-            gnd_link_capacity=int(payload.get("gs_capacity", 100000)),
-        )
-        tm._apply_network_config(net_cfg)
+    tm = TopologyManager.from_satcom(sim_prop)
+    net_cfg = NetworkConfig(
+        project_name=payload["name"],
+        update_time=int(payload.get("update_time", 5)),
+        isl_link_capacity=int(payload.get("isl_capacity", 100000)),
+        gnd_link_capacity=int(payload.get("gs_capacity", 100000)),
+    )
+    tm._apply_network_config(net_cfg)
 
-        save_path = payload.get("save_path", "").strip()
-        if save_path:
-            sp = Path(save_path)
-            if sp.is_dir():
-                sp = sp / f"{payload['name']}.json"
-            tm.to_file(str(sp))
+    save_path = str(payload.get("save_path") or "").strip()
+    if save_path:
+        sp = Path(save_path)
+        if sp.is_dir():
+            sp = sp / f"{payload['name']}.json"
+        tm.to_file(str(sp))
 
-        app_state.topology_manager = tm
-        app_state.project_name = payload["name"]
-        tm.set_status(True)
-        logging.info("Project '%s' loaded successfully.", payload["name"])
-    except Exception:
-        logging.exception("Project creation failed.")
-    finally:
-        app_state.creating = False
+    return tm
+
+
+def _create_project(payload: Dict[str, Any]) -> ProjectResult:
+    """Build a project and return the result stored by the task manager."""
+    name = str(payload["name"]).strip()
+    save_path = str(payload.get("save_path") or "").strip()
+    tm = _build_topology(payload)
+    tm.set_status(True)
+    logging.info("Project '%s' loaded successfully.", name)
+    return ProjectResult(tm, name, save_path)
+
+
+def _project_display_name(tm: TopologyManager) -> str:
+    """Return the user-facing project name from a loaded topology manager."""
+    simulation_property = getattr(tm, "simulation_property", None)
+    name = (
+        getattr(simulation_property, "simulation_name", None)
+        if simulation_property
+        else None
+    )
+    if not name:
+        raw_name = str(getattr(tm, "project_name", "") or "Loaded Project")
+        name = re.sub(r"_\d{10}$", "", raw_name)
+    return str(name).strip() or "Loaded Project"
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -244,7 +263,7 @@ async def api_ground_station_presets() -> JSONResponse:
 
 
 @app.post("/api/project/create")
-async def api_project_create(request: Request) -> Dict[str, Any]:
+async def api_project_create(request: Request) -> JSONResponse:
     """Start building a constellation project in a background thread.
 
     Accepts a JSON body with the following keys:
@@ -264,19 +283,47 @@ async def api_project_create(request: Request) -> Dict[str, Any]:
         'ok' False and 'error' message on validation failure.
     """
     try:
-        payload: Dict[str, Any] = await request.json()
+        payload = await request.json()
     except Exception as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
-    if app_state.creating:
+    if not isinstance(payload, dict):
         return JSONResponse(
-            {"ok": False, "error": "A project is already being created."},
-            status_code=409,
+            {"ok": False, "error": "Request body must be a JSON object."},
+            status_code=400,
         )
 
-    thread = threading.Thread(target=_build_topology, args=(payload,), daemon=True)
-    thread.start()
-    return {"ok": True}
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        return JSONResponse(
+            {"ok": False, "error": "Project name is required."},
+            status_code=400,
+        )
+
+    save_path = str(payload.get("save_path") or "").strip()
+    started = app_state.project_tasks.start(
+        name=name,
+        save_path=save_path,
+        operation="create",
+        runner=lambda: _create_project(payload),
+    )
+    if not started:
+        return JSONResponse(
+            {"ok": False, "error": "A project operation is already running."},
+            status_code=409,
+        )
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/project/status")
+async def api_project_status() -> Dict[str, Any]:
+    """Return the explicit state of the project lifecycle.
+
+    Returns:
+        JSON object with state, operation, project_name, pending_name,
+        loaded, and error.
+    """
+    return app_state.project.snapshot()
 
 
 @app.get("/api/project/exists")
@@ -289,12 +336,7 @@ async def api_project_exists(name: str) -> Dict[str, Any]:
     Returns:
         JSON object with key 'exists' set to True if the project is loaded.
     """
-    exists = (
-        app_state.topology_manager is not None
-        and app_state.project_name == name
-        and not app_state.creating
-    )
-    return {"exists": exists}
+    return {"exists": app_state.project.exists(name)}
 
 
 @app.get("/api/project/config")
@@ -309,18 +351,43 @@ async def api_project_config(name: str) -> JSONResponse:
     Returns:
         JSON object with the project configuration, or 404 if not found.
     """
-    if app_state.project_name != name or app_state.topology_manager is None:
+    tm = app_state.project.get_topology(name)
+    if tm is None:
         return JSONResponse({"error": "Project not found."}, status_code=404)
-    tm = app_state.topology_manager
+
     try:
-        cfg = (
-            tm.simulation_manager.configuration_manager.simulation_property.model_dump()
-        )
+        simulation_property = getattr(tm, "simulation_property", None)
+        if simulation_property is None:
+            return JSONResponse(
+                {"error": "Project configuration is unavailable."},
+                status_code=500,
+            )
+
+        cfg = simulation_property.model_dump(mode="json")
+        cfg["name"] = app_state.project.project_name or simulation_property.simulation_name
+        cfg["update_time"] = tm.update_time
+        cfg["isl_capacity"] = tm.isl_link_capacity
+        cfg["gs_capacity"] = tm.gnd_link_capacity
+        cfg["save_path"] = app_state.project.save_path
+
+        for ground in cfg.get("ground_objects_properties", []):
+            data_file = ground.get("data_file")
+            ground["stations"] = []
+            if not data_file:
+                continue
+            try:
+                ground["stations"] = _parse_gs_file(Path(data_file))
+            except Exception:
+                logging.exception(
+                    "Could not read ground station file for project config: %s",
+                    data_file,
+                )
+        return JSONResponse(cfg)
     except Exception:
+        logging.exception("Could not read project config.")
         return JSONResponse(
             {"error": "Could not read project config."}, status_code=500
         )
-    return JSONResponse(cfg)
 
 
 @app.post("/api/project/load")
@@ -335,9 +402,15 @@ async def api_project_load(request: Request) -> JSONResponse:
         and 'error' on failure.
     """
     try:
-        payload: Dict[str, Any] = await request.json()
+        payload = await request.json()
     except Exception as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            {"ok": False, "error": "Request body must be a JSON object."},
+            status_code=400,
+        )
 
     content = payload.get("content", "")
     if not content:
@@ -345,20 +418,28 @@ async def api_project_load(request: Request) -> JSONResponse:
             {"ok": False, "error": "No file content provided."}, status_code=400
         )
 
+    if not app_state.project.begin(name="", save_path="", operation="load"):
+        return JSONResponse(
+            {"ok": False, "error": "A project operation is already running."},
+            status_code=409,
+        )
+
     tmp_path = (
         Path(tempfile.gettempdir()) / f"satgonetem_load_{os.urandom(8).hex()}.json"
     )
-    tmp_path.write_text(content, encoding="utf-8")
     try:
+        tmp_path.write_text(content, encoding="utf-8")
         tm = await asyncio.to_thread(TopologyManager.from_file, str(tmp_path))
-        app_state.topology_manager = tm
-        app_state.project_name = tm.project_name or "Loaded Project"
+        project_name = _project_display_name(tm)
         tm.set_status(True)
-        logging.info("Project '%s' loaded from file.", app_state.project_name)
-        return JSONResponse({"ok": True, "name": app_state.project_name})
+        app_state.project.succeed(tm, project_name, "")
+        logging.info("Project '%s' loaded from file.", project_name)
+        return JSONResponse({"ok": True, "name": project_name})
     except Exception as exc:
         logging.exception("Project load failed.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        message = str(exc).strip() or exc.__class__.__name__
+        app_state.project.fail(message)
+        return JSONResponse({"ok": False, "error": message}, status_code=500)
     finally:
         tmp_path.unlink(missing_ok=True)
 
