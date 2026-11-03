@@ -1,11 +1,20 @@
 /** Space Security Lab UI controller. */
 import { api } from "./api.js";
 import { escapeHtml } from "./escape.js";
+import {
+  buildDdosPlan,
+  buildFloodFlow,
+  buildIperf3Flow,
+  summarizeDdos,
+  throughputPoints,
+} from "./security_model.js";
 
 const state = {
   range: null,
   captures: [],
   activeUnit: "recon",
+  ddosRun: null,
+  ddosChart: null,
 };
 
 function byId(id) {
@@ -295,10 +304,248 @@ function exportNotes() {
   URL.revokeObjectURL(url);
 }
 
+function appendDdosLog(line) {
+  const log = byId("ddos-log");
+  if (!log) return;
+  const stamp = new Date().toLocaleTimeString();
+  log.textContent += `[${stamp}] ${line}\n`;
+  log.scrollTop = log.scrollHeight;
+}
+
+function setDdosStatus(text, isError = false) {
+  const element = byId("ddos-status");
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function setDdosRunning(running) {
+  const runButton = byId("ddos-run");
+  if (runButton) runButton.disabled = running;
+  const stop = byId("ddos-stop");
+  if (stop) stop.disabled = !running;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollTrafficJob(jobId, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const data = await api.get(
+      `/api/traffic/status?job_id=${encodeURIComponent(jobId)}`,
+    );
+    if (["done", "error", "cancelled"].includes(data.status)) return data;
+    await sleep(400);
+  }
+  throw new Error("Traffic job timed out.");
+}
+
+async function cancelTrafficJob(jobId) {
+  if (!jobId) return;
+  try {
+    await api.post("/api/traffic/cancel", { job_id: jobId });
+  } catch {
+    /* already finished or cancelled */
+  }
+}
+
+function renderDdosMetrics(summary) {
+  const element = byId("ddos-metrics");
+  if (!element) return;
+  const baseline =
+    summary.baseline === null ? "-" : `${summary.baseline.toFixed(2)} Mbps`;
+  const attack =
+    summary.attack === null ? "-" : `${summary.attack.toFixed(2)} Mbps`;
+  const drop =
+    summary.dropPercent === null ? "-" : `${summary.dropPercent.toFixed(1)}%`;
+  element.innerHTML =
+    `<dl class="sec-metric"><dt>Baseline</dt><dd>${baseline}</dd></dl>` +
+    `<dl class="sec-metric"><dt>During attack</dt><dd>${attack}</dd></dl>` +
+    `<dl class="sec-metric"><dt>Throughput drop</dt><dd>${drop}</dd></dl>`;
+}
+
+function renderDdosChart(points, attackStart) {
+  const canvas = byId("ddos-chart");
+  if (!canvas || !window.Chart) return;
+  if (state.ddosChart) {
+    state.ddosChart.destroy();
+    state.ddosChart = null;
+  }
+  const labels = points.map((point) => point.t.toFixed(0));
+  const baseline = points.map((point) =>
+    point.t < attackStart ? point.mbps : null,
+  );
+  const attack = points.map((point) =>
+    point.t >= attackStart ? point.mbps : null,
+  );
+  state.ddosChart = new window.Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Baseline",
+          data: baseline,
+          borderColor: "#3da9fc",
+          backgroundColor: "rgba(61,169,252,0.12)",
+          tension: 0.2,
+          spanGaps: true,
+        },
+        {
+          label: "Attack window",
+          data: attack,
+          borderColor: "#f87171",
+          backgroundColor: "rgba(248,113,113,0.12)",
+          tension: 0.2,
+          spanGaps: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: "Time (s)" },
+          grid: { color: "#1e2937" },
+        },
+        y: {
+          title: { display: true, text: "Throughput (Mbps)" },
+          grid: { color: "#1e2937" },
+          beginAtZero: true,
+        },
+      },
+    },
+  });
+}
+
+async function runDdos() {
+  const src = byId("ddos-src")?.value;
+  const dst = byId("ddos-dst")?.value;
+  const attacker = byId("ddos-attacker")?.value;
+  const target = byId("ddos-target")?.value;
+  if (!src || !dst || !attacker || !target) {
+    setDdosStatus("Select legitimate and attack endpoints.", true);
+    return;
+  }
+  if (attacker === target) {
+    setDdosStatus("Attacker and attack target must be different nodes.", true);
+    return;
+  }
+
+  const plan = buildDdosPlan({
+    baselineSec: byId("ddos-baseline")?.value,
+    attackSec: byId("ddos-duration")?.value,
+    protocol: byId("ddos-protocol")?.value,
+    rate: byId("ddos-rate")?.value,
+  });
+  const run = { stop: false, iperfJob: null, attackJob: null };
+  state.ddosRun = run;
+  setDdosRunning(true);
+  setDdosStatus("Starting baseline...");
+  const log = byId("ddos-log");
+  if (log) log.textContent = "";
+  appendDdosLog(
+    `baseline ${src} -> ${dst}, ${plan.baselineSec}s TCP; attack starts at ${plan.attackStart}s`,
+  );
+
+  try {
+    const baseline = await api.post(
+      "/api/traffic/iperf3",
+      buildIperf3Flow({ src, dst, duration: plan.baselineSec }),
+    );
+    run.iperfJob = baseline.job_id;
+    appendDdosLog(`iperf3 job ${run.iperfJob} started`);
+    const baselinePromise = pollTrafficJob(
+      run.iperfJob,
+      (plan.baselineSec + 20) * 1000,
+    ).catch((error) => ({ status: "error", error: error.message }));
+
+    await sleep(plan.attackStart * 1000);
+    if (run.stop) {
+      await cancelTrafficJob(run.iperfJob);
+      setDdosStatus("Stopped.");
+      return;
+    }
+
+    const attack = await api.post(
+      "/api/traffic/hping3",
+      buildFloodFlow({
+        src: attacker,
+        dst: target,
+        protocol: plan.protocol,
+        rate: plan.rate,
+      }),
+    );
+    run.attackJob = attack.job_id;
+    appendDdosLog(
+      `${plan.protocol.toUpperCase()} flood ${attacker} -> ${target} started (${run.attackJob})`,
+    );
+
+    await sleep(plan.attackSec * 1000);
+    await cancelTrafficJob(run.attackJob);
+    appendDdosLog("attack stopped; waiting for baseline result");
+    run.attackJob = null;
+
+    const baselineResult = await baselinePromise;
+    if (baselineResult.status === "done" && baselineResult.results) {
+      const points = throughputPoints(baselineResult.results.intervals);
+      const summary = summarizeDdos(points, plan.attackStart);
+      renderDdosChart(points, plan.attackStart);
+      renderDdosMetrics(summary);
+      if (summary.dropPercent === null) {
+        setDdosStatus(
+          "Baseline finished, but no interval throughput was reported.",
+          true,
+        );
+      } else {
+        setDdosStatus(
+          `Baseline ${summary.baseline.toFixed(2)} Mbps, attack ${summary.attack.toFixed(2)} Mbps, drop ${summary.dropPercent.toFixed(1)}%.`,
+        );
+      }
+      appendDdosLog("baseline complete");
+    } else if (baselineResult.status === "cancelled") {
+      setDdosStatus("Baseline was cancelled.");
+    } else {
+      setDdosStatus(
+        baselineResult.error ||
+          "Baseline failed. Check that both nodes are addressable.",
+        true,
+      );
+    }
+  } catch (error) {
+    if (run.stop) {
+      setDdosStatus("Stopped.");
+    } else {
+      setDdosStatus(error.message || "DDoS lab failed.", true);
+      appendDdosLog(error.message || "DDoS lab failed.");
+    }
+  } finally {
+    await cancelTrafficJob(run.attackJob);
+    await cancelTrafficJob(run.iperfJob);
+    state.ddosRun = null;
+    setDdosRunning(false);
+  }
+}
+
+async function stopDdos() {
+  const run = state.ddosRun;
+  if (!run) return;
+  run.stop = true;
+  setDdosStatus("Stopping...");
+  await cancelTrafficJob(run.attackJob);
+  await cancelTrafficJob(run.iperfJob);
+}
+
 for (const button of document.querySelectorAll(".sec-unit-button[data-unit]")) {
   button.addEventListener("click", () => activateUnit(button.dataset.unit));
 }
 byId("sec-refresh")?.addEventListener("click", loadRange);
 byId("recon-export")?.addEventListener("click", exportNotes);
+byId("ddos-run")?.addEventListener("click", runDdos);
+byId("ddos-stop")?.addEventListener("click", stopDdos);
 
 loadRange();
