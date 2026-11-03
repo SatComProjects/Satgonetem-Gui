@@ -231,3 +231,136 @@ Both ideas need the same core pieces:
 - Should WireGuard keys be generated per run or loaded from a scenario fixture?
 - Do we want a separate `sgnt-monitor`/`sgnt-tools` image, or add packages to the
   existing node images?
+
+## Broader security roadmap
+
+These are the next workstreams after the two detailed labs above. They are all
+proposed; none is implemented yet.
+
+### 1. Firewall and QoS control plane
+
+Add a first-class policy interface to SatGoNetEm, not just GUI buttons:
+
+- Per-node firewall using `iptables`/`ip6tables` initially, with `nftables` in a
+  rebuilt image.
+- Policy templates:
+  - default-deny inbound, allow established/related;
+  - allow TT&C and telemetry ports only from mission control;
+  - BCP 38 ingress/egress source validation to stop spoofing;
+  - management-plane allowlist;
+  - per-prefix rate limits and connection limits.
+- QoS and policing through `tc`: ingress policing, per-flow classes, SYN rate
+  limits, and DSCP handling alongside the existing netem/TBF setup.
+- API shape: `apply_policy(node, policy)`, `clear_policy(node)`,
+  `policy_status(node)`, with idempotent apply and rollback.
+- Counters and logs from the rules feed the detection layer.
+
+First lab: run the existing DDoS, detect the flood, apply a rate limit or ACL,
+and measure recovery. That turns the DDoS demo into a defense exercise.
+
+### 2. Detection and telemetry
+
+- **Packet-level IDS sidecar.** Build a small `sgnt-monitor` image with Zeek or
+  Suricata and attach it to a node's network namespace
+  (`--net=container:...`) or a mirror interface. It can emit alerts without
+  bloating every satellite image.
+- **Flow telemetry.** Export per-link bytes, packets, drops, errors, and
+  retransmits to Prometheus. SatGoNetEm already has `monitor_links()`; turn it
+  into a proper metrics endpoint.
+- **Control-plane monitoring.** Track OSPF/IS-IS neighbor state, route count,
+  and route changes. A sudden route withdrawal is a detection signal.
+- **RF/link-budget monitoring.** Expose C/N0, link capacity, and budget inputs
+  from the existing `link_budget` module. Interference then appears as a
+  capacity/noise change, not just packet loss.
+- **Anomaly detection.** Baseline each link and flag changes in throughput,
+  loss, RTT, queue depth, or route churn using simple thresholds/EWMA/z-score
+  before reaching for ML.
+- **Honeypots.** Put a decoy telemetry or management service on selected ground
+  stations and alert on scans or login attempts.
+
+### 3. Response and incident workflow
+
+- Quarantine a node or link.
+- Apply an ACL or rate limit.
+- Switch routing method or withdraw a route.
+- Rotate keys or disable a service.
+- Restore from the pre-incident snapshot.
+- Produce an evidence bundle: alerts, pcaps, route diffs, firewall counters,
+  timeline.
+- Score detection time, containment time, and whether the mitigation actually
+  restored service.
+
+This is where a cyber range becomes more than a set of demos.
+
+### 4. Satellite-specific scenarios
+
+- **Link-budget jamming.** Add an interference/noise-rise parameter to the link
+  budget, recompute capacity, and apply it to the link. This is more faithful
+  than `tc loss`.
+- **Ephemeris/TLE integrity.** Tamper with orbit data and observe wrong links,
+  coverage, or handovers. Defend with signed ephemeris, cross-source checks, and
+  plausibility bounds.
+- **TT&C authentication and replay.** Add a small mission-control service with
+  telecommands: test unsigned commands, replay, stale timestamps, and weak keys;
+  defend with mTLS, signatures, nonces, and least privilege.
+- **Firmware update integrity.** Mock a signed update service, then test
+  tampered manifests, wrong hashes, rollback, and key compromise.
+- **Handover flooding.** Attack the ground-station association process rather
+  than just the data plane.
+- **Routing attacks.** Route injection, blackhole, prefix hijack, and OSPF
+  adjacency abuse; defend with protocol authentication, prefix filters, route
+  limits, and monitoring.
+- **Time synchronization attacks.** If PTP/NTP is added, test spoofed time and
+  its effect on handovers and logs.
+- **HIL/SDR.** Use the hardware-in-the-loop path for real RF jamming/spoofing
+  rather than claiming the packet-level analogue is RF.
+
+### 5. SatGoNetEm core features
+
+- **Scenario DSL** in YAML/JSON: actors, phases, triggers, objectives, allowed
+  actions, detection rules, and scoring.
+- **Event bus/API** for link changes, route changes, attack start/stop, alerts,
+  and policy changes; the GUI consumes it via SSE/WebSocket.
+- **Defense plugin API** with apply/rollback semantics, so firewall, rate-limit,
+  routing, and quarantine actions are uniform.
+- **Deterministic replay** of topology state, flows, policies, and captures for
+  grading and research.
+- **Image profiles:** satellite, ground-station, and monitor, with a documented
+  capability matrix.
+- **Custom routing daemon support** already exists; use it for authenticated
+  routing, prefix filters, and a BGP/RPKI-style lab.
+- **P4/BMv2 experiments:** the satellite image has `simple_switch_grpc` and
+  `init_bmv2()`. An in-network ACL or telemetry sketch is a strong advanced lab,
+  but treat it as experimental.
+
+### 6. Platform security
+
+This is separate from the attack labs but important:
+
+- Authentication and RBAC for the GUI, even if it stays loopback-only.
+- Audit logs for destructive actions.
+- Do not expose the Docker socket broadly; use a restricted proxy or rootless
+  containers.
+- Image signing, SBOMs, dependency pinning, and secrets management.
+- CPU/memory/packet-rate limits per lab so a flood cannot take down the host or
+  the class.
+
+### Priority
+
+| Priority | Capability | Why |
+|---|---|---|
+| P0 | Firewall + rate-limit policy API and GUI editor | Enables mitigation labs immediately |
+| P0 | Link/flow telemetry and alert timeline | Makes detection measurable |
+| P1 | Zeek/Suricata sidecar | Real IDS alerts and evidence |
+| P1 | Link-budget interference model | Satellite-specific, more credible than packet loss |
+| P1 | TT&C auth/replay and firmware-signing mock | Ground-segment and mission security |
+| P2 | Routing attacks + authentication | Control-plane security |
+| P2 | TLE/ephemeris integrity | Unique to constellation emulation |
+| P3 | P4/eBPF, HIL/SDR, scenario engine | Advanced/research extensions |
+
+### First milestone
+
+Build the **policy API + link/flow telemetry + alert timeline + a DDoS
+mitigation lab**. That gives SatGoNetEm a real detect-and-respond loop, and the
+GUI becomes the place where students see it rather than the place where the
+security model lives.
