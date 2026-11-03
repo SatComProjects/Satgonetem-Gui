@@ -85,11 +85,14 @@ class SatGoNetemTrafficAdapter:
         config = Hping3Config(
             proto=request.proto,
             dport=request.dport,
+            sport=request.sport,
             count=request.count,
             size=request.size,
+            ttl=request.ttl,
             rate_type=request.rate_type,
             interval=request.interval,
             flags=request.flags,
+            spoof_src=request.spoof_src,
         )
         flow = Hping3Flow(source, destination, config, delay=0.0)
         flow.start()

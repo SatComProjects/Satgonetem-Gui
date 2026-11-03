@@ -5,6 +5,7 @@ import {
   buildDdosPlan,
   buildFloodFlow,
   buildIperf3Flow,
+  buildSpoofFlow,
   summarizeDdos,
   throughputPoints,
 } from "./security_model.js";
@@ -202,7 +203,7 @@ function renderTargetSelects(range) {
     const target = byId("ddos-target");
     if (target) target.value = nodes[1].value;
     const spoof = byId("trust-spoof");
-    if (spoof) spoof.value = nodes[1].value;
+    if (spoof) spoof.value = nodes[0].value;
   }
 }
 
@@ -783,6 +784,179 @@ async function resetSecurityRange() {
   }
 }
 
+async function resolveNodeIp(name) {
+  if (!name) return "";
+  const data = await api.get(`/api/nodes/${encodeURIComponent(name)}`);
+  const node = data?.node || {};
+  if (node.loopback?.ipv4) return node.loopback.ipv4;
+  const iface = (node.interfaces || []).find((item) => item.ipv4);
+  return iface?.ipv4 || "";
+}
+
+async function refreshTrustIp() {
+  const name = byId("trust-spoof")?.value;
+  const element = byId("trust-ip");
+  if (!element) return;
+  if (!name) {
+    element.textContent = "Spoofed source IP: -";
+    return;
+  }
+  try {
+    const ip = await resolveNodeIp(name);
+    element.textContent = `Spoofed source IP: ${ip || "(no address found)"}`;
+  } catch {
+    element.textContent = "Spoofed source IP: -";
+  }
+}
+
+function setTrustStatus(text, isError = false) {
+  const element = byId("trust-status");
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function setTrustRunning(running) {
+  const run = byId("trust-run");
+  if (run) run.disabled = running;
+  const stop = byId("trust-stop");
+  if (stop) stop.disabled = !running;
+}
+
+function renderTrustResult(result) {
+  const element = byId("trust-result");
+  if (!element) return;
+  if (!result || result.status !== "done" || !result.results) {
+    element.textContent =
+      result?.error || `hping3 status: ${result?.status || "unknown"}`;
+    return;
+  }
+  const data = result.results;
+  element.textContent = [
+    `packets received: ${data.packets_received ?? "-"} / ${data.packets_transmitted ?? "-"}`,
+    `packet loss: ${data.packet_loss_percent ?? "-"}%`,
+    `reachable: ${data.reachable ? "yes" : "no"}`,
+    `rtt avg: ${data.rtt_avg_ms ?? "-"} ms`,
+  ].join("\n");
+}
+
+async function waitForCaptureReady(captureId, timeoutMs = 12000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const captures = await api.get("/api/security/captures");
+    const capture = captures.find((item) => item.id === captureId);
+    if (capture && capture.status !== "capturing") return capture;
+    await sleep(500);
+  }
+  return null;
+}
+
+async function runTrustTest() {
+  const attacker = byId("trust-attacker")?.value;
+  const target = byId("trust-target")?.value;
+  const spoof = byId("trust-spoof")?.value;
+  const flags = byId("trust-flags")?.value || "S";
+  const count = Number(byId("trust-count")?.value) || 20;
+  const captureEnabled = byId("trust-capture")?.value === "yes";
+
+  if (!attacker || !target || !spoof) {
+    setTrustStatus("Select attacker, target, and spoofed source.", true);
+    return;
+  }
+  if (attacker === target) {
+    setTrustStatus("Attacker and target must differ.", true);
+    return;
+  }
+  if (spoof === attacker) {
+    setTrustStatus("Spoofed source must differ from the attacker.", true);
+    return;
+  }
+
+  setTrustRunning(true);
+  state.trustJobId = null;
+  state.trustCaptureId = null;
+  try {
+    const spoofIp = await resolveNodeIp(spoof);
+    if (!spoofIp) {
+      setTrustStatus("The spoofed source has no IPv4 address.", true);
+      return;
+    }
+    setTrustStatus(`Spoofing ${spoofIp} toward ${target}...`);
+    if (captureEnabled) {
+      const detail = await api.get(`/api/nodes/${encodeURIComponent(target)}`);
+      const iface =
+        detail?.node?.interfaces?.[0]?.iname ||
+        detail?.node?.interfaces?.[0]?.name;
+      if (!iface) throw new Error("Target has no capture interface.");
+      const capture = await api.post("/api/security/captures", {
+        node: target,
+        interface: iface,
+        packet_limit: 100,
+        duration_sec: 12,
+      });
+      state.trustCaptureId = capture.id;
+      setTrustStatus(`Capturing on ${target}/${iface} while sending SYN packets...`);
+    }
+
+    const job = await api.post(
+      "/api/traffic/hping3",
+      buildSpoofFlow({
+        src: attacker,
+        dst: target,
+        spoofSrc: spoofIp,
+        count,
+        flags,
+      }),
+    );
+    state.trustJobId = job.job_id;
+    const result = await pollTrafficJob(job.job_id, 20000);
+    renderTrustResult(result);
+    setTrustStatus(
+      result.status === "done"
+        ? "Spoofed packets sent. Check the capture evidence."
+        : result.error || `hping3 finished as ${result.status}.`,
+      result.status !== "done",
+    );
+  } catch (error) {
+    setTrustStatus(error.message || "Spoofing test failed.", true);
+  } finally {
+    if (state.trustCaptureId) {
+      try {
+        await api.post(
+          `/api/security/captures/${encodeURIComponent(state.trustCaptureId)}/stop`,
+        );
+        await waitForCaptureReady(state.trustCaptureId);
+        await refreshCaptures();
+      } catch {
+        /* capture may already be complete */
+      }
+      state.trustCaptureId = null;
+    }
+    state.trustJobId = null;
+    setTrustRunning(false);
+  }
+}
+
+async function stopTrustTest() {
+  setTrustStatus("Stopping spoofing test...");
+  if (state.trustJobId) {
+    await cancelTrafficJob(state.trustJobId);
+  }
+  if (state.trustCaptureId) {
+    try {
+      await api.post(
+        `/api/security/captures/${encodeURIComponent(state.trustCaptureId)}/stop`,
+      );
+      await waitForCaptureReady(state.trustCaptureId);
+      await refreshCaptures();
+    } catch {
+      /* ignore */
+    }
+    state.trustCaptureId = null;
+  }
+  setTrustRunning(false);
+}
+
 for (const button of document.querySelectorAll(".sec-unit-button[data-unit]")) {
   button.addEventListener("click", () => activateUnit(button.dataset.unit));
 }
@@ -797,5 +971,8 @@ byId("res-node")?.addEventListener("change", refreshResRoute);
 byId("conf-node")?.addEventListener("change", loadConfInterfaces);
 byId("conf-start")?.addEventListener("click", startConfCapture);
 byId("conf-stop")?.addEventListener("click", stopConfCapture);
+byId("trust-spoof")?.addEventListener("change", refreshTrustIp);
+byId("trust-run")?.addEventListener("click", runTrustTest);
+byId("trust-stop")?.addEventListener("click", stopTrustTest);
 
-loadRange().then(loadAllNodes);
+loadRange().then(loadAllNodes).then(refreshTrustIp);

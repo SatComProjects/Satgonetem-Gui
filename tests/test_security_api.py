@@ -56,6 +56,20 @@ def test_security_capture_rejects_invalid_limits(client) -> None:
     assert response.status_code == 422
 
 
+def test_security_hping3_rejects_invalid_spoof_source(client) -> None:
+    """A forged source must be a valid IPv4 address before a job starts."""
+    response = client.post(
+        "/api/traffic/hping3",
+        json={
+            "src": "Gnd0",
+            "dst": "Gnd1",
+            "spoof_src": "not-an-ip",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_security_reset_requires_a_snapshot(client) -> None:
     """Reset reports a conflict when no security snapshot exists."""
     response = client.post("/api/security/reset")

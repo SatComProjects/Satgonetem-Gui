@@ -26,6 +26,19 @@ export function buildFloodFlow({ src, dst, protocol = "udp", rate = "flood" }) {
   };
 }
 
+export function buildSpoofFlow({ src, dst, spoofSrc, count = 20, flags = "S" }) {
+  return {
+    src,
+    dst,
+    proto: "tcp",
+    dport: 5201,
+    count: Number(count) || 20,
+    rate_type: "fast",
+    flags: String(flags || "S").split(""),
+    spoof_src: spoofSrc,
+  };
+}
+
 export function throughputPoints(intervals) {
   if (!Array.isArray(intervals)) return [];
   const points = [];

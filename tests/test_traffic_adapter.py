@@ -140,6 +140,40 @@ def test_start_methods_build_and_start_flows(monkeypatch) -> None:
     assert iperf.stopped is True
 
 
+def test_hping3_adapter_passes_spoof_fields(monkeypatch) -> None:
+    """Spoofed source, source port, and TTL reach the hping3 config."""
+    created = []
+
+    class FakeFlow:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            created.append(self)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(adapter_module, "Hping3Flow", FakeFlow)
+    adapter = SatGoNetemTrafficAdapter()
+    adapter.start_hping3(
+        object(),
+        object(),
+        Hping3Request(
+            src="a",
+            dst="b",
+            spoof_src="10.0.0.7",
+            sport=1234,
+            ttl=3,
+            flags=["S"],
+        ),
+    )
+
+    config = created[0].args[2]
+    assert config.spoof_src == "10.0.0.7"
+    assert config.sport == 1234
+    assert config.ttl == 3
+    assert config.flags == ["S"]
+
+
 def test_poll_rejects_unknown_kinds() -> None:
     """Unknown job kinds are an explicit error."""
     with pytest.raises(ValueError):

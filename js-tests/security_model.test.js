@@ -5,6 +5,7 @@ import {
   buildDdosPlan,
   buildFloodFlow,
   buildIperf3Flow,
+  buildSpoofFlow,
   splitThroughput,
   summarizeDdos,
   throughputPoints,
@@ -48,6 +49,23 @@ describe("security model", () => {
 
     expect(flow.flags).toEqual([]);
     expect(flow.rate_type).toBe("flood");
+  });
+
+  it("builds a spoofed SYN flow", () => {
+    expect(
+      buildSpoofFlow({
+        src: "Gnd2",
+        dst: "Gnd1",
+        spoofSrc: "10.0.0.7",
+        count: "12",
+        flags: "SA",
+      }),
+    ).toMatchObject({
+      proto: "tcp",
+      flags: ["S", "A"],
+      spoof_src: "10.0.0.7",
+      count: 12,
+    });
   });
 
   it("extracts throughput points from iperf3 intervals", () => {
