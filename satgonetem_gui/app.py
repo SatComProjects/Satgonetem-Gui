@@ -10,6 +10,7 @@ from .adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
 from .config import Settings, load_settings
 from .errors import install_error_handlers
+from .resources import GROUND_STATIONS_DIR
 from .routes import pages, projects, routing, topology, traffic
 from .services.container import ApplicationServices
 from .services.project_service import ProjectService
@@ -19,7 +20,6 @@ from .services.traffic_service import TrafficService
 from .state import RuntimeState
 
 BASE_DIR = Path(__file__).resolve().parent
-RESOURCES_DIR = BASE_DIR.parent / "resources" / "ground_station_files"
 
 
 def build_services(settings: Settings) -> ApplicationServices:
@@ -28,7 +28,7 @@ def build_services(settings: Settings) -> ApplicationServices:
     topology_adapter = SatGoNetemTopologyAdapter(settings)
     traffic_adapter = SatGoNetemTrafficAdapter()
 
-    project = ProjectService(runtime, topology_adapter, settings, RESOURCES_DIR)
+    project = ProjectService(runtime, topology_adapter, settings, GROUND_STATIONS_DIR)
     topology = TopologyService(runtime.project, topology_adapter)
     routing = RoutingService(topology, topology_adapter)
     traffic = TrafficService(topology, traffic_adapter)

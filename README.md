@@ -16,27 +16,25 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 
 ## Requirements
 
-- Python >= 3.10
+- Python >= 3.10 (CI runs 3.12)
+- Node >= 24 for the frontend test suite
 - SatGoNetEm
 - A modern web browser with WebGL support (for the 3D globe)
 
 ## Installation
 
-It is recommended to work in a virtual environment.
+The supported development path uses [uv](https://github.com/astral-sh/uv):
 
 ```bash
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
+uv sync --extra dev
 ```
 
-Or, if you use [uv](https://github.com/astral-sh/uv):
+For a plain virtual environment, install the project instead:
 
 ```bash
-uv sync
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
 
 ## Running the Application
@@ -76,6 +74,7 @@ satgonetem_gui/
 ├── ground_stations.py  # Ground-station CSV parsing/writing
 ├── serializers.py      # Traffic result shaping
 ├── storage.py          # Data-file and save-path policy
+├── data/               # Bundled presets and sample GoNetem config
 ├── static/             # ES modules, CSS, and shared JS models
 ├── templates/          # Jinja2 HTML templates
 │   └── base.html       # Shared layout with navigation
@@ -83,7 +82,6 @@ tests/                  # pytest suite (10x10 in-process topology)
 js-tests/               # Vitest unit tests for pure frontend models
 e2e/                    # Playwright page smoke tests
 docs/                   # Architecture notes and test baseline
-resources/              # Sample configuration and ground station data
 package.json            # Frontend test/tooling manifest
 ```
 
@@ -112,6 +110,13 @@ The server and project storage are configured through environment variables:
 Set `SATGONETEM_GUI_HOST=0.0.0.0` only on a trusted network. The form's
 `Save to` field is optional; when used, its target must stay inside the
 configured save root.
+
+## Security
+
+The GUI has no authentication and is intended for trusted local use. It binds
+`127.0.0.1` by default, constrains project saves to `SATGONETEM_GUI_SAVE_ROOT`,
+and does not expose a public API. Do not bind it to a public interface without
+placing it behind an authenticating reverse proxy.
 
 ## Development
 
