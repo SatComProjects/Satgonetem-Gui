@@ -40,6 +40,7 @@ def test_openapi_schema_contains_all_public_routes(client) -> None:
     expected = {
         "/api/status",
         "/api/project/create",
+        "/api/project/status",
         "/api/project/exists",
         "/api/project/config",
         "/api/project/load",

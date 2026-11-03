@@ -64,7 +64,7 @@ def ground_object() -> dict[str, Any]:
     }
 
 
-def project_payload(name: str = PROJECT_NAME) -> dict[str, Any]:
+def project_payload(name: str = PROJECT_NAME, save_path: str = "") -> dict[str, Any]:
     """Return the JSON body accepted by POST /api/project/create."""
     return {
         "name": name,
@@ -73,16 +73,19 @@ def project_payload(name: str = PROJECT_NAME) -> dict[str, Any]:
         "end_date": "01/01/2024 00:10:00",
         "isl_capacity": "100000",
         "gs_capacity": "100000",
-        "save_path": "",
+        "save_path": save_path,
         "walker_shells_json": json.dumps([walker_shell()]),
         "ground_objects_properties_json": json.dumps([ground_object()]),
     }
 
 
-def build_project(name: str = PROJECT_NAME) -> dict[str, Any]:
-    """Build the 10x10 project synchronously and return the submitted payload."""
+def build_project(name: str = PROJECT_NAME, save_path: str = "") -> dict[str, Any]:
+    """Build the 10x10 project synchronously and install it in the session."""
     from satgonetem_gui.app import _build_topology
+    from satgonetem_gui.state import app_state
 
-    payload = project_payload(name)
-    _build_topology(payload)
+    payload = project_payload(name, save_path)
+    tm = _build_topology(payload)
+    tm.set_status(True)
+    app_state.project.succeed(tm, name, save_path)
     return payload
