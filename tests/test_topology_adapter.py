@@ -55,6 +55,38 @@ def test_topology_adapter_round_trips_a_project(settings) -> None:
     assert adapter.status(reloaded.topology_manager)["satellites"] == 100
 
 
+def test_links_include_security_fields(settings) -> None:
+    """Link responses carry stable keys, capacity, delay, and state."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    link = SimpleNamespace(
+        source=SimpleNamespace(name="Sat0"),
+        target=SimpleNamespace(name="Sat1"),
+        type="InterSatelliteLink",
+        direction="bidirectional",
+        distance=1_500_000.0,
+        delay=5,
+        is_active=True,
+        get_capacity=lambda: 5000,
+    )
+    topology = SimpleNamespace(links={frozenset(("Sat0", "Sat1")): link})
+
+    result = adapter.links(topology)
+
+    assert result == [
+        {
+            "key": "Sat0|Sat1|InterSatelliteLink|bidirectional",
+            "src": "Sat0",
+            "dst": "Sat1",
+            "type": "InterSatelliteLink",
+            "direction": "bidirectional",
+            "distance_km": 1500.0,
+            "capacity_kbps": 5000,
+            "delay_ms": 5,
+            "state": "active",
+        }
+    ]
+
+
 def test_traffic_nodes_filters_and_orders_endpoints(settings) -> None:
     """Only addressable endpoints with interfaces are returned, ground stations first."""
     adapter = SatGoNetemTopologyAdapter(settings)

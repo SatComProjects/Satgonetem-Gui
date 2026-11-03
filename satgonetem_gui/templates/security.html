@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/security.css">
+{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Space Security Lab</h2>
+
+<div class="sec-banner">
+  <strong>Training range.</strong>
+  Attacks are confined to the emulated constellation. Do not point these
+  tools at real networks. The GUI is a local teaching tool with no
+  authentication.
+</div>
+
+<div class="sec-readiness" id="sec-readiness">
+  <span class="sec-ready" id="sec-ready-project">Project: not loaded</span>
+  <span class="sec-ready" id="sec-ready-containers">Containers: stopped</span>
+  <span class="sec-ready" id="sec-ready-addressing">Addressing: not applied</span>
+  <span class="sec-ready" id="sec-ready-routing">Routing: not applied</span>
+  <span class="muted" id="sec-project-name"></span>
+</div>
+
+<p class="muted" id="sec-msg"></p>
+
+<div class="sec-layout">
+  <nav class="sec-nav" aria-label="Security units">
+    <button type="button" class="sec-unit-button active" data-unit="recon">0. Reconnaissance</button>
+    <button type="button" class="sec-unit-button" data-unit="ddos">1. Availability / DDoS</button>
+    <button type="button" class="sec-unit-button" data-unit="resilience">2. Resilience</button>
+    <button type="button" class="sec-unit-button" data-unit="confidentiality">3. Confidentiality</button>
+    <button type="button" class="sec-unit-button" data-unit="trust">4. Trust / spoofing</button>
+    <button type="button" class="sec-unit-button" id="sec-refresh" data-action="refresh">Refresh range</button>
+  </nav>
+
+  <div class="sec-content">
+    <section class="card sec-panel active" data-panel="recon">
+      <h3 class="card-title">0. Reconnaissance</h3>
+      <p class="muted">
+        Read-only. Map the topology, find bottlenecks, and choose a target
+        before sending any attack traffic.
+      </p>
+      <div class="sec-stats" id="recon-stats"></div>
+
+      <h4>Links</h4>
+      <div class="sec-table-wrap">
+        <table class="sec-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Endpoints</th>
+              <th>Type</th>
+              <th>Capacity</th>
+              <th>Delay</th>
+              <th>State</th>
+            </tr>
+          </thead>
+          <tbody id="recon-links-body">
+            <tr><td colspan="6" class="muted">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Addressable targets</h4>
+      <div class="sec-targets" id="recon-targets"></div>
+
+      <label>Target notes
+        <textarea id="recon-notes" rows="3" placeholder="Which target, why, and what would the attacker gain?"></textarea>
+      </label>
+      <div class="sec-actions">
+        <button type="button" id="recon-export">Export notes</button>
+      </div>
+    </section>
+
+    <section class="card sec-panel" data-panel="ddos">
+      <h3 class="card-title">1. Availability / DDoS</h3>
+      <p class="muted">
+        Run a legitimate iperf3 flow, then saturate the path with hping3.
+        Compare the baseline with the attack window.
+      </p>
+      <div class="sec-grid">
+        <label>Legitimate source
+          <select id="ddos-src"></select>
+        </label>
+        <label>Legitimate destination
+          <select id="ddos-dst"></select>
+        </label>
+        <label>Attacker
+          <select id="ddos-attacker"></select>
+        </label>
+        <label>Attack target
+          <select id="ddos-target"></select>
+        </label>
+        <label>Protocol
+          <select id="ddos-protocol">
+            <option value="udp">UDP flood</option>
+            <option value="tcp">TCP SYN flood</option>
+            <option value="icmp">ICMP flood</option>
+          </select>
+        </label>
+        <label>Attack rate
+          <select id="ddos-rate">
+            <option value="fast">--fast</option>
+            <option value="faster">--faster</option>
+            <option value="flood" selected>--flood</option>
+          </select>
+        </label>
+        <label>Attack duration (s)
+          <input type="number" id="ddos-duration" min="2" max="30" value="8">
+        </label>
+        <label>Baseline duration (s)
+          <input type="number" id="ddos-baseline" min="5" max="30" value="15">
+        </label>
+      </div>
+      <div class="sec-actions">
+        <button type="button" id="ddos-run">Run baseline + attack</button>
+        <button type="button" class="secondary" id="ddos-stop" disabled>Stop</button>
+      </div>
+      <p class="muted" id="ddos-status">Idle.</p>
+      <div class="sec-metrics" id="ddos-metrics"></div>
+      <div class="sec-chart-wrap">
+        <canvas id="ddos-chart"></canvas>
+      </div>
+      <pre class="sec-log" id="ddos-log"></pre>
+    </section>
+
+    <section class="card sec-panel" data-panel="resilience">
+      <h3 class="card-title">2. Resilience</h3>
+      <p class="muted">
+        Fail a link and watch the route change. Reset restores the snapshot
+        taken before the lab; the destructive path needs running containers.
+      </p>
+      <div class="sec-grid">
+        <label>Link
+          <select id="res-link"></select>
+        </label>
+        <label>Routing method
+          <select id="res-method">
+            <option value="static">Static (Dijkstra)</option>
+            <option value="dynamic-ospf">Dynamic OSPF</option>
+            <option value="dynamic-isis">Dynamic IS-IS</option>
+            <option value="sr-mpls">SR-MPLS</option>
+          </select>
+        </label>
+        <label>Route view node
+          <select id="res-node"></select>
+        </label>
+      </div>
+      <div class="sec-actions">
+        <button type="button" id="res-fail">Fail selected link</button>
+        <button type="button" class="secondary" id="res-apply">Apply routing method</button>
+        <button type="button" class="secondary" id="res-reset">Reset lab</button>
+      </div>
+      <p class="muted" id="res-status">Idle.</p>
+      <div class="sec-route-grid">
+        <div>
+          <h4>Before</h4>
+          <pre class="sec-route" id="res-route-before">Select a node.</pre>
+        </div>
+        <div>
+          <h4>After</h4>
+          <pre class="sec-route" id="res-route-after">-</pre>
+        </div>
+        <div>
+          <h4>Diff</h4>
+          <pre class="sec-route" id="res-diff">-</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="card sec-panel" data-panel="confidentiality">
+      <h3 class="card-title">3. Confidentiality</h3>
+      <p class="muted">
+        Capture packets on an on-path satellite interface, then download the
+        pcap and inspect what is exposed in Wireshark.
+      </p>
+      <div class="sec-grid">
+        <label>Node
+          <select id="conf-node"></select>
+        </label>
+        <label>Interface
+          <select id="conf-interface"></select>
+        </label>
+        <label>Packet limit
+          <input type="number" id="conf-limit" min="1" max="1000" value="200">
+        </label>
+        <label>Duration (s)
+          <input type="number" id="conf-duration" min="1" max="60" value="15">
+        </label>
+      </div>
+      <div class="sec-actions">
+        <button type="button" id="conf-start">Start capture</button>
+        <button type="button" class="secondary" id="conf-stop" disabled>Stop capture</button>
+      </div>
+      <p class="muted" id="conf-status">Idle.</p>
+      <div id="conf-captures" class="sec-captures"></div>
+    </section>
+
+    <section class="card sec-panel" data-panel="trust">
+      <h3 class="card-title">4. Trust / spoofing</h3>
+      <p class="muted">
+        Send a SYN with a forged source address, capture at the target, and
+        show why an IP address is not an identity. Use only inside this range.
+      </p>
+      <div class="sec-grid">
+        <label>Attacker
+          <select id="trust-attacker"></select>
+        </label>
+        <label>Target
+          <select id="trust-target"></select>
+        </label>
+        <label>Spoofed source
+          <select id="trust-spoof"></select>
+        </label>
+        <label>TCP flags
+          <select id="trust-flags">
+            <option value="S" selected>SYN (-S)</option>
+            <option value="SA">SYN+ACK (-S -A)</option>
+            <option value="A">ACK (-A)</option>
+            <option value="F">FIN (-F)</option>
+          </select>
+        </label>
+        <label>Packets
+          <input type="number" id="trust-count" min="1" max="10000" value="20">
+        </label>
+        <label>Capture on target
+          <select id="trust-capture">
+            <option value="yes" selected>Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+      </div>
+      <p class="muted" id="trust-ip">Spoofed source IP: -</p>
+      <div class="sec-actions">
+        <button type="button" id="trust-run">Run spoofing test</button>
+        <button type="button" class="secondary" id="trust-stop" disabled>Stop</button>
+      </div>
+      <p class="muted" id="trust-status">Idle.</p>
+      <div class="sec-grid">
+        <div>
+          <h4>hping3 result</h4>
+          <pre class="sec-route" id="trust-result">-</pre>
+        </div>
+        <div>
+          <h4>Capture evidence</h4>
+          <div id="trust-evidence" class="sec-captures"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module" src="/static/security.js?v=1"></script>
+{% endblock %}

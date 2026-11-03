@@ -33,4 +33,8 @@ def create_pages_router(templates: Jinja2Templates) -> APIRouter:
     async def traffic_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "traffic.html")
 
+    @router.get("/security", response_class=HTMLResponse)
+    async def security_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "security.html")
+
     return router

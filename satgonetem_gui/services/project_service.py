@@ -58,6 +58,22 @@ class ProjectService:
         if not started:
             raise APIError(409, "A project operation is already running.")
 
+    @property
+    def current_name(self) -> str | None:
+        """Return the user-facing name of the loaded project."""
+        return self.state.project.project_name
+
+    def snapshot(self) -> str:
+        """Serialize the loaded project for a later restore."""
+        topology = self.state.project.get_topology()
+        if topology is None:
+            raise APIError(404, "No project is currently loaded.")
+        try:
+            return self.gateway.save(topology)
+        except Exception as exc:
+            logger.exception("Could not snapshot the loaded project.")
+            raise APIError(500, "Could not snapshot the loaded project.") from exc
+
     def status(self) -> dict:
         """Return the current project lifecycle snapshot."""
         return self.state.project.snapshot()

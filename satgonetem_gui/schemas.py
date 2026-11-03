@@ -1,5 +1,6 @@
 """Pydantic request and response schemas for the JSON API."""
 
+import ipaddress
 import json
 from typing import Any, Literal
 
@@ -148,11 +149,15 @@ class GroundStationResponse(BaseModel):
 class LinkResponse(BaseModel):
     """One topology link."""
 
+    key: str
     src: str
     dst: str
     type: str
     direction: str
     distance_km: float
+    capacity_kbps: int = 0
+    delay_ms: int = 0
+    state: str = "unknown"
 
 
 class StatusResponse(BaseModel):
@@ -308,10 +313,104 @@ class Hping3Request(BaseModel):
 
     src: str = Field(min_length=1)
     dst: str = Field(min_length=1)
-    proto: str = "tcp"
-    dport: int = 0
-    count: int = 100
-    size: int = 0
-    rate_type: str = "interval"
+    proto: Literal["tcp", "udp", "icmp"] = "tcp"
+    dport: int = Field(default=0, ge=0, le=65535)
+    sport: int | None = Field(default=None, ge=1, le=65535)
+    count: int = Field(default=100, ge=1, le=1_000_000)
+    size: int = Field(default=0, ge=0, le=65507)
+    ttl: int | None = Field(default=None, ge=1, le=255)
+    rate_type: Literal["interval", "fast", "faster", "flood"] = "interval"
     interval: str = ""
     flags: list[str] = Field(default_factory=list)
+    spoof_src: str | None = None
+
+    @field_validator("flags")
+    @classmethod
+    def _validate_flags(cls, value: list[str]) -> list[str]:
+        """Accept only the TCP flag letters supported by hping3."""
+        allowed = {"S", "A", "F", "R", "P", "U"}
+        invalid = [flag for flag in value if flag not in allowed]
+        if invalid:
+            raise ValueError(f"unsupported TCP flags: {invalid}")
+        return value
+
+    @field_validator("spoof_src")
+    @classmethod
+    def _validate_spoof_src(cls, value: str | None) -> str | None:
+        """Reject a spoofed source unless it is a valid IPv4 address."""
+        if value is None or not value.strip():
+            return None
+        try:
+            ipaddress.IPv4Address(value.strip())
+        except ValueError as exc:
+            raise ValueError("spoof_src must be a valid IPv4 address") from exc
+        return value.strip()
+
+
+class SecurityNode(BaseModel):
+    """An addressable node exposed by the security lab."""
+
+    name: str
+    type: str
+    label: str
+
+
+class SecurityLink(BaseModel):
+    """A security-relevant link with its capacity and state."""
+
+    key: str
+    src: str
+    dst: str
+    type: str
+    direction: str
+    distance_km: float
+    capacity_kbps: int = 0
+    delay_ms: int = 0
+    state: str = "unknown"
+
+
+class SecurityReadiness(BaseModel):
+    """Whether the range is ready for a lab action."""
+
+    project_loaded: bool
+    gonetem_is_on: bool
+    addressing_applied: bool
+    routing_initiated: bool
+    routing_method: str | None = None
+
+
+class SecurityCapture(BaseModel):
+    """One packet capture managed by the security lab."""
+
+    id: str
+    node: str
+    interface: str
+    status: str
+    packet_limit: int
+    duration_sec: int
+    size_bytes: int = 0
+    created_at: float
+    download_url: str | None = None
+
+
+class SecurityRangeResponse(BaseModel):
+    """Readiness, targets, links, and captures for the security page."""
+
+    ok: bool = True
+    project_name: str | None = None
+    readiness: SecurityReadiness
+    nodes: list[SecurityNode] = Field(default_factory=list)
+    links: list[SecurityLink] = Field(default_factory=list)
+    routing_methods: list[str] = Field(default_factory=list)
+    captures: list[SecurityCapture] = Field(default_factory=list)
+    failed_links: list[str] = Field(default_factory=list)
+    snapshot_available: bool = False
+
+
+class CaptureStartRequest(BaseModel):
+    """Start a packet capture on one node interface."""
+
+    node: str = Field(min_length=1)
+    interface: str = Field(min_length=1)
+    packet_limit: int = Field(default=200, ge=1, le=1000)
+    duration_sec: int = Field(default=15, ge=1, le=60)

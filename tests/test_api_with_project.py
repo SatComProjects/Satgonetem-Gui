@@ -60,7 +60,23 @@ def test_links_endpoint(project_client) -> None:
     link_types = {link["type"] for link in links}
     assert "InterSatelliteLink" in link_types
     assert "GroundStationLink" in link_types
-    assert all({"src", "dst", "type", "direction", "distance_km"} == set(link) for link in links)
+    assert all(
+        {
+            "key",
+            "src",
+            "dst",
+            "type",
+            "direction",
+            "distance_km",
+            "capacity_kbps",
+            "delay_ms",
+            "state",
+        }
+        == set(link)
+        for link in links
+    )
+    assert all(link["capacity_kbps"] > 0 for link in links)
+    assert all(link["delay_ms"] >= 0 for link in links)
 
 
 def test_nodes_and_node_detail(project_client) -> None:

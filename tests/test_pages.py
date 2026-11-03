@@ -12,6 +12,7 @@ import pytest
         ("/world", "World View"),
         ("/nodes", "Nodes"),
         ("/traffic", "Traffic Generator"),
+        ("/security", "Space Security Lab"),
     ],
 )
 def test_page_routes_render(client, path: str, marker: str) -> None:
@@ -61,5 +62,11 @@ def test_openapi_schema_contains_all_public_routes(client) -> None:
         "/api/traffic/hping3",
         "/api/traffic/status",
         "/api/traffic/cancel",
+        "/api/security/range",
+        "/api/security/links/{key}/fail",
+        "/api/security/reset",
+        "/api/security/captures",
+        "/api/security/captures/{capture_id}/stop",
+        "/api/security/captures/{capture_id}",
     }
     assert expected.issubset(paths)

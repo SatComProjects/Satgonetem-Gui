@@ -1,0 +1,274 @@
+/* Space Security Lab */
+.sec-banner {
+  border: 1px solid #4b1f1f;
+  background: #2a1214;
+  color: #fecaca;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 0.88rem;
+}
+
+.sec-readiness {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.sec-ready {
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+}
+
+.sec-ready.ok {
+  color: var(--ok);
+  border-color: var(--ok-border);
+}
+
+.sec-ready.bad {
+  color: var(--bad);
+  border-color: var(--bad-border);
+}
+
+.sec-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.sec-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: 12px;
+}
+
+.sec-unit-button {
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.sec-unit-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #102031;
+}
+
+.sec-content {
+  min-width: 0;
+}
+
+.sec-panel {
+  display: none;
+}
+
+.sec-panel.active {
+  display: block;
+}
+
+.sec-panel h4 {
+  margin: 18px 0 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sec-stats,
+.sec-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+.sec-stat,
+.sec-metric {
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.sec-stat dt,
+.sec-metric dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sec-stat dd,
+.sec-metric dd {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.sec-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.sec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.sec-table th,
+.sec-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sec-table th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sec-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sec-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sec-target {
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.sec-target strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.sec-grid label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.sec-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.sec-actions button {
+  min-width: 120px;
+}
+
+.sec-log,
+.sec-route {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sec-chart-wrap {
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+  min-height: 220px;
+}
+
+.sec-route-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.sec-captures {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sec-capture {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.sec-capture .spacer {
+  flex: 1;
+}
+
+.sec-capture a {
+  color: var(--accent);
+}
+
+.sec-panel textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid #2a394b;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+@media (max-width: 760px) {
+  .sec-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sec-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .sec-unit-button {
+    flex: 1 1 140px;
+  }
+}

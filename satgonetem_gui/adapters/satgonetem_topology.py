@@ -198,17 +198,31 @@ class SatGoNetemTopologyAdapter:
         ]
 
     def links(self, topology: Any) -> list[dict[str, Any]]:
-        """Return topology links."""
-        return [
-            {
-                "src": link.source.name,
-                "dst": link.target.name,
-                "type": link.type,
-                "direction": link.direction,
-                "distance_km": round(link.distance / 1000.0, 2),
-            }
-            for link in topology.links.values()
-        ]
+        """Return topology links with the fields the security lab needs."""
+        from ..links import link_key
+
+        result = []
+        for link in topology.links.values():
+            capacity = 0
+            get_capacity = getattr(link, "get_capacity", None)
+            if callable(get_capacity):
+                capacity = int(get_capacity() or 0)
+            result.append(
+                {
+                    "key": link_key(link),
+                    "src": link.source.name,
+                    "dst": link.target.name,
+                    "type": link.type,
+                    "direction": link.direction,
+                    "distance_km": round(link.distance / 1000.0, 2),
+                    "capacity_kbps": capacity,
+                    "delay_ms": int(getattr(link, "delay", 0) or 0),
+                    "state": (
+                        "active" if getattr(link, "is_active", True) else "inactive"
+                    ),
+                }
+            )
+        return result
 
     def nodes(self, topology: Any) -> list[dict[str, Any]]:
         """Return node summaries."""

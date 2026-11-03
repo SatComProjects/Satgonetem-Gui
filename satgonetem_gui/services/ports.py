@@ -88,3 +88,33 @@ class TrafficGateway(Protocol):
     def poll(self, kind: str, flow: Any) -> TrafficPoll: ...
 
     def stop(self, flow: Any) -> None: ...
+
+
+class SecurityGateway(Protocol):
+    """Destructive and capture operations used by the security lab."""
+
+    def routing_methods(self, topology: Any) -> list[str]: ...
+
+    def fail_link(self, topology: Any, key: str) -> dict[str, Any]: ...
+
+    def start_capture(
+        self,
+        topology: Any,
+        node: str,
+        interface: str,
+        packet_limit: int,
+        duration_sec: int,
+    ) -> dict[str, Any]: ...
+
+    def stop_capture(self, topology: Any, node: str, path: str) -> None: ...
+
+    def capture_status(
+        self,
+        topology: Any,
+        node: str,
+        path: str,
+    ) -> dict[str, Any]: ...
+
+    def read_capture(self, topology: Any, node: str, path: str) -> bytes: ...
+
+    def delete_capture(self, topology: Any, node: str, path: str) -> None: ...

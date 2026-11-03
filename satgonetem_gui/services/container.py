@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from ..state import RuntimeState
 from .project_service import ProjectService
 from .routing_service import RoutingService
+from .security_service import SecurityService
 from .topology_service import TopologyService
 from .traffic_service import TrafficService
 
@@ -18,3 +19,4 @@ class ApplicationServices:
     topology: TopologyService
     routing: RoutingService
     traffic: TrafficService
+    security: SecurityService
