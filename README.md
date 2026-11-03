@@ -76,12 +76,15 @@ satgonetem_gui/
 ├── ground_stations.py  # Ground-station CSV parsing/writing
 ├── serializers.py      # Traffic result shaping
 ├── storage.py          # Data-file and save-path policy
-├── static/             # CSS and JavaScript assets
+├── static/             # ES modules, CSS, and shared JS models
 ├── templates/          # Jinja2 HTML templates
 │   └── base.html       # Shared layout with navigation
 tests/                  # pytest suite (10x10 in-process topology)
+js-tests/               # Vitest unit tests for pure frontend models
+e2e/                    # Playwright page smoke tests
 docs/                   # Architecture notes and test baseline
 resources/              # Sample configuration and ground station data
+package.json            # Frontend test/tooling manifest
 ```
 
 ## Pages
@@ -118,7 +121,7 @@ To run the application in development mode with auto-reload:
 uvicorn satgonetem_gui.app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Install the development tools and run the test suite:
+Install the development tools and run the Python suite:
 
 ```bash
 uv sync --extra dev
@@ -127,8 +130,22 @@ uv run ruff check .
 uv run ruff format --check tests
 ```
 
-The default suite builds a 10x10 Walker constellation in-process; it does not
-require Docker or a running GoNetem server. See
+Install the frontend tooling and run the JS tests:
+
+```bash
+npm ci
+npm run test:js
+```
+
+Run the browser smoke tests (the Playwright web server starts the app itself):
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+The default Python suite builds a 10x10 Walker constellation in-process and
+does not require Docker or a running GoNetem server. See
 [`docs/architecture.md`](docs/architecture.md) for the test strategy, target
 module boundaries, and the current coverage baseline.
 

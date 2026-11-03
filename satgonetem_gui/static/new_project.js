@@ -1,5 +1,4 @@
-(function () {
-  "use strict";
+import { api } from "./api.js";
 
   var shells = [];
   var grounds = [];
@@ -45,10 +44,10 @@
       del.type = "button";
       del.className = "button";
       del.style.flexShrink = "0";
-      del.onclick = function () {
+      del.addEventListener("click", function () {
         shells.splice(idx, 1);
         renderShells();
-      };
+      });
       li.appendChild(label);
       li.appendChild(del);
       shellList.appendChild(li);
@@ -78,10 +77,10 @@
       del.type = "button";
       del.className = "button";
       del.style.flexShrink = "0";
-      del.onclick = function () {
+      del.addEventListener("click", function () {
         grounds.splice(idx, 1);
         renderGrounds();
-      };
+      });
       li.appendChild(label);
       li.appendChild(del);
       groundList.appendChild(li);
@@ -222,9 +221,9 @@
     shells = [];
     grounds = [];
     try {
-      var r = await fetch("/api/project/config?name=" + encodeURIComponent(projectName));
-      if (!r.ok) throw new Error("Failed to load project config");
-      var cfg = await r.json();
+      var cfg = await api.get(
+        "/api/project/config?name=" + encodeURIComponent(projectName)
+      );
 
       document.querySelector('[name="name"]').value = cfg.name || projectName;
       document.querySelector('[name="update_time"]').value = cfg.update_time != null ? cfg.update_time : 5;
@@ -280,6 +279,7 @@
       renderGrounds();
     } catch (err) {
       console.error("Could not load project config:", err);
+      alert("Could not load project config: " + String(err.message || err));
       seedDefaults();
     }
   }
@@ -291,23 +291,20 @@
     var lastStatus = null;
     while (attempts < maxAttempts) {
       try {
-        var r = await fetch("/api/project/status");
-        if (r.ok) {
-          lastStatus = await r.json();
-          if (lastStatus.state === "error") {
-            var projectError = new Error(lastStatus.error || "Project creation failed");
-            projectError.projectFailure = true;
-            throw projectError;
-          }
-          if (lastStatus.state === "loaded") {
-            if (lastStatus.project_name === projectName) return;
-            var nameError = new Error(
-              "Project finished with an unexpected name: " +
-                String(lastStatus.project_name || "unknown")
-            );
-            nameError.projectFailure = true;
-            throw nameError;
-          }
+        lastStatus = await api.get("/api/project/status");
+        if (lastStatus.state === "error") {
+          var projectError = new Error(lastStatus.error || "Project creation failed");
+          projectError.projectFailure = true;
+          throw projectError;
+        }
+        if (lastStatus.state === "loaded") {
+          if (lastStatus.project_name === projectName) return;
+          var nameError = new Error(
+            "Project finished with an unexpected name: " +
+              String(lastStatus.project_name || "unknown")
+          );
+          nameError.projectFailure = true;
+          throw nameError;
         }
       } catch (e) {
         if (e && e.projectFailure) {
@@ -350,13 +347,7 @@
       if (progLabel) progLabel.textContent = "Constellation";
       if (progFill) progFill.style.width = "10%";
 
-      var r = await fetch("/api/project/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      var j = await r.json().catch(function () { return {}; });
-      if (!r.ok || !j.ok) throw new Error(j.error || "Failed to start project creation");
+      await api.post("/api/project/create", payload);
 
       if (msgEl) msgEl.textContent = "Building constellation topology...";
       if (progFill) progFill.style.width = "30%";
@@ -401,4 +392,3 @@
       seedDefaults();
     }
   }
-})();

@@ -13,7 +13,7 @@
     <div class="traffic-form">
       <div class="form-row">
         <label>Tool
-          <select id="tg-tool" onchange="tgToggleTool()">
+          <select id="tg-tool">
             <option value="iperf3">iperf3 (Throughput)</option>
             <option value="ping">Ping (ICMP)</option>
             <option value="hping3">hping3 (Custom)</option>
@@ -34,7 +34,7 @@
       <div id="tg-iperf3-opts">
         <div class="form-row">
           <label>Protocol
-            <select id="tg-proto" onchange="tgToggleProto()">
+            <select id="tg-proto">
               <option value="TCP">TCP</option>
               <option value="UDP">UDP</option>
             </select>
@@ -120,7 +120,7 @@
         </div>
         <div class="form-row">
           <label>Rate
-            <select id="tg-hping-rate" onchange="tgToggleHpingRate()">
+            <select id="tg-hping-rate">
               <option value="interval">Interval (-i)</option>
               <option value="fast">--fast</option>
               <option value="faster">--faster</option>
@@ -137,8 +137,8 @@
         <label>Delay (s)
           <input type="number" id="tg-delay" value="0" min="0" max="3600">
         </label>
-        <button type="button" class="button secondary" onclick="tgAddToQueue()">Add to Queue</button>
-        <button type="button" class="button" onclick="tgRunNow()">Run Now</button>
+        <button type="button" class="button secondary" id="tg-add-queue">Add to Queue</button>
+        <button type="button" class="button" id="tg-run-now">Run Now</button>
         <span id="tg-msg" class="muted"></span>
       </div>
     </div>
@@ -146,5 +146,5 @@
 
 </div>
 
-<script src="/static/traffic.js"></script>
+<script type="module" src="/static/traffic.js?v=2"></script>
 {% endblock %}

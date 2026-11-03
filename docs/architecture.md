@@ -1,14 +1,15 @@
 # Architecture and test baseline
 
-Status: Phase 5 complete. The refactor is tracked in
+Status: Phase 6 complete. The refactor is tracked in
 [issue #1](https://github.com/SatComProjects/Satgonetem-Gui/issues/1);
 completed phases are
 [#2](https://github.com/SatComProjects/Satgonetem-Gui/issues/2),
 [#3](https://github.com/SatComProjects/Satgonetem-Gui/issues/3),
 [#4](https://github.com/SatComProjects/Satgonetem-Gui/issues/4),
 [#5](https://github.com/SatComProjects/Satgonetem-Gui/issues/5),
-[#6](https://github.com/SatComProjects/Satgonetem-Gui/issues/6), and
-[#7](https://github.com/SatComProjects/Satgonetem-Gui/issues/7).
+[#6](https://github.com/SatComProjects/Satgonetem-Gui/issues/6),
+[#7](https://github.com/SatComProjects/Satgonetem-Gui/issues/7), and
+[#8](https://github.com/SatComProjects/Satgonetem-Gui/issues/8).
 
 ## Current shape
 
@@ -120,6 +121,23 @@ not import those dependency internals.
 - Added fake-controller failure tests and an opt-in real-container contract test
   (`SATGONETEM_RUN_CONTAINER_TESTS=1`).
 
+## Phase 6 changes
+
+- Converted page scripts to ES modules with a shared `api.js` client and a
+  quote-safe `escape.js` helper.
+- Removed inline `onclick`/`onchange` handlers and the inline load/save script;
+  project actions now live in `project_actions.js`.
+- Queue items use stable queue IDs. Removal clears the matching poll timer, and
+  `Clear` cancels every tracked timer.
+- Ground-station selections are keyed by `preset:index`, so equal indexes in
+  different presets no longer collide.
+- Extracted pure `queue_model.js`, `ground_stations_model.js`, and
+  `traffic_model.js` modules with Vitest coverage.
+- Added Playwright smoke coverage for all non-WebGL pages, absence of inline
+  handlers, and queue add/remove behavior.
+- World View remains a manual WebGL check; the smoke test only verifies the
+  page shell.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -137,6 +155,11 @@ not import those dependency internals.
   containers.
 - The real-container routing contract test is marked `slow` and skipped unless
   `SATGONETEM_RUN_CONTAINER_TESTS=1`.
+- Vitest covers the pure queue, ground-station selection, traffic payload, API
+  wrapper, and escaping modules.
+- Playwright covers page navigation, runtime page errors, absence of inline
+  handlers, queue add/remove, cross-preset station selection, edit-form prefill,
+  node expansion, and dashboard counts. World View WebGL rendering is excluded.
 
 ## Current measurements
 
@@ -146,7 +169,7 @@ Measured on 2026-11-03 with Python 3.15.0, pytest 9.2.0, and coverage 7.17.1:
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **146 passed, 1 skipped** in about 1.8 s.
+Result: **146 passed, 1 skipped** in about 1.8 s. Frontend: **14 Vitest tests**, **9 Playwright smoke tests**.
 
 | Module | Statements | Coverage |
 |---|---:|---:|
@@ -161,8 +184,8 @@ Result: **146 passed, 1 skipped** in about 1.8 s.
 | `storage.py` | 29 | 95% |
 | **Total** | **1193** | **90%** |
 
-Branch coverage is enabled. No coverage threshold is enforced yet. Phase 6
-will cover the frontend queue, escaping, and browser smoke tests.
+Branch coverage is enabled. No coverage threshold is enforced yet. Phase 7
+covers packaging, resources, and documentation cleanup.
 
 ## Tooling decisions
 
@@ -177,12 +200,13 @@ will cover the frontend queue, escaping, and browser smoke tests.
   Keep the two-line warning header at the top of the file.
 - Ruff checks `E9`, `F`, and `I` across the repository. Formatting is checked
   for the test suite; production files are formatted as they are touched.
-- CI runs on pushes and pull requests to `main` and `develop`, installs from the
-  lockfile, runs lint and tests, and verifies that the wheel contains the
-  application modules, templates, and static assets.
+- CI runs on pushes and pull requests to `main` and `develop`, installs Python
+  and npm dependencies, runs Python/Vitest/Playwright tests, and verifies that
+  the wheel contains the application modules, templates, and static assets.
+- `node_modules/`, `.npm-cache/`, and Playwright browser/artifacts are ignored.
 
 ## Next phase
 
-Phase 6 converts the frontend JavaScript to testable modules, fixes queue and
-escaping bugs, and adds browser-level smoke coverage. See issue #1 for the full
-plan.
+Phase 7 moves bundled resources into the package, fixes installed-package
+resource discovery, and cleans up documentation and repository debt. See
+issue #1 for the full plan.
