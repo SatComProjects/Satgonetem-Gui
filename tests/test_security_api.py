@@ -41,6 +41,21 @@ def test_security_fail_link_requires_a_project(client) -> None:
     assert response.status_code == 404
 
 
+def test_security_capture_rejects_invalid_limits(client) -> None:
+    """Capture bounds are enforced before any container command runs."""
+    response = client.post(
+        "/api/security/captures",
+        json={
+            "node": "Sat0",
+            "interface": "eth0",
+            "packet_limit": 0,
+            "duration_sec": 999,
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_security_reset_requires_a_snapshot(client) -> None:
     """Reset reports a conflict when no security snapshot exists."""
     response = client.post("/api/security/reset")

@@ -15,6 +15,8 @@ const state = {
   activeUnit: "recon",
   ddosRun: null,
   ddosChart: null,
+  captureTimer: null,
+  activeCaptureId: null,
 };
 
 function byId(id) {
@@ -184,7 +186,7 @@ function renderTargetSelects(range) {
   for (const id of ["ddos-src", "ddos-dst", "ddos-attacker", "ddos-target"]) {
     fillSelect(id, nodes);
   }
-  for (const id of ["conf-node", "trust-attacker", "trust-target", "trust-spoof"]) {
+  for (const id of ["trust-attacker", "trust-target", "trust-spoof"]) {
     fillSelect(id, nodes);
   }
   const resNodes = (range?.nodes || []).map((node) => ({
@@ -590,18 +592,135 @@ async function fetchRouteTable(node) {
   return data?.node?.routing_table || [];
 }
 
-async function loadResNodes() {
+async function loadAllNodes() {
   try {
     const nodes = await api.get("/api/nodes");
-    fillSelect(
-      "res-node",
-      (nodes || []).map((node) => ({
-        value: node.name,
-        label: node.name,
-      })),
-    );
+    const options = (nodes || []).map((node) => ({
+      value: node.name,
+      label: `${node.name} (${node.type})`,
+    }));
+    fillSelect("res-node", options);
+    fillSelect("conf-node", options);
+    await loadConfInterfaces();
   } catch {
     /* no project yet */
+  }
+}
+
+async function loadConfInterfaces() {
+  const node = byId("conf-node")?.value;
+  const select = byId("conf-interface");
+  if (!select) return;
+  select.replaceChildren();
+  if (!node) return;
+  try {
+    const data = await api.get(`/api/nodes/${encodeURIComponent(node)}`);
+    const interfaces = data?.node?.interfaces || [];
+    for (const iface of interfaces) {
+      const option = document.createElement("option");
+      option.value = iface.iname || iface.name;
+      option.textContent = `${iface.iname || iface.name} (${iface.ipv4 || "-"})`;
+      select.appendChild(option);
+    }
+    setConfStatus(
+      interfaces.length ? "Select a capture limit and start." : "Node has no interfaces.",
+      interfaces.length === 0,
+    );
+  } catch (error) {
+    setConfStatus(error.message || "Could not load interfaces.", true);
+  }
+}
+
+function setConfStatus(text, isError = false) {
+  const element = byId("conf-status");
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function setConfRunning(running) {
+  const start = byId("conf-start");
+  if (start) start.disabled = running;
+  const stop = byId("conf-stop");
+  if (stop) stop.disabled = !running;
+}
+
+function startCapturePolling() {
+  if (state.captureTimer) clearInterval(state.captureTimer);
+  state.captureTimer = setInterval(refreshCaptures, 1500);
+}
+
+function stopCapturePolling() {
+  if (state.captureTimer) {
+    clearInterval(state.captureTimer);
+    state.captureTimer = null;
+  }
+}
+
+async function refreshCaptures() {
+  try {
+    const captures = await api.get("/api/security/captures");
+    renderCaptures(captures);
+    if (state.activeCaptureId) {
+      const active = captures.find(
+        (capture) => capture.id === state.activeCaptureId,
+      );
+      if (!active || active.status !== "capturing") {
+        state.activeCaptureId = null;
+        setConfRunning(false);
+        stopCapturePolling();
+        if (active?.status === "ready") {
+          setConfStatus(`Capture ${active.id} ready (${fmtBytes(active.size_bytes)}).`);
+        } else if (active?.status === "error") {
+          setConfStatus("Capture failed. Check the node image and permissions.", true);
+        }
+      }
+    }
+  } catch (error) {
+    setConfStatus(error.message || "Could not refresh captures.", true);
+  }
+}
+
+async function startConfCapture() {
+  const node = byId("conf-node")?.value;
+  const iface = byId("conf-interface")?.value;
+  if (!node || !iface) {
+    setConfStatus("Select a node and interface.", true);
+    return;
+  }
+  const limit = Number(byId("conf-limit")?.value) || 200;
+  const duration = Number(byId("conf-duration")?.value) || 15;
+  try {
+    setConfStatus("Starting capture...");
+    const capture = await api.post("/api/security/captures", {
+      node,
+      interface: iface,
+      packet_limit: limit,
+      duration_sec: duration,
+    });
+    state.activeCaptureId = capture.id;
+    setConfRunning(true);
+    setConfStatus(
+      `Capturing ${limit} packets or ${duration}s on ${node}/${iface}...`,
+    );
+    startCapturePolling();
+    await refreshCaptures();
+  } catch (error) {
+    setConfStatus(error.message || "Could not start capture.", true);
+  }
+}
+
+async function stopConfCapture() {
+  if (!state.activeCaptureId) return;
+  const captureId = state.activeCaptureId;
+  try {
+    await api.post(
+      `/api/security/captures/${encodeURIComponent(captureId)}/stop`,
+    );
+    setConfStatus("Stopping capture...");
+    await refreshCaptures();
+  } catch (error) {
+    setConfStatus(error.message || "Could not stop capture.", true);
   }
 }
 
@@ -675,5 +794,8 @@ byId("res-fail")?.addEventListener("click", failSelectedLink);
 byId("res-apply")?.addEventListener("click", applyResRouting);
 byId("res-reset")?.addEventListener("click", resetSecurityRange);
 byId("res-node")?.addEventListener("change", refreshResRoute);
+byId("conf-node")?.addEventListener("change", loadConfInterfaces);
+byId("conf-start")?.addEventListener("click", startConfCapture);
+byId("conf-stop")?.addEventListener("click", stopConfCapture);
 
-loadRange().then(loadResNodes);
+loadRange().then(loadAllNodes);
