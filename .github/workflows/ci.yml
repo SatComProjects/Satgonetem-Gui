@@ -52,6 +52,8 @@ jobs:
               names = set(archive.namelist())
 
           required = {
+              "satgonetem_gui/config.py",
+              "satgonetem_gui/schemas.py",
               "satgonetem_gui/static/base.css",
               "satgonetem_gui/templates/base.html",
           }

@@ -64,8 +64,14 @@ FastAPI auto-generated API documentation can be found at **http://localhost:8000
 ```
 satgonetem_gui/
 ├── app.py              # FastAPI application (routes & API endpoints)
-├── main.py             # Entry point (uvicorn runner)
-├── state.py            # Global application state (TopologyManager, jobs, etc.)
+├── main.py             # Entry point (uvicorn runner + settings)
+├── config.py           # Host, port, and save-root settings
+├── schemas.py          # Pydantic request/response models
+├── errors.py           # Shared API error envelope
+├── state.py            # Project session, jobs, and runtime state
+├── ground_stations.py  # Ground-station CSV parsing/writing
+├── serializers.py      # Traffic result shaping
+├── storage.py          # Data-file and save-path policy
 ├── static/             # CSS and JavaScript assets
 ├── templates/          # Jinja2 HTML templates
 │   └── base.html       # Shared layout with navigation
@@ -86,12 +92,26 @@ resources/              # Sample configuration and ground station data
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
 | `/docs` | API Documentation — auto-generated Swagger UI |
 
+## Configuration
+
+The server and project storage are configured through environment variables:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SATGONETEM_GUI_HOST` | `127.0.0.1` | Bind address; loopback by default. |
+| `SATGONETEM_GUI_PORT` | `8000` | HTTP port. |
+| `SATGONETEM_GUI_SAVE_ROOT` | `~/satgonetem-projects` | Only project save paths inside this directory are accepted. |
+
+Set `SATGONETEM_GUI_HOST=0.0.0.0` only on a trusted network. The form's
+`Save to` field is optional; when used, its target must stay inside the
+configured save root.
+
 ## Development
 
 To run the application in development mode with auto-reload:
 
 ```bash
-uvicorn satgonetem_gui.app:app --reload --host 0.0.0.0 --port 8000
+uvicorn satgonetem_gui.app:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Install the development tools and run the test suite:

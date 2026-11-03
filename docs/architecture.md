@@ -1,28 +1,30 @@
 # Architecture and test baseline
 
-Status: Phase 1 complete. The refactor is tracked in
+Status: Phase 2 complete. The refactor is tracked in
 [issue #1](https://github.com/SatComProjects/Satgonetem-Gui/issues/1);
-Phase 0 is [issue #2](https://github.com/SatComProjects/Satgonetem-Gui/issues/2)
-and Phase 1 is [issue #3](https://github.com/SatComProjects/Satgonetem-Gui/issues/3).
+completed phases are
+[#2](https://github.com/SatComProjects/Satgonetem-Gui/issues/2),
+[#3](https://github.com/SatComProjects/Satgonetem-Gui/issues/3), and
+[#4](https://github.com/SatComProjects/Satgonetem-Gui/issues/4).
 
 ## Current shape
 
-`satgonetem_gui/app.py` is still a single FastAPI module that owns page
-rendering, static mounting, request parsing, topology construction, save/load,
-ground-station CSV handling, routing/GoNetem access, and traffic flows.
+`satgonetem_gui/app.py` still contains the route handlers and topology
+orchestration, but the supporting concerns now have dedicated modules:
 
-Phase 1 extracted the project lifecycle into `state.py`:
+- `schemas.py` - Pydantic request/response models shared by every JSON route.
+- `errors.py` - `APIError` and the FastAPI handlers that produce one error
+  envelope.
+- `config.py` - host, port, and save-root settings from environment variables.
+- `storage.py` - data-file resolution, safe project filenames, and save-root
+  containment.
+- `ground_stations.py` - CSV parsing and unique temporary station files.
+- `serializers.py` - iperf3/ping/hping3 result shaping for the frontend.
+- `state.py` - `ProjectSession`/`ProjectTaskManager` and the process-global
+  `app_state` singleton.
 
-- `ProjectSession` owns the loaded topology, the user-facing project name, the
-  save path, and an explicit `idle -> creating -> loaded | error` state.
-- `ProjectTaskManager` enforces one build at a time and records the outcome in
-  the session. The loaded topology is preserved while a replacement is built
-  and if the replacement fails.
-- The process-global `app_state` singleton still exists. Phase 3 replaces it
-  with an app factory and injected services.
-
-Phase 0 added the test, lint, and CI safety net. Phase 1 used it to fix the P0
-lifecycle defects D1-D5.
+The process-global `app_state` still exists. Phase 3 replaces it with an app
+factory and injected services.
 
 ## Target dependency rule
 
@@ -47,19 +49,33 @@ The detailed target layout and SOLID mapping are in issue #1.
 
 - Added `ProjectSession`/`ProjectTaskManager` with single-flight reservation,
   explicit states, and a preserved previous project on failure.
-- Added `GET /api/project/status` for the New Project page. The page now stops
-  polling on `error` and shows the failure message instead of waiting ten
-  minutes.
-- Fixed `GET /api/project/config`: it reads `TopologyManager.simulation_property`
-  and the network attributes, returns the submitted `name`, dates, capacities,
+- Added `GET /api/project/status`; the New Project page stops polling on
+  `error` and shows the failure message.
+- Fixed `/api/project/config` to return the editable name, dates, capacities,
   shells, save path, and ground objects with their stations embedded.
 - Load now derives the user-facing name from `simulation_property.simulation_name`
-  instead of the timestamp-suffixed `tm.project_name`. Save/download uses the
-  same name.
-- The edit form keeps ground stations, capacities, and the save path when it is
-  submitted back through `/api/project/create`.
-- Create and load participate in the same single-flight guard. A second
-  operation returns HTTP 409.
+  instead of the timestamp-suffixed `tm.project_name`.
+- The edit form round-trips ground stations, capacities, and save path.
+
+## Phase 2 changes
+
+- Every JSON API route now declares Pydantic request/response models and a
+  `response_model`; `tests/test_openapi_contract.py` verifies the schema.
+- Lifted request parsing out of route bodies. FastAPI now returns 422 for
+  malformed or incomplete bodies before handlers run.
+- Added one error envelope, `{ok: false, error: ...}`, for 400, 404, 409, 422,
+  and 500 responses. Unexpected exceptions are logged and converted to a 500
+  envelope.
+- Invalid project files now return 400 instead of 500. Unsupported project
+  operation conflicts remain 409.
+- Moved ground-station CSV parsing/writing and traffic-result serialization
+  into pure, independently tested modules.
+- Added `Settings`: `SATGONETEM_GUI_HOST`, `SATGONETEM_GUI_PORT`, and
+  `SATGONETEM_GUI_SAVE_ROOT`. The server binds `127.0.0.1` by default.
+- Enforced save-root containment. `save_path` values outside the root return
+  400, and relative paths resolve under the root.
+- Inline ground-station data now uses unique `mkstemp` names instead of a
+  filename derived from user input.
 
 ## Test strategy
 
@@ -69,13 +85,11 @@ The detailed target layout and SOLID mapping are in issue #1.
   too small for routing checks.
 - The fixture builds in-process with `TopologyManager.from_satcom`; no Docker,
   no GoNetem server, and no containers are required for the default suite.
-- Page routes, read APIs, save/load, lifecycle errors, and the edit round-trip
+- Page routes, read APIs, lifecycle errors, typed validation, save/load, the
+  edit round-trip, settings, path containment, serializers, and OpenAPI schemas
   are covered in `tests/`.
-- Known-broken behavior is marked with `xfail(strict=True)` and a defect ID
-  from issue #1. D1, D4, and the Phase 1 lifecycle defects are fixed; the two
-  remaining strict xfails cover D9 (typed request validation) for Phase 2.
-- Tests reset the global state before and after each case through the
-  `AppState.reset()` method.
+- Tests reset the global state before and after each case through
+  `AppState.reset()`.
 - Docker-backed routing and traffic happy paths are not part of the default
   suite. They will be covered by fake-adapter tests and optional contract tests.
 
@@ -87,18 +101,22 @@ Measured on 2026-11-03 with Python 3.15.0, pytest 9.2.0, and coverage 7.17.1:
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **64 passed, 2 xfailed** in about 0.5 s. (Phase 0 started at 50 passed,
-4 xfailed, and 58% total coverage.)
+Result: **99 passed** in about 0.6 s.
 
 | Module | Statements | Coverage |
 |---|---:|---:|
-| `satgonetem_gui/app.py` | 573 | 59% |
+| `satgonetem_gui/app.py` | 445 | 65% |
+| `satgonetem_gui/config.py` | 17 | 88% |
+| `satgonetem_gui/ground_stations.py` | 30 | 87% |
+| `satgonetem_gui/main.py` | 8 | 80% |
+| `satgonetem_gui/schemas.py` | 120 | 98% |
+| `satgonetem_gui/serializers.py` | 63 | 79% |
 | `satgonetem_gui/state.py` | 152 | 91% |
-| `satgonetem_gui/main.py` | 6 | 0% |
-| **Total** | **731** | **64%** |
+| `satgonetem_gui/storage.py` | 29 | 95% |
+| **Total** | **895** | **77%** |
 
-Branch coverage is enabled. No coverage threshold is enforced yet; Phase 2
-adds typed request validation and will gate new domain and service modules.
+Branch coverage is enabled. No coverage threshold is enforced yet; Phase 3 will
+gate new domain and service modules.
 
 ## Tooling decisions
 
@@ -120,6 +138,5 @@ adds typed request validation and will gate new domain and service modules.
 
 ## Next phase
 
-Phase 2 adds Pydantic request/response schemas, consistent error handling, and
-the remaining typed-validation fixes for D9. See issue #1 for the full phased
-plan.
+Phase 3 extracts the app factory, routers, services, and `satgonetem` adapters,
+and removes the global mutable state. See issue #1 for the full phased plan.

@@ -227,10 +227,12 @@ def test_project_config_returns_editable_fields(project_client) -> None:
     assert grounds[0]["stations"][0]["name"] == "Berlin"
 
 
-def test_config_returns_preserved_save_path(client, tmp_path) -> None:
+def test_config_returns_preserved_save_path(client, tmp_path, monkeypatch) -> None:
     """The session keeps the save path entered on the create form."""
+    import satgonetem_gui.app as app_module
     from tests.factories import build_project
 
+    monkeypatch.setattr(app_module, "SAVE_ROOT", tmp_path)
     build_project(name="WithPath", save_path=str(tmp_path))
     response = client.get("/api/project/config?name=WithPath")
 
@@ -259,17 +261,8 @@ def test_edit_round_trip_preserves_ground_stations(project_client) -> None:
     assert stations[0]["city"] == "Berlin"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="D9: numeric conversion happens outside the try block; see #1",
-)
-def test_invalid_iperf3_numeric_payload_returns_422(project_client, monkeypatch) -> None:
-    """Invalid numbers should be a validation error, not a 500."""
-    from satgonetem_gui.state import app_state
-
-    manager = app_state.topology_manager
-    monkeypatch.setattr(manager, "get_gonetem_status", lambda: True)
-
+def test_invalid_iperf3_numeric_payload_returns_422(project_client) -> None:
+    """Invalid numbers are rejected by the request schema before the handler."""
     response = project_client.post(
         "/api/traffic/iperf3",
         json={"src": "Sat0", "dst": "Sat1", "duration": "not-a-number"},

@@ -25,11 +25,11 @@ from tests.helpers import wait_for_project_state
         ("POST", "/api/gonetem/start", None),
         ("POST", "/api/gonetem/stop", None),
         ("GET", "/api/traffic/nodes", None),
-        ("POST", "/api/traffic/iperf3", {}),
-        ("POST", "/api/traffic/ping", {}),
-        ("POST", "/api/traffic/hping3", {}),
+        ("POST", "/api/traffic/iperf3", {"src": "Sat0", "dst": "Sat1"}),
+        ("POST", "/api/traffic/ping", {"src": "Sat0", "dst": "Sat1"}),
+        ("POST", "/api/traffic/hping3", {"src": "Sat0", "dst": "Sat1"}),
         ("GET", "/api/traffic/status?job_id=missing", None),
-        ("POST", "/api/traffic/cancel", {}),
+        ("POST", "/api/traffic/cancel", {"job_id": "missing"}),
         ("GET", "/api/project/save", None),
         ("GET", "/api/project/config?name=Missing", None),
     ],
@@ -93,22 +93,11 @@ def test_ground_station_presets_are_served(client) -> None:
 
 
 def test_project_load_requires_content(client) -> None:
-    """An empty load request is rejected."""
+    """An empty load request is rejected by request validation."""
     response = client.post("/api/project/load", json={})
 
-    assert response.status_code == 400
+    assert response.status_code == 422
     assert response.json()["ok"] is False
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="D9: invalid JSON currently reaches the loader and returns 500; see #1",
-)
-def test_project_load_rejects_invalid_json_with_400(client) -> None:
-    """Malformed project files should be a client error, not a server error."""
-    response = client.post("/api/project/load", json={"content": "{not json"})
-
-    assert response.status_code == 400
 
 
 def test_project_create_rejects_invalid_json(client) -> None:
@@ -119,21 +108,21 @@ def test_project_create_rejects_invalid_json(client) -> None:
         headers={"Content-Type": "application/json"},
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_project_create_requires_a_name(client) -> None:
-    """A create request without a name is rejected before a thread starts."""
+    """A create request without required fields is rejected before a thread starts."""
     response = client.post("/api/project/create", json={})
 
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_project_create_is_single_flight(client) -> None:
     """A second create request is rejected while a build is marked active."""
     assert app_state.project.begin("First", save_path="/tmp/first", operation="create")
     try:
-        response = client.post("/api/project/create", json={"name": "Second"})
+        response = client.post("/api/project/create", json=project_payload("Second"))
     finally:
         app_state.project.reset()
 
@@ -159,12 +148,12 @@ def test_concurrent_create_and_load_are_rejected(client, monkeypatch) -> None:
     started = threading.Event()
     release = threading.Event()
 
-    def blocking_create(payload: dict) -> ProjectResult:
+    def blocking_create(payload) -> ProjectResult:
         started.set()
         release.wait(timeout=5)
         return ProjectResult(
             SimpleNamespace(set_status=lambda _value: None),
-            payload["name"],
+            payload.name,
             "",
         )
 

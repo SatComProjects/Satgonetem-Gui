@@ -82,10 +82,11 @@ def project_payload(name: str = PROJECT_NAME, save_path: str = "") -> dict[str, 
 def build_project(name: str = PROJECT_NAME, save_path: str = "") -> dict[str, Any]:
     """Build the 10x10 project synchronously and install it in the session."""
     from satgonetem_gui.app import _build_topology
+    from satgonetem_gui.schemas import ProjectCreateRequest
     from satgonetem_gui.state import app_state
 
     payload = project_payload(name, save_path)
-    tm = _build_topology(payload)
+    tm = _build_topology(ProjectCreateRequest(**payload))
     tm.set_status(True)
     app_state.project.succeed(tm, name, save_path)
     return payload

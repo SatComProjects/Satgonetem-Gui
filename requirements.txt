@@ -184,6 +184,7 @@ pydantic==2.14.2
     # via
     #   fastapi
     #   sat-com-topology
+    #   satgonetem-gui
 pydantic-core==2.50.2
     # via pydantic
 pyerfa==2.0.1.5

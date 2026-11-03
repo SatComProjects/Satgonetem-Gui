@@ -7,10 +7,10 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sat_com_builder.models import (
@@ -34,160 +34,90 @@ from satgonetem.utils.satcom_fix import apply_satcom_fix
 
 apply_satcom_fix()
 
+from . import schemas
+from .config import load_settings
+from .errors import APIError, install_error_handlers
+from .ground_stations import parse_ground_station_file, write_stations_to_temp
+from .serializers import (
+    serialize_hping3_results,
+    serialize_iperf3_results,
+    serialize_ping_results,
+)
 from .state import ProjectResult, app_state
+from .storage import SavePathError, resolve_data_file, resolve_save_path
 
 BASE_DIR = Path(__file__).parent
 SATGONETEM_DIR = BASE_DIR.parent / "satgonetem"
 RESOURCES_DIR = BASE_DIR.parent / "resources" / "ground_station_files"
+SETTINGS = load_settings()
+SAVE_ROOT = SETTINGS.save_root
 
 app = FastAPI(title="SatGoNetem GUI")
+install_error_handlers(app)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
-def _resolve_data_file(data_file: str) -> str:
-    """Resolve a ground station data file path to an absolute path.
-
-    Checks the path as-is first (absolute), then resolves relative paths
-    against the local satgonetem resources directory.
+def _build_topology(payload: schemas.ProjectCreateRequest) -> TopologyManager:
+    """Build a TopologyManager from a typed create-form payload.
 
     Args:
-        data_file: Absolute or relative path to the CSV ground station file.
-
-    Returns:
-        Absolute path string to the existing file.
-
-    Raises:
-        FileNotFoundError: If the file cannot be located.
-    """
-    p = Path(data_file)
-    if p.is_absolute() and p.exists():
-        return str(p)
-    resolved = SATGONETEM_DIR / data_file
-    if resolved.exists():
-        return str(resolved)
-    raise FileNotFoundError(f"Ground station data file not found: {data_file!r}")
-
-
-def _parse_gs_file(path: Path) -> List[Dict[str, Any]]:
-    """Parse a CSV ground station file into a list of station dicts.
-
-    Args:
-        path: Path to the CSV file with format: index,name,lat,lon,elevation_km.
-
-    Returns:
-        List of dicts with keys: index, name, latitude, longitude, elevation_km.
-    """
-    stations = []
-    with path.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split(",", 4)
-            if len(parts) < 5:
-                continue
-            try:
-                stations.append(
-                    {
-                        "index": int(parts[0]),
-                        "name": parts[1].strip(),
-                        "latitude": float(parts[2]),
-                        "longitude": float(parts[3]),
-                        "elevation_km": float(parts[4]),
-                    }
-                )
-            except ValueError:
-                continue
-    return stations
-
-
-def _write_stations_to_tmp(identifier: str, stations: List[Dict[str, Any]]) -> str:
-    """Write inline station dicts to a temporary CSV file.
-
-    Args:
-        identifier: Human-readable name used to form the filename.
-        stations: List of dicts with keys: index, name, latitude, longitude,
-            elevation_km.
-
-    Returns:
-        Absolute path to the written temp file.
-    """
-    name = identifier.lower().replace(" ", "_")
-    path = Path(tempfile.gettempdir()) / f"gs_{name}.txt"
-    lines = [
-        f"{s['index']},{s['name']},{s['latitude']},{s['longitude']},{s['elevation_km']}"
-        for s in stations
-    ]
-    path.write_text("\n".join(lines))
-    return str(path)
-
-
-def _build_topology(payload: Dict[str, Any]) -> TopologyManager:
-    """Build a TopologyManager from a create-form payload.
-
-    Args:
-        payload: Parsed JSON body from the /api/project/create endpoint.
-            Accepts an optional 'save_path' key (str) with a directory or file
-            path where the topology JSON should be written via to_file().
-            Ground objects may carry an inline 'stations' list instead of a
-            'data_file' path.
+        payload: Validated project creation request.
 
     Returns:
         The initialised TopologyManager.
 
     Raises:
-        Exception: Any validation or topology-building error is propagated to
-            the caller, which records it in the project session.
+        Exception: Validation or topology-building errors are propagated to
+            the task manager, which records them in the project session.
     """
-    shells_raw: list = json.loads(payload["walker_shells_json"])
-    grounds_raw: list = json.loads(payload["ground_objects_properties_json"])
+    shells_raw: list = json.loads(payload.walker_shells_json)
+    grounds_raw: list = json.loads(payload.ground_objects_properties_json)
 
-    shells = [WalkerShellProperty(**s) for s in shells_raw]
+    shells = [WalkerShellProperty(**shell) for shell in shells_raw]
 
     ground_props = []
-    for g in grounds_raw:
-        g = dict(g)
-        if g.get("stations"):
-            g["data_file"] = _write_stations_to_tmp(
-                g.get("identifier", "gs"), g.pop("stations")
-            )
+    for ground in grounds_raw:
+        ground = dict(ground)
+        if ground.get("stations"):
+            ground["data_file"] = str(write_stations_to_temp(ground.pop("stations")))
         else:
-            g.pop("stations", None)
-            g["data_file"] = _resolve_data_file(g["data_file"])
-        ground_props.append(GroundObjectProperty(**g))
+            ground.pop("stations", None)
+            data_file = ground.get("data_file")
+            if not data_file:
+                raise ValueError("Ground object has no stations or data_file.")
+            ground["data_file"] = str(resolve_data_file(data_file, SATGONETEM_DIR))
+        ground_props.append(GroundObjectProperty(**ground))
 
-    sim_prop = SimulationProperty(
-        simulation_name=payload["name"],
-        start_date=payload["start_date"],
-        end_date=payload["end_date"],
+    simulation_property = SimulationProperty(
+        simulation_name=payload.name.strip(),
+        start_date=payload.start_date,
+        end_date=payload.end_date,
         walker_shells=shells,
         ground_objects_properties=ground_props,
     )
 
-    tm = TopologyManager.from_satcom(sim_prop)
-    net_cfg = NetworkConfig(
-        project_name=payload["name"],
-        update_time=int(payload.get("update_time", 5)),
-        isl_link_capacity=int(payload.get("isl_capacity", 100000)),
-        gnd_link_capacity=int(payload.get("gs_capacity", 100000)),
+    tm = TopologyManager.from_satcom(simulation_property)
+    network_config = NetworkConfig(
+        project_name=payload.name.strip(),
+        update_time=payload.update_time,
+        isl_link_capacity=payload.isl_capacity,
+        gnd_link_capacity=payload.gs_capacity,
     )
-    tm._apply_network_config(net_cfg)
+    tm._apply_network_config(network_config)
 
-    save_path = str(payload.get("save_path") or "").strip()
-    if save_path:
-        sp = Path(save_path)
-        if sp.is_dir():
-            sp = sp / f"{payload['name']}.json"
-        tm.to_file(str(sp))
+    save_target = resolve_save_path(payload.save_path, payload.name, SAVE_ROOT)
+    if save_target is not None:
+        save_target.parent.mkdir(parents=True, exist_ok=True)
+        tm.to_file(str(save_target))
 
     return tm
 
 
-def _create_project(payload: Dict[str, Any]) -> ProjectResult:
+def _create_project(payload: schemas.ProjectCreateRequest) -> ProjectResult:
     """Build a project and return the result stored by the task manager."""
-    name = str(payload["name"]).strip()
-    save_path = str(payload.get("save_path") or "").strip()
+    name = payload.name.strip()
+    save_path = str(payload.save_path or "").strip()
     tm = _build_topology(payload)
     tm.set_status(True)
     logging.info("Project '%s' loaded successfully.", name)
@@ -248,59 +178,33 @@ async def ground_stations_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "ground_stations.html")
 
 
-@app.get("/api/ground_stations/presets")
-async def api_ground_station_presets() -> JSONResponse:
-    """Return all preset ground station files and their stations.
-
-    Returns:
-        JSON array of objects, each with keys: name (str) and stations (list
-        of dicts with index, name, latitude, longitude, elevation_km).
-    """
-    result = []
-    for p in sorted(RESOURCES_DIR.glob("*.txt")):
-        result.append({"name": p.stem, "stations": _parse_gs_file(p)})
-    return JSONResponse(result)
+@app.get(
+    "/api/ground_stations/presets",
+    response_model=list[schemas.GroundStationPreset],
+)
+async def api_ground_station_presets() -> list[schemas.GroundStationPreset]:
+    """Return all preset ground station files and their stations."""
+    return [
+        {"name": path.stem, "stations": parse_ground_station_file(path)}
+        for path in sorted(RESOURCES_DIR.glob("*.txt"))
+    ]
 
 
-@app.post("/api/project/create")
-async def api_project_create(request: Request) -> JSONResponse:
-    """Start building a constellation project in a background thread.
-
-    Accepts a JSON body with the following keys:
-        name (str): Project name.
-        start_date (str): Simulation start in 'DD/MM/YYYY HH:MM:SS' format.
-        end_date (str): Simulation end in the same format.
-        update_time (str|int): Topology update interval in seconds.
-        isl_capacity (str|int): ISL link capacity in Kbps.
-        gs_capacity (str|int): Ground-station link capacity in Kbps.
-        save_path (str): Optional directory or file path to save the topology.
-        walker_shells_json (str): JSON array of WalkerShell dicts.
-        ground_objects_properties_json (str): JSON array of ground object dicts.
-            Each object may have a 'stations' list instead of 'data_file'.
-
-    Returns:
-        JSON object with key 'ok' set to True on successful dispatch, or
-        'ok' False and 'error' message on validation failure.
-    """
-    try:
-        payload = await request.json()
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-
-    if not isinstance(payload, dict):
-        return JSONResponse(
-            {"ok": False, "error": "Request body must be a JSON object."},
-            status_code=400,
-        )
-
-    name = str(payload.get("name") or "").strip()
+@app.post("/api/project/create", response_model=schemas.OperationResponse)
+async def api_project_create(
+    payload: schemas.ProjectCreateRequest,
+) -> schemas.OperationResponse:
+    """Start building a constellation project in a background thread."""
+    name = payload.name.strip()
     if not name:
-        return JSONResponse(
-            {"ok": False, "error": "Project name is required."},
-            status_code=400,
-        )
+        raise APIError(400, "Project name is required.")
 
-    save_path = str(payload.get("save_path") or "").strip()
+    try:
+        resolve_save_path(payload.save_path, name, SAVE_ROOT)
+    except SavePathError as exc:
+        raise APIError(400, str(exc)) from exc
+
+    save_path = str(payload.save_path or "").strip()
     started = app_state.project_tasks.start(
         name=name,
         save_path=save_path,
@@ -308,160 +212,102 @@ async def api_project_create(request: Request) -> JSONResponse:
         runner=lambda: _create_project(payload),
     )
     if not started:
-        return JSONResponse(
-            {"ok": False, "error": "A project operation is already running."},
-            status_code=409,
-        )
-    return JSONResponse({"ok": True})
+        raise APIError(409, "A project operation is already running.")
+    return schemas.OperationResponse()
 
 
-@app.get("/api/project/status")
-async def api_project_status() -> Dict[str, Any]:
-    """Return the explicit state of the project lifecycle.
-
-    Returns:
-        JSON object with state, operation, project_name, pending_name,
-        loaded, and error.
-    """
-    return app_state.project.snapshot()
+@app.get("/api/project/status", response_model=schemas.ProjectStatusResponse)
+async def api_project_status() -> schemas.ProjectStatusResponse:
+    """Return the explicit state of the project lifecycle."""
+    return schemas.ProjectStatusResponse(**app_state.project.snapshot())
 
 
-@app.get("/api/project/exists")
-async def api_project_exists(name: str) -> Dict[str, Any]:
-    """Check whether a named project has finished loading.
-
-    Args:
-        name: The project name to check (query parameter).
-
-    Returns:
-        JSON object with key 'exists' set to True if the project is loaded.
-    """
-    return {"exists": app_state.project.exists(name)}
+@app.get("/api/project/exists", response_model=schemas.ProjectExistsResponse)
+async def api_project_exists(name: str) -> schemas.ProjectExistsResponse:
+    """Check whether a named project has finished loading."""
+    return schemas.ProjectExistsResponse(exists=app_state.project.exists(name))
 
 
-@app.get("/api/project/config")
-async def api_project_config(name: str) -> JSONResponse:
-    """Return the configuration of the currently loaded project.
-
-    Used by the new_project form when editing an existing project.
-
-    Args:
-        name: Project name to retrieve config for (query parameter).
-
-    Returns:
-        JSON object with the project configuration, or 404 if not found.
-    """
+@app.get("/api/project/config", response_model=schemas.ProjectConfigResponse)
+async def api_project_config(name: str) -> schemas.ProjectConfigResponse:
+    """Return the editable configuration of the loaded project."""
     tm = app_state.project.get_topology(name)
     if tm is None:
-        return JSONResponse({"error": "Project not found."}, status_code=404)
+        raise APIError(404, "Project not found.")
 
     try:
         simulation_property = getattr(tm, "simulation_property", None)
         if simulation_property is None:
-            return JSONResponse(
-                {"error": "Project configuration is unavailable."},
-                status_code=500,
-            )
+            raise APIError(500, "Project configuration is unavailable.")
 
-        cfg = simulation_property.model_dump(mode="json")
-        cfg["name"] = app_state.project.project_name or simulation_property.simulation_name
-        cfg["update_time"] = tm.update_time
-        cfg["isl_capacity"] = tm.isl_link_capacity
-        cfg["gs_capacity"] = tm.gnd_link_capacity
-        cfg["save_path"] = app_state.project.save_path
+        config = simulation_property.model_dump(mode="json")
+        config["name"] = (
+            app_state.project.project_name or simulation_property.simulation_name
+        )
+        config["update_time"] = tm.update_time
+        config["isl_capacity"] = tm.isl_link_capacity
+        config["gs_capacity"] = tm.gnd_link_capacity
+        config["save_path"] = app_state.project.save_path
 
-        for ground in cfg.get("ground_objects_properties", []):
+        for ground in config.get("ground_objects_properties", []):
             data_file = ground.get("data_file")
             ground["stations"] = []
             if not data_file:
                 continue
             try:
-                ground["stations"] = _parse_gs_file(Path(data_file))
+                ground["stations"] = parse_ground_station_file(Path(data_file))
             except Exception:
                 logging.exception(
                     "Could not read ground station file for project config: %s",
                     data_file,
                 )
-        return JSONResponse(cfg)
-    except Exception:
-        logging.exception("Could not read project config.")
-        return JSONResponse(
-            {"error": "Could not read project config."}, status_code=500
-        )
-
-
-@app.post("/api/project/load")
-async def api_project_load(request: Request) -> JSONResponse:
-    """Load a topology from an uploaded JSON file.
-
-    Expects a JSON body with a single key 'content' containing the raw
-    JSON text of a previously saved topology file (from to_file()).
-
-    Returns:
-        JSON object with 'ok' True and 'name' on success, or 'ok' False
-        and 'error' on failure.
-    """
-    try:
-        payload = await request.json()
+        return schemas.ProjectConfigResponse.model_validate(config)
+    except APIError:
+        raise
     except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        logging.exception("Could not read project config.")
+        raise APIError(500, "Could not read project config.") from exc
 
-    if not isinstance(payload, dict):
-        return JSONResponse(
-            {"ok": False, "error": "Request body must be a JSON object."},
-            status_code=400,
-        )
 
-    content = payload.get("content", "")
-    if not content:
-        return JSONResponse(
-            {"ok": False, "error": "No file content provided."}, status_code=400
-        )
-
+@app.post("/api/project/load", response_model=schemas.ProjectLoadedResponse)
+async def api_project_load(
+    payload: schemas.ProjectLoadRequest,
+) -> schemas.ProjectLoadedResponse:
+    """Load a topology from an uploaded saved-project JSON file."""
     if not app_state.project.begin(name="", save_path="", operation="load"):
-        return JSONResponse(
-            {"ok": False, "error": "A project operation is already running."},
-            status_code=409,
-        )
+        raise APIError(409, "A project operation is already running.")
 
     tmp_path = (
         Path(tempfile.gettempdir()) / f"satgonetem_load_{os.urandom(8).hex()}.json"
     )
     try:
-        tmp_path.write_text(content, encoding="utf-8")
+        tmp_path.write_text(payload.content, encoding="utf-8")
         tm = await asyncio.to_thread(TopologyManager.from_file, str(tmp_path))
         project_name = _project_display_name(tm)
         tm.set_status(True)
         app_state.project.succeed(tm, project_name, "")
         logging.info("Project '%s' loaded from file.", project_name)
-        return JSONResponse({"ok": True, "name": project_name})
+        return schemas.ProjectLoadedResponse(name=project_name)
+    except (json.JSONDecodeError, ValueError, KeyError) as exc:
+        message = str(exc).strip() or exc.__class__.__name__
+        app_state.project.fail(message)
+        raise APIError(400, f"Invalid project file: {message}") from exc
     except Exception as exc:
         logging.exception("Project load failed.")
         message = str(exc).strip() or exc.__class__.__name__
         app_state.project.fail(message)
-        return JSONResponse({"ok": False, "error": message}, status_code=500)
+        raise APIError(500, "Project load failed.") from exc
     finally:
         tmp_path.unlink(missing_ok=True)
 
 
-@app.get("/api/project/save")
-async def api_project_save() -> JSONResponse:
-    """Return the currently loaded project as a downloadable JSON string.
+@app.get("/api/project/save", response_model=schemas.ProjectSaveResponse)
+async def api_project_save() -> schemas.ProjectSaveResponse:
+    """Return the loaded project as a downloadable JSON string."""
+    tm = app_state.project.get_topology()
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
 
-    Serialises the active TopologyManager to a temporary file and returns
-    its contents so the browser can trigger a client-side download.
-
-    Returns:
-        JSON object with 'ok' True, 'content' (raw JSON text), and 'filename'.
-        Returns 404 if no project is currently loaded.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
-
-    tm = app_state.topology_manager
     tmp_path = (
         Path(tempfile.gettempdir()) / f"satgonetem_save_{os.urandom(8).hex()}.json"
     )
@@ -469,221 +315,152 @@ async def api_project_save() -> JSONResponse:
         await asyncio.to_thread(tm.to_file, str(tmp_path))
         content = tmp_path.read_text(encoding="utf-8")
         filename = f"{(app_state.project_name or 'project').replace(' ', '_')}.json"
-        return JSONResponse({"ok": True, "content": content, "filename": filename})
+        return schemas.ProjectSaveResponse(content=content, filename=filename)
     except Exception as exc:
         logging.exception("Project save failed.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        raise APIError(500, "Project save failed.") from exc
     finally:
         tmp_path.unlink(missing_ok=True)
 
 
-@app.get("/api/satellites")
-async def api_satellites() -> JSONResponse:
-    """Return all satellites with their current positions.
-
-    Syncs positions from the underlying sat_com_model before serialising.
-
-    Returns:
-        JSON array of satellite objects, each with keys:
-        id (int), name (str), position (dict with latitude, longitude, altitude).
-        Returns 404 if no project is loaded.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
-
+@app.get("/api/satellites", response_model=list[schemas.SatelliteResponse])
+async def api_satellites() -> list[schemas.SatelliteResponse]:
+    """Return all satellites with their current positions."""
     tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
+
     try:
         tm._sync_node_positions()
     except Exception:
         logging.exception("Failed to sync satellite positions.")
 
-    result = []
-    for sat in tm.satellites.values():
-        result.append(
-            {
-                "id": sat.id,
-                "name": sat.name,
-                "position": {
-                    "latitude": sat.position.get("latitude"),
-                    "longitude": sat.position.get("longitude"),
-                    "altitude": sat.position.get("altitude"),
-                },
-            }
-        )
-    return JSONResponse(result)
-
-
-@app.get("/api/ground_stations")
-async def api_ground_stations() -> JSONResponse:
-    """Return all ground stations with their positions.
-
-    Returns:
-        JSON array of ground station objects, each with keys:
-        id (int), name (str), city (str|None), position (dict with latitude,
-        longitude, altitude). Returns 404 if no project is loaded.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
-
-    tm = app_state.topology_manager
-    result = []
-    for gs in tm.ground_stations.values():
-        result.append(
-            {
-                "id": gs.id,
-                "name": gs.name,
-                "city": getattr(gs, "city", None),
-                "position": {
-                    "latitude": gs.position.get("latitude"),
-                    "longitude": gs.position.get("longitude"),
-                    "altitude": gs.position.get("altitude"),
-                },
-            }
-        )
-    return JSONResponse(result)
-
-
-@app.get("/api/status")
-async def api_status() -> Dict[str, Any]:
-    """Return the current constellation and emulation status.
-
-    Returns:
-        JSON object with constellation_loaded, satellites, ground_stations,
-        links, gonetem_is_on, simulation_updating, current_step, current_time.
-    """
-    return app_state.get_status_dict()
-
-
-@app.get("/api/routing/status")
-async def api_routing_status() -> JSONResponse:
-    """Return the current routing and addressing status.
-
-    Returns:
-        JSON object with gonetem_is_on, addressing_applied,
-        routing_initiated, and routing_method.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
-    tm = app_state.topology_manager
-    gonetem_on = tm.get_gonetem_status()
-    return JSONResponse(
+    return [
         {
-            "ok": True,
-            "gonetem_is_on": gonetem_on,
-            "addressing_applied": gonetem_on,
-            "routing_initiated": tm.get_routing_initiated(),
-            "routing_method": tm.routing,
+            "id": sat.id,
+            "name": sat.name,
+            "position": {
+                "latitude": sat.position.get("latitude"),
+                "longitude": sat.position.get("longitude"),
+                "altitude": sat.position.get("altitude"),
+            },
         }
+        for sat in tm.satellites.values()
+    ]
+
+
+@app.get(
+    "/api/ground_stations",
+    response_model=list[schemas.GroundStationResponse],
+)
+async def api_ground_stations() -> list[schemas.GroundStationResponse]:
+    """Return all ground stations with their positions."""
+    tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
+
+    return [
+        {
+            "id": station.id,
+            "name": station.name,
+            "city": getattr(station, "city", None),
+            "position": {
+                "latitude": station.position.get("latitude"),
+                "longitude": station.position.get("longitude"),
+                "altitude": station.position.get("altitude"),
+            },
+        }
+        for station in tm.ground_stations.values()
+    ]
+
+
+@app.get("/api/status", response_model=schemas.StatusResponse)
+async def api_status() -> schemas.StatusResponse:
+    """Return the current constellation and emulation status."""
+    return schemas.StatusResponse(**app_state.get_status_dict())
+
+
+@app.get("/api/routing/status", response_model=schemas.RoutingStatusResponse)
+async def api_routing_status() -> schemas.RoutingStatusResponse:
+    """Return the current routing and addressing status."""
+    tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
+
+    gonetem_on = tm.get_gonetem_status()
+    return schemas.RoutingStatusResponse(
+        gonetem_is_on=gonetem_on,
+        addressing_applied=gonetem_on,
+        routing_initiated=tm.get_routing_initiated(),
+        routing_method=tm.routing,
     )
 
 
-@app.post("/api/routing/apply")
-async def api_routing_apply(request: Request) -> JSONResponse:
-    """Apply IP addressing and initialize routing.
-
-    Expects a JSON body with 'method' (str) choosing one of the supported
-    routing methods: static, dynamic-ospf, dynamic-isis, sr-mpls.
-
-    Returns:
-        JSON object with 'ok' True on success, or 'ok' False and 'error'.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
-    try:
-        payload: Dict[str, Any] = await request.json()
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-
+@app.post("/api/routing/apply", response_model=schemas.OperationResponse)
+async def api_routing_apply(
+    payload: schemas.RoutingApplyRequest,
+) -> schemas.OperationResponse:
+    """Apply IP addressing and initialize routing."""
     tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
     if not tm.get_gonetem_status():
-        return JSONResponse(
-            {"ok": False, "error": "GoNetEm is not running. Start containers first."},
-            status_code=409,
-        )
+        raise APIError(409, "GoNetEm is not running. Start containers first.")
 
-    method = payload.get("method", "static")
     try:
         await asyncio.to_thread(tm.set_ip_addresses)
-        await asyncio.to_thread(tm.init_routing, routing_method=method)
+        await asyncio.to_thread(tm.init_routing, routing_method=payload.method)
     except Exception as exc:
         logging.exception("Failed to apply addressing and routing.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        raise APIError(500, "Failed to apply addressing and routing.") from exc
 
-    return JSONResponse({"ok": True})
+    return schemas.OperationResponse()
 
 
-@app.post("/api/routing/delete")
-async def api_routing_delete() -> JSONResponse:
-    """Delete all installed routing state.
+@app.post("/api/routing/delete", response_model=schemas.OperationResponse)
+async def api_routing_delete() -> schemas.OperationResponse:
+    """Delete all installed routing state."""
+    tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
 
-    Returns:
-        JSON object with 'ok' True on success, or 'ok' False and 'error'.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
     try:
-        await asyncio.to_thread(app_state.topology_manager.delete_routing)
+        await asyncio.to_thread(tm.delete_routing)
     except Exception as exc:
         logging.exception("Failed to delete routing.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
-    return JSONResponse({"ok": True})
+        raise APIError(500, "Failed to delete routing.") from exc
+    return schemas.OperationResponse()
 
 
-@app.post("/api/gonetem/start")
-async def api_gonetem_start() -> JSONResponse:
-    """Start the Docker containers via GoNetem.
+@app.post("/api/gonetem/start", response_model=schemas.OperationResponse)
+async def api_gonetem_start() -> schemas.OperationResponse:
+    """Start the Docker containers via GoNetem."""
+    tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
 
-    Returns:
-        JSON object with 'ok' True on success, or 'ok' False and 'error' on failure.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
     try:
-        await asyncio.to_thread(app_state.topology_manager.start_gonetem)
-        return JSONResponse({"ok": True})
+        await asyncio.to_thread(tm.start_gonetem)
     except Exception as exc:
         logging.exception("Failed to start GoNetem.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        raise APIError(500, "Failed to start GoNetem.") from exc
+    return schemas.OperationResponse()
 
 
-@app.post("/api/gonetem/stop")
-async def api_gonetem_stop() -> JSONResponse:
-    """Stop the Docker containers via GoNetem.
+@app.post("/api/gonetem/stop", response_model=schemas.OperationResponse)
+async def api_gonetem_stop() -> schemas.OperationResponse:
+    """Stop the Docker containers via GoNetem."""
+    tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
 
-    Returns:
-        JSON object with 'ok' True on success, or 'ok' False and 'error' on failure.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
     try:
-        tm = app_state.topology_manager
         await asyncio.to_thread(tm.stop_gonetem)
         tm.set_status(True)
-        return JSONResponse({"ok": True})
     except Exception as exc:
         logging.exception("Failed to stop GoNetem.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        raise APIError(500, "Failed to stop GoNetem.") from exc
+    return schemas.OperationResponse()
 
 
 @app.get("/world", response_class=HTMLResponse)
@@ -699,39 +476,23 @@ async def world_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "world.html")
 
 
-@app.get("/api/links")
-async def api_links() -> JSONResponse:
-    """Return all links with their endpoints, type, and direction.
-
-    Link types are as returned by the topology model:
-    - InterSatelliteLink: inter-satellite link; direction is ORBITAL or ADJACENT.
-    - GroundStationLink: ground-station-to-satellite link.
-    - UserTerminalLink: user-terminal-to-satellite link.
-
-    Returns:
-        JSON array of link objects, each with keys: src (str), dst (str),
-        type (str), direction (str), distance_km (float).
-        Returns 404 if no project is loaded.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
-
+@app.get("/api/links", response_model=list[schemas.LinkResponse])
+async def api_links() -> list[schemas.LinkResponse]:
+    """Return all links with their endpoints, type, and direction."""
     tm = app_state.topology_manager
-    result = []
-    for link in tm.links.values():
-        result.append(
-            {
-                "src": link.source.name,
-                "dst": link.target.name,
-                "type": link.type,
-                "direction": link.direction,
-                "distance_km": round(link.distance / 1000.0, 2),
-            }
-        )
-    return JSONResponse(result)
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
+
+    return [
+        {
+            "src": link.source.name,
+            "dst": link.target.name,
+            "type": link.type,
+            "direction": link.direction,
+            "distance_km": round(link.distance / 1000.0, 2),
+        }
+        for link in tm.links.values()
+    ]
 
 
 @app.get("/nodes", response_class=HTMLResponse)
@@ -747,31 +508,21 @@ async def nodes_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "nodes.html")
 
 
-@app.get("/api/nodes")
-async def api_nodes() -> JSONResponse:
-    """Return all nodes with basic identity and position info.
-
-    Returns:
-        JSON array of node objects, each with keys:
-        name (str), type (str), id (int), position (dict),
-        and city (str|None) for ground stations.
-        Returns 404 if no project is loaded.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
-
+@app.get("/api/nodes", response_model=list[schemas.NodeSummary])
+async def api_nodes() -> list[schemas.NodeSummary]:
+    """Return all nodes with basic identity and position info."""
     tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
+
     try:
         tm._sync_node_positions()
     except Exception:
         logging.exception("Failed to sync node positions.")
 
-    result = []
+    nodes = []
     for sat in tm.satellites.values():
-        result.append(
+        nodes.append(
             {
                 "name": sat.name,
                 "type": "satellite",
@@ -783,48 +534,33 @@ async def api_nodes() -> JSONResponse:
                 },
             }
         )
-    for gs in tm.ground_stations.values():
-        result.append(
+    for station in tm.ground_stations.values():
+        nodes.append(
             {
-                "name": gs.name,
+                "name": station.name,
                 "type": "ground_station",
-                "id": gs.id,
-                "city": getattr(gs, "city", None),
+                "id": station.id,
+                "city": getattr(station, "city", None),
                 "position": {
-                    "latitude": gs.position.get("latitude"),
-                    "longitude": gs.position.get("longitude"),
-                    "altitude": gs.position.get("altitude"),
+                    "latitude": station.position.get("latitude"),
+                    "longitude": station.position.get("longitude"),
+                    "altitude": station.position.get("altitude"),
                 },
             }
         )
-    return JSONResponse(result)
+    return nodes
 
 
-@app.get("/api/nodes/{name}")
-async def api_node_detail(name: str) -> JSONResponse:
-    """Return detailed information for a single node.
-
-    Args:
-        name: Node name (e.g. 'Sat0' or 'Gnd0').
-
-    Returns:
-        JSON object with name, type, id, position, interfaces,
-        loopback, routing_table, and type-specific fields.
-        Returns 404 if no project is loaded or node not found.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
-
+@app.get("/api/nodes/{name}", response_model=schemas.NodeDetailResponse)
+async def api_node_detail(name: str) -> schemas.NodeDetailResponse:
+    """Return detailed information for a single node."""
     tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project is currently loaded.")
+
     node = tm.get_node_by_name(name)
     if node is None:
-        return JSONResponse(
-            {"ok": False, "error": f"Node not found: {name}"},
-            status_code=404,
-        )
+        raise APIError(404, f"Node not found: {name}")
 
     try:
         tm._sync_node_positions()
@@ -848,10 +584,6 @@ async def api_node_detail(name: str) -> JSONResponse:
         )
 
     loopback = node.loopback
-    loopback_data = {
-        "ipv4": getattr(loopback, "ipv4", ""),
-    }
-
     routing_table: list[str] = []
     try:
         routing_table = node.get_routing_table()
@@ -868,7 +600,7 @@ async def api_node_detail(name: str) -> JSONResponse:
             "altitude": node.position.get("altitude"),
         },
         "interfaces": interfaces,
-        "loopback": loopback_data,
+        "loopback": {"ipv4": getattr(loopback, "ipv4", "")},
         "routing_table": routing_table,
     }
 
@@ -880,7 +612,7 @@ async def api_node_detail(name: str) -> JSONResponse:
     else:
         data["city"] = getattr(node, "city", None)
 
-    return JSONResponse({"ok": True, "node": data})
+    return schemas.NodeDetailResponse(node=schemas.NodeDetail(**data))
 
 
 @app.get("/traffic", response_class=HTMLResponse)
@@ -896,232 +628,50 @@ async def traffic_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "traffic.html")
 
 
-def _clean_numeric(val: Any) -> Any:
-    """Convert a scalar value to a JSON-safe number, preserving None.
-
-    Handles pandas/numpy scalar types via ``.item()`` and replaces
-    NaN / inf with None so the result is JSON-serialisable.
-    """
-    if val is None:
-        return None
-    if hasattr(val, "item"):
-        val = val.item()
-    if isinstance(val, float):
-        if val != val or val == float("inf") or val == float("-inf"):
-            return None
-        return val
-    if isinstance(val, (int, str, bool)):
-        return val
-    try:
-        f = float(val)
-        if f != f or f == float("inf") or f == float("-inf"):
-            return None
-        return f
-    except (TypeError, ValueError):
-        return str(val) if val is not None else None
-
-
-def _serialize_iperf3_results(result: Any) -> Dict[str, Any]:
-    """Extract chart-friendly data from an Iperf3Results object.
-
-    Args:
-        result: An Iperf3Results instance.
-
-    Returns:
-        Dict with summary metrics and per-interval arrays (including
-        per-stream data) so the frontend can plot all available metrics.
-    """
-    data: Dict[str, Any] = {
-        "protocol": result.protocol,
-        "duration_seconds": result.duration_seconds,
-        "num_streams": result.num_streams,
-        "avg_throughput_mbps": result.avg_throughput_mbps,
-        "max_throughput_mbps": result.max_throughput_mbps,
-        "min_throughput_mbps": result.min_throughput_mbps,
-        "pmtu": result.pmtu,
-        "intervals": [],
-    }
-    if result.protocol == "TCP":
-        data["total_bytes_sent"] = result.total_bytes_sent
-        data["total_bytes_received"] = result.total_bytes_received
-        data["total_retransmits"] = result.total_retransmits
-        data["avg_rtt_ms"] = result.avg_rtt_ms
-        data["max_rtt_ms"] = result.max_rtt_ms
-    else:
-        data["total_bytes"] = result.total_bytes
-        data["total_packets"] = result.total_packets
-        data["avg_jitter_ms"] = result.avg_jitter_ms
-        data["total_lost_packets"] = result.total_lost_packets
-        data["avg_loss_percent"] = result.avg_loss_percent
-        data["total_out_of_order"] = result.total_out_of_order
-
-    try:
-        raw_intervals = result._data.get("intervals", [])
-        for iv in raw_intervals:
-            entry: Dict[str, Any] = {"t": 0.0, "sum": {}, "sums": {}, "streams": []}
-
-            # Determine timestamp from the first available aggregate
-            t = 0.0
-            for key in (
-                "sum",
-                "sum_received",
-                "sum_sent",
-                "sum_bidir",
-                "sum_bidir_reverse",
-            ):
-                if key in iv:
-                    t = float(iv[key].get("end", iv[key].get("start", 0.0)))
-                    break
-            if t == 0.0 and iv.get("streams"):
-                t = float(
-                    iv["streams"][0].get("end", iv["streams"][0].get("start", 0.0))
-                )
-            entry["t"] = t
-
-            # Store all aggregate objects under "sums"
-            for key in (
-                "sum",
-                "sum_received",
-                "sum_sent",
-                "sum_bidir",
-                "sum_bidir_reverse",
-            ):
-                if key in iv:
-                    entry["sums"][key] = {
-                        k: _clean_numeric(v) for k, v in iv[key].items()
-                    }
-
-            # Primary aggregate for simple plotting: prefer sum, then sum_received, then sum_sent
-            primary = (
-                iv.get("sum") or iv.get("sum_received") or iv.get("sum_sent") or {}
-            )
-            entry["sum"] = {k: _clean_numeric(v) for k, v in primary.items()}
-
-            # Per-stream metrics
-            for st in iv.get("streams", []):
-                entry["streams"].append({k: _clean_numeric(v) for k, v in st.items()})
-
-            data["intervals"].append(entry)
-    except Exception:
-        logging.exception("Failed to serialize iperf3 intervals.")
-    return data
-
-
-def _serialize_ping_results(result: Any) -> Dict[str, Any]:
-    """Extract data from a PingResults object.
-
-    Args:
-        result: A PingResults instance.
-
-    Returns:
-        Dict with summary statistics.
-    """
-    return {
-        "packets_transmitted": result.packets_transmitted,
-        "packets_received": result.packets_received,
-        "packet_loss_percent": result.packet_loss_percent,
-        "reachable": result.reachable,
-        "rtt_min_ms": result.rtt_min_ms,
-        "rtt_avg_ms": result.rtt_avg_ms,
-        "rtt_max_ms": result.rtt_max_ms,
-        "rtt_mdev_ms": result.rtt_mdev_ms,
-    }
-
-
-def _serialize_hping3_results(result: Any) -> Dict[str, Any]:
-    """Extract chart-friendly data from an Hping3Results object.
-
-    Args:
-        result: An Hping3Results instance.
-
-    Returns:
-        Dict with per-packet arrays and summary statistics.
-    """
-    return {
-        "payload_bytes": result.payload_bytes,
-        "seq": result.seq,
-        "rtt_ms": [
-            None if (isinstance(v, float) and v != v) else v for v in result.rtt_ms
-        ],
-        "cumulative_mbit": result.cumulative_mbit,
-        "packets_transmitted": result.packets_transmitted,
-        "packets_received": result.packets_received,
-        "packet_loss_percent": result.packet_loss_percent,
-        "rtt_min_ms": result.rtt_min_ms,
-        "rtt_avg_ms": result.rtt_avg_ms,
-        "rtt_max_ms": result.rtt_max_ms,
-        "reachable": result.reachable,
-    }
-
-
-@app.get("/api/traffic/nodes")
-async def api_traffic_nodes() -> JSONResponse:
-    """Return all nodes that can be used as traffic endpoints.
-
-    Returns:
-        JSON object with 'ok' True and a 'nodes' list containing name and type.
-        Returns 404 if no project is loaded.
-    """
-    if app_state.topology_manager is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project is currently loaded."},
-            status_code=404,
-        )
-    tm = app_state.topology_manager
-    nodes = []
-    for sat in tm.satellites.values():
-        nodes.append({"name": sat.name, "type": "satellite"})
-    for gs in tm.ground_stations.values():
-        nodes.append({"name": gs.name, "type": "ground_station"})
-    return JSONResponse({"ok": True, "nodes": nodes})
-
-
-@app.post("/api/traffic/iperf3")
-async def api_traffic_iperf3(request: Request) -> JSONResponse:
-    """Start an iperf3 flow between two nodes.
-
-    Accepts a JSON body with keys: src (str), dst (str), protocol (str),
-    duration (int), bandwidth_mbps (float), parallel (int), interval (float),
-    port (int), congestion_control (str), window_size (str), bidir (bool).
-
-    Returns:
-        JSON object with 'ok' True and 'job_id' on success.
-    """
-    try:
-        payload: Dict[str, Any] = await request.json()
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-
+@app.get("/api/traffic/nodes", response_model=schemas.TrafficNodesResponse)
+async def api_traffic_nodes() -> schemas.TrafficNodesResponse:
+    """Return all nodes that can be used as traffic endpoints."""
     tm = app_state.topology_manager
     if tm is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project loaded."}, status_code=404
-        )
-    if not tm.get_gonetem_status():
-        return JSONResponse(
-            {"ok": False, "error": "GoNetEm is not running."}, status_code=409
-        )
+        raise APIError(404, "No project is currently loaded.")
 
-    src_name = payload.get("src", "")
-    dst_name = payload.get("dst", "")
-    src = tm.get_node_by_name(src_name)
-    dst = tm.get_node_by_name(dst_name)
+    nodes = [
+        {"name": satellite.name, "type": "satellite"}
+        for satellite in tm.satellites.values()
+    ]
+    nodes.extend(
+        {"name": station.name, "type": "ground_station"}
+        for station in tm.ground_stations.values()
+    )
+    return schemas.TrafficNodesResponse(nodes=nodes)
+
+
+@app.post("/api/traffic/iperf3", response_model=schemas.TrafficStartResponse)
+async def api_traffic_iperf3(
+    payload: schemas.Iperf3Request,
+) -> schemas.TrafficStartResponse:
+    """Start an iperf3 flow between two nodes."""
+    tm = app_state.topology_manager
+    if tm is None:
+        raise APIError(404, "No project loaded.")
+    if not tm.get_gonetem_status():
+        raise APIError(409, "GoNetEm is not running.")
+
+    src = tm.get_node_by_name(payload.src)
+    dst = tm.get_node_by_name(payload.dst)
     if src is None or dst is None:
-        return JSONResponse(
-            {"ok": False, "error": f"Node not found: {src_name} or {dst_name}"},
-            status_code=404,
-        )
+        raise APIError(404, f"Node not found: {payload.src} or {payload.dst}")
 
     config = Iperf3Config(
-        protocol=payload.get("protocol", "TCP"),
-        duration=int(payload.get("duration", 10)),
-        bandwidth_mbps=float(payload.get("bandwidth_mbps", 0.0)),
-        parallel=int(payload.get("parallel", 1)),
-        interval=float(payload.get("interval", 1.0)),
-        port=int(payload.get("port", 5201)),
-        congestion_control=payload.get("congestion_control", "bbr"),
-        window_size=payload.get("window_size") or None,
-        bidir=bool(payload.get("bidir", False)),
+        protocol=payload.protocol,
+        duration=payload.duration,
+        bandwidth_mbps=payload.bandwidth_mbps,
+        parallel=payload.parallel,
+        interval=payload.interval,
+        port=payload.port,
+        congestion_control=payload.congestion_control,
+        window_size=payload.window_size or None,
+        bidir=payload.bidir,
     )
 
     try:
@@ -1129,7 +679,7 @@ async def api_traffic_iperf3(request: Request) -> JSONResponse:
         flow.start()
     except Exception as exc:
         logging.exception("Failed to start iperf3 flow.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        raise APIError(500, "Failed to start iperf3 flow.") from exc
 
     job_id = f"j{os.urandom(8).hex()}"
     with app_state.jobs_lock:
@@ -1139,52 +689,31 @@ async def api_traffic_iperf3(request: Request) -> JSONResponse:
             "status": "running",
             "results": None,
             "error": None,
-            "src": src_name,
-            "dst": dst_name,
+            "src": payload.src,
+            "dst": payload.dst,
         }
-    return JSONResponse({"ok": True, "job_id": job_id})
+    return schemas.TrafficStartResponse(job_id=job_id)
 
 
-@app.post("/api/traffic/ping")
-async def api_traffic_ping(request: Request) -> JSONResponse:
-    """Start a ping flow between two nodes.
-
-    Accepts a JSON body with keys: src (str), dst (str), count (int),
-    timeout_sec (float), interval_sec (float), packet_size (int).
-
-    Returns:
-        JSON object with 'ok' True and 'job_id' on success.
-    """
-    try:
-        payload: Dict[str, Any] = await request.json()
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-
+@app.post("/api/traffic/ping", response_model=schemas.TrafficStartResponse)
+async def api_traffic_ping(payload: schemas.PingRequest) -> schemas.TrafficStartResponse:
+    """Start a ping flow between two nodes."""
     tm = app_state.topology_manager
     if tm is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project loaded."}, status_code=404
-        )
+        raise APIError(404, "No project loaded.")
     if not tm.get_gonetem_status():
-        return JSONResponse(
-            {"ok": False, "error": "GoNetEm is not running."}, status_code=409
-        )
+        raise APIError(409, "GoNetEm is not running.")
 
-    src_name = payload.get("src", "")
-    dst_name = payload.get("dst", "")
-    src = tm.get_node_by_name(src_name)
-    dst = tm.get_node_by_name(dst_name)
+    src = tm.get_node_by_name(payload.src)
+    dst = tm.get_node_by_name(payload.dst)
     if src is None or dst is None:
-        return JSONResponse(
-            {"ok": False, "error": f"Node not found: {src_name} or {dst_name}"},
-            status_code=404,
-        )
+        raise APIError(404, f"Node not found: {payload.src} or {payload.dst}")
 
     config = PingConfig(
-        count=int(payload.get("count", 5)),
-        timeout_sec=float(payload.get("timeout_sec", 0.5)),
-        interval_sec=float(payload.get("interval_sec", 0.2)),
-        packet_size=int(payload.get("packet_size", 56)),
+        count=payload.count,
+        timeout_sec=payload.timeout_sec,
+        interval_sec=payload.interval_sec,
+        packet_size=payload.packet_size,
     )
 
     try:
@@ -1192,7 +721,7 @@ async def api_traffic_ping(request: Request) -> JSONResponse:
         flow.start()
     except Exception as exc:
         logging.exception("Failed to start ping flow.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        raise APIError(500, "Failed to start ping flow.") from exc
 
     job_id = f"j{os.urandom(8).hex()}"
     with app_state.jobs_lock:
@@ -1202,56 +731,36 @@ async def api_traffic_ping(request: Request) -> JSONResponse:
             "status": "running",
             "results": None,
             "error": None,
-            "src": src_name,
-            "dst": dst_name,
+            "src": payload.src,
+            "dst": payload.dst,
         }
-    return JSONResponse({"ok": True, "job_id": job_id})
+    return schemas.TrafficStartResponse(job_id=job_id)
 
 
-@app.post("/api/traffic/hping3")
-async def api_traffic_hping3(request: Request) -> JSONResponse:
-    """Start an hping3 flow between two nodes.
-
-    Accepts a JSON body with keys: src (str), dst (str), proto (str),
-    dport (int), count (int), size (int), rate_type (str), interval (str),
-    flags (list[str]).
-
-    Returns:
-        JSON object with 'ok' True and 'job_id' on success.
-    """
-    try:
-        payload: Dict[str, Any] = await request.json()
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-
+@app.post("/api/traffic/hping3", response_model=schemas.TrafficStartResponse)
+async def api_traffic_hping3(
+    payload: schemas.Hping3Request,
+) -> schemas.TrafficStartResponse:
+    """Start an hping3 flow between two nodes."""
     tm = app_state.topology_manager
     if tm is None:
-        return JSONResponse(
-            {"ok": False, "error": "No project loaded."}, status_code=404
-        )
+        raise APIError(404, "No project loaded.")
     if not tm.get_gonetem_status():
-        return JSONResponse(
-            {"ok": False, "error": "GoNetEm is not running."}, status_code=409
-        )
+        raise APIError(409, "GoNetEm is not running.")
 
-    src_name = payload.get("src", "")
-    dst_name = payload.get("dst", "")
-    src = tm.get_node_by_name(src_name)
-    dst = tm.get_node_by_name(dst_name)
+    src = tm.get_node_by_name(payload.src)
+    dst = tm.get_node_by_name(payload.dst)
     if src is None or dst is None:
-        return JSONResponse(
-            {"ok": False, "error": f"Node not found: {src_name} or {dst_name}"},
-            status_code=404,
-        )
+        raise APIError(404, f"Node not found: {payload.src} or {payload.dst}")
 
     config = Hping3Config(
-        proto=payload.get("proto", "tcp"),
-        dport=int(payload.get("dport", 0)),
-        count=int(payload.get("count", 100)),
-        size=int(payload.get("size", 0)),
-        rate_type=payload.get("rate_type", "interval"),
-        interval=payload.get("interval", ""),
-        flags=payload.get("flags", []),
+        proto=payload.proto,
+        dport=payload.dport,
+        count=payload.count,
+        size=payload.size,
+        rate_type=payload.rate_type,
+        interval=payload.interval,
+        flags=payload.flags,
     )
 
     try:
@@ -1259,7 +768,7 @@ async def api_traffic_hping3(request: Request) -> JSONResponse:
         flow.start()
     except Exception as exc:
         logging.exception("Failed to start hping3 flow.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        raise APIError(500, "Failed to start hping3 flow.") from exc
 
     job_id = f"j{os.urandom(8).hex()}"
     with app_state.jobs_lock:
@@ -1269,130 +778,103 @@ async def api_traffic_hping3(request: Request) -> JSONResponse:
             "status": "running",
             "results": None,
             "error": None,
-            "src": src_name,
-            "dst": dst_name,
+            "src": payload.src,
+            "dst": payload.dst,
         }
-    return JSONResponse({"ok": True, "job_id": job_id})
+    return schemas.TrafficStartResponse(job_id=job_id)
 
 
-@app.get("/api/traffic/status")
-async def api_traffic_status(job_id: str) -> JSONResponse:
-    """Poll the status of a traffic job.
-
-    Args:
-        job_id: The job identifier returned by the start endpoint.
-
-    Returns:
-        JSON object with 'status' ('running', 'done', 'error', 'cancelled')
-        and result data when finished.
-    """
+@app.get("/api/traffic/status", response_model=schemas.TrafficStatusResponse)
+async def api_traffic_status(job_id: str) -> schemas.TrafficStatusResponse:
+    """Poll the status of a traffic job."""
     with app_state.jobs_lock:
         job = app_state.jobs.get(job_id)
     if job is None:
-        return JSONResponse({"ok": False, "error": "Job not found."}, status_code=404)
+        raise APIError(404, "Job not found.")
 
     flow = job["flow"]
     kind = job["kind"]
 
     try:
         if kind == "iperf3":
-            st = flow.status()
-            if st == FlowStatus.RUNNING:
-                return JSONResponse({"ok": True, "status": "running"})
-            elif st == FlowStatus.DONE:
-                result = flow.results()
-                job["results"] = _serialize_iperf3_results(result)
+            status = flow.status()
+            if status == FlowStatus.RUNNING:
+                return schemas.TrafficStatusResponse(status="running")
+            if status == FlowStatus.DONE:
+                job["results"] = serialize_iperf3_results(flow.results())
                 job["status"] = "done"
-                return JSONResponse(
-                    {"ok": True, "status": "done", "results": job["results"]}
+                return schemas.TrafficStatusResponse(
+                    status="done",
+                    results=job["results"],
                 )
-            elif st == FlowStatus.ERROR:
+            if status == FlowStatus.ERROR:
                 job["status"] = "error"
                 try:
                     _ = flow.results()
                 except Exception as exc:
                     job["error"] = str(exc)
-                return JSONResponse(
-                    {
-                        "ok": True,
-                        "status": "error",
-                        "error": job.get("error", "Unknown error."),
-                    }
+                return schemas.TrafficStatusResponse(
+                    status="error",
+                    error=job.get("error", "Unknown error."),
                 )
         elif kind == "ping":
-            st = flow.status()
-            if st == PingStatus.RUNNING:
-                return JSONResponse({"ok": True, "status": "running"})
-            elif st == PingStatus.DONE:
-                result = flow.results()
-                job["results"] = _serialize_ping_results(result)
+            status = flow.status()
+            if status == PingStatus.RUNNING:
+                return schemas.TrafficStatusResponse(status="running")
+            if status == PingStatus.DONE:
+                job["results"] = serialize_ping_results(flow.results())
                 job["status"] = "done"
-                return JSONResponse(
-                    {"ok": True, "status": "done", "results": job["results"]}
+                return schemas.TrafficStatusResponse(
+                    status="done",
+                    results=job["results"],
                 )
-            elif st == PingStatus.ERROR:
+            if status == PingStatus.ERROR:
                 job["status"] = "error"
                 try:
                     _ = flow.results()
                 except Exception as exc:
                     job["error"] = str(exc)
-                return JSONResponse(
-                    {
-                        "ok": True,
-                        "status": "error",
-                        "error": job.get("error", "Unknown error."),
-                    }
+                return schemas.TrafficStatusResponse(
+                    status="error",
+                    error=job.get("error", "Unknown error."),
                 )
         elif kind == "hping3":
-            st = flow.status()
-            if st == Hping3Status.RUNNING:
-                return JSONResponse({"ok": True, "status": "running"})
-            elif st == Hping3Status.DONE:
-                result = flow.results()
-                job["results"] = _serialize_hping3_results(result)
+            status = flow.status()
+            if status == Hping3Status.RUNNING:
+                return schemas.TrafficStatusResponse(status="running")
+            if status == Hping3Status.DONE:
+                job["results"] = serialize_hping3_results(flow.results())
                 job["status"] = "done"
-                return JSONResponse(
-                    {"ok": True, "status": "done", "results": job["results"]}
+                return schemas.TrafficStatusResponse(
+                    status="done",
+                    results=job["results"],
                 )
-            elif st == Hping3Status.ERROR:
+            if status == Hping3Status.ERROR:
                 job["status"] = "error"
                 try:
                     _ = flow.results()
                 except Exception as exc:
                     job["error"] = str(exc)
-                return JSONResponse(
-                    {
-                        "ok": True,
-                        "status": "error",
-                        "error": job.get("error", "Unknown error."),
-                    }
+                return schemas.TrafficStatusResponse(
+                    status="error",
+                    error=job.get("error", "Unknown error."),
                 )
     except Exception as exc:
         logging.exception("Error polling traffic job status.")
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        raise APIError(500, "Error polling traffic job status.") from exc
 
-    return JSONResponse({"ok": True, "status": job.get("status", "unknown")})
+    return schemas.TrafficStatusResponse(status=job.get("status", "unknown"))
 
 
-@app.post("/api/traffic/cancel")
-async def api_traffic_cancel(request: Request) -> JSONResponse:
-    """Cancel a running traffic job.
-
-    Expects a JSON body with 'job_id'.
-
-    Returns:
-        JSON object with 'ok' True if the job was marked cancelled.
-    """
-    try:
-        payload: Dict[str, Any] = await request.json()
-    except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-
-    job_id = payload.get("job_id", "")
+@app.post("/api/traffic/cancel", response_model=schemas.OperationResponse)
+async def api_traffic_cancel(
+    payload: schemas.TrafficCancelRequest,
+) -> schemas.OperationResponse:
+    """Cancel a running traffic job."""
     with app_state.jobs_lock:
-        job = app_state.jobs.get(job_id)
+        job = app_state.jobs.get(payload.job_id)
     if job is None:
-        return JSONResponse({"ok": False, "error": "Job not found."}, status_code=404)
+        raise APIError(404, "Job not found.")
 
     job["status"] = "cancelled"
-    return JSONResponse({"ok": True})
+    return schemas.OperationResponse()
