@@ -83,6 +83,13 @@ function renderReadiness(range) {
   );
   const name = byId("sec-project-name");
   if (name) name.textContent = range?.project_name ? `Project: ${range.project_name}` : "";
+  const methodSelect = byId("res-method");
+  if (methodSelect && readiness.routing_method) {
+    const exists = [...methodSelect.options].some(
+      (option) => option.value === readiness.routing_method,
+    );
+    if (exists) methodSelect.value = readiness.routing_method;
+  }
 }
 
 function nodeOptions(nodes) {
@@ -540,6 +547,123 @@ async function stopDdos() {
   await cancelTrafficJob(run.iperfJob);
 }
 
+function setResStatus(text, isError = false) {
+  const element = byId("res-status");
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function routeText(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return "(empty)";
+  return rows.join("\n");
+}
+
+function diffRoute(before, after) {
+  const beforeRows = Array.isArray(before) ? before : [];
+  const afterRows = Array.isArray(after) ? after : [];
+  const beforeSet = new Set(beforeRows);
+  const afterSet = new Set(afterRows);
+  const removed = beforeRows.filter((row) => !afterSet.has(row));
+  const added = afterRows.filter((row) => !beforeSet.has(row));
+  if (removed.length === 0 && added.length === 0) return "(no route change)";
+  return [
+    ...removed.map((row) => `- ${row}`),
+    ...added.map((row) => `+ ${row}`),
+  ].join("\n");
+}
+
+function renderRouteViews(before, after) {
+  const beforeElement = byId("res-route-before");
+  const afterElement = byId("res-route-after");
+  const diffElement = byId("res-diff");
+  if (beforeElement) beforeElement.textContent = routeText(before);
+  if (afterElement) afterElement.textContent = after === null ? "-" : routeText(after);
+  if (diffElement) {
+    diffElement.textContent = after === null ? "-" : diffRoute(before, after);
+  }
+}
+
+async function fetchRouteTable(node) {
+  if (!node) return [];
+  const data = await api.get(`/api/nodes/${encodeURIComponent(node)}`);
+  return data?.node?.routing_table || [];
+}
+
+async function loadResNodes() {
+  try {
+    const nodes = await api.get("/api/nodes");
+    fillSelect(
+      "res-node",
+      (nodes || []).map((node) => ({
+        value: node.name,
+        label: node.name,
+      })),
+    );
+  } catch {
+    /* no project yet */
+  }
+}
+
+async function refreshResRoute() {
+  const node = byId("res-node")?.value;
+  try {
+    const rows = await fetchRouteTable(node);
+    renderRouteViews(rows, null);
+    setResStatus(`Loaded route table for ${node || "node"}.`);
+  } catch (error) {
+    setResStatus(error.message || "Could not read the route table.", true);
+  }
+}
+
+async function failSelectedLink() {
+  const key = byId("res-link")?.value;
+  const node = byId("res-node")?.value;
+  if (!key) {
+    setResStatus("Select a link first.", true);
+    return;
+  }
+  let before = [];
+  try {
+    before = await fetchRouteTable(node);
+    renderRouteViews(before, null);
+    setResStatus("Failing link...");
+    await api.post(`/api/security/links/${encodeURIComponent(key)}/fail`);
+    await loadRange();
+    const after = await fetchRouteTable(node);
+    renderRouteViews(before, after);
+    setResStatus("Link failed. Compare the route diff; Reset restores the snapshot.");
+  } catch (error) {
+    setResStatus(error.message || "Could not fail the link.", true);
+  }
+}
+
+async function applyResRouting() {
+  const method = byId("res-method")?.value || "static";
+  try {
+    setResStatus(`Applying ${method}...`);
+    await api.post("/api/routing/apply", { method });
+    await loadRange();
+    await refreshResRoute();
+    setResStatus(`Routing method ${method} applied.`);
+  } catch (error) {
+    setResStatus(error.message || "Could not apply routing.", true);
+  }
+}
+
+async function resetSecurityRange() {
+  try {
+    setResStatus("Resetting the range. Containers may restart...");
+    await api.post("/api/security/reset");
+    await loadRange();
+    renderRouteViews([], null);
+    await refreshResRoute();
+    setResStatus("Range restored from the security snapshot.");
+  } catch (error) {
+    setResStatus(error.message || "Could not reset the range.", true);
+  }
+}
+
 for (const button of document.querySelectorAll(".sec-unit-button[data-unit]")) {
   button.addEventListener("click", () => activateUnit(button.dataset.unit));
 }
@@ -547,5 +671,9 @@ byId("sec-refresh")?.addEventListener("click", loadRange);
 byId("recon-export")?.addEventListener("click", exportNotes);
 byId("ddos-run")?.addEventListener("click", runDdos);
 byId("ddos-stop")?.addEventListener("click", stopDdos);
+byId("res-fail")?.addEventListener("click", failSelectedLink);
+byId("res-apply")?.addEventListener("click", applyResRouting);
+byId("res-reset")?.addEventListener("click", resetSecurityRange);
+byId("res-node")?.addEventListener("change", refreshResRoute);
 
-loadRange();
+loadRange().then(loadResNodes);
