@@ -238,6 +238,7 @@ class TrafficNode(BaseModel):
 
     name: str
     type: str
+    label: str
 
 
 class TrafficNodesResponse(BaseModel):
