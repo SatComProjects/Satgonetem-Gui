@@ -16,27 +16,26 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 
 ## Requirements
 
-- Python >= 3.10
-- SatGoNetEm
-- A modern web browser with WebGL support (for the 3D globe)
+- Python >= 3.10 (CI runs 3.12)
+- Node >= 24 for the frontend test suite
+- SatGoNetEm **v0.2.0** (pinned Git tag)
+- A modern web browser with WebGL support (for the 3D globe; unsupported
+  browsers get a fallback message)
 
 ## Installation
 
-It is recommended to work in a virtual environment.
+The supported development path uses [uv](https://github.com/astral-sh/uv):
 
 ```bash
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
+uv sync --extra dev
 ```
 
-Or, if you use [uv](https://github.com/astral-sh/uv):
+For a plain virtual environment, install the project instead:
 
 ```bash
-uv sync
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
 
 ## Running the Application
@@ -63,15 +62,28 @@ FastAPI auto-generated API documentation can be found at **http://localhost:8000
 
 ```
 satgonetem_gui/
-├── app.py              # FastAPI application (routes & API endpoints)
-├── main.py             # Entry point (uvicorn runner)
-├── state.py            # Global application state (TopologyManager, jobs, etc.)
-├── static/             # CSS and JavaScript assets
+├── app.py              # create_app factory and composition root
+├── main.py             # Entry point (uvicorn runner + settings)
+├── dependencies.py     # FastAPI service injection
+├── config.py           # Host, port, and save-root settings
+├── schemas.py          # Pydantic request/response models
+├── errors.py           # Shared API error envelope
+├── state.py            # Per-application project/runtime state
+├── routes/             # Page, project, topology, routing, traffic APIs
+├── services/           # Use-case orchestration and job registry
+├── adapters/           # SatGoNetem topology and traffic adapters
+├── ground_stations.py  # Ground-station CSV parsing/writing
+├── serializers.py      # Traffic result shaping
+├── storage.py          # Data-file and save-path policy
+├── data/               # Bundled presets and sample GoNetem config
+├── static/             # ES modules, CSS, and shared JS models
 ├── templates/          # Jinja2 HTML templates
 │   └── base.html       # Shared layout with navigation
-satgonetem_gui.egg-info/
-docs/                   # Project documentation (placeholder)
-resources/              # Sample configuration and ground station data
+tests/                  # pytest suite (10x10 in-process topology)
+js-tests/               # Vitest unit tests for pure frontend models
+e2e/                    # Playwright page smoke tests
+docs/                   # Architecture notes and test baseline
+package.json            # Frontend test/tooling manifest
 ```
 
 ## Pages
@@ -86,13 +98,62 @@ resources/              # Sample configuration and ground station data
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
 | `/docs` | API Documentation — auto-generated Swagger UI |
 
+## Configuration
+
+The server and project storage are configured through environment variables:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SATGONETEM_GUI_HOST` | `127.0.0.1` | Bind address; loopback by default. |
+| `SATGONETEM_GUI_PORT` | `8000` | HTTP port. |
+| `SATGONETEM_GUI_SAVE_ROOT` | `~/satgonetem-projects` | Only project save paths inside this directory are accepted. |
+
+Set `SATGONETEM_GUI_HOST=0.0.0.0` only on a trusted network. The form's
+`Save to` field is optional; when used, its target must stay inside the
+configured save root.
+
+## Security
+
+The GUI has no authentication and is intended for trusted local use. It binds
+`127.0.0.1` by default, constrains project saves to `SATGONETEM_GUI_SAVE_ROOT`,
+and does not expose a public API. Do not bind it to a public interface without
+placing it behind an authenticating reverse proxy.
+
 ## Development
 
 To run the application in development mode with auto-reload:
 
 ```bash
-uvicorn satgonetem_gui.app:app --reload --host 0.0.0.0 --port 8000
+uvicorn satgonetem_gui.app:app --reload --host 127.0.0.1 --port 8000
 ```
+
+Install the development tools and run the Python suite:
+
+```bash
+uv sync --extra dev
+uv run pytest
+uv run ruff check .
+uv run ruff format --check tests
+```
+
+Install the frontend tooling and run the JS tests:
+
+```bash
+npm ci
+npm run test:js
+```
+
+Run the browser smoke tests (the Playwright web server starts the app itself):
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+The default Python suite builds a 10x10 Walker constellation in-process and
+does not require Docker or a running GoNetem server. See
+[`docs/architecture.md`](docs/architecture.md) for the test strategy, target
+module boundaries, and the current coverage baseline.
 
 ## License
 

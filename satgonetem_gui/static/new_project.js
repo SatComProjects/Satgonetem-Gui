@@ -1,5 +1,4 @@
-(function () {
-  "use strict";
+import { api } from "./api.js";
 
   var shells = [];
   var grounds = [];
@@ -45,10 +44,10 @@
       del.type = "button";
       del.className = "button";
       del.style.flexShrink = "0";
-      del.onclick = function () {
+      del.addEventListener("click", function () {
         shells.splice(idx, 1);
         renderShells();
-      };
+      });
       li.appendChild(label);
       li.appendChild(del);
       shellList.appendChild(li);
@@ -78,10 +77,10 @@
       del.type = "button";
       del.className = "button";
       del.style.flexShrink = "0";
-      del.onclick = function () {
+      del.addEventListener("click", function () {
         grounds.splice(idx, 1);
         renderGrounds();
-      };
+      });
       li.appendChild(label);
       li.appendChild(del);
       groundList.appendChild(li);
@@ -219,10 +218,12 @@
   }
 
   async function loadProjectConfig(projectName) {
+    shells = [];
+    grounds = [];
     try {
-      var r = await fetch("/api/project/config?name=" + encodeURIComponent(projectName));
-      if (!r.ok) throw new Error("Failed to load project config");
-      var cfg = await r.json();
+      var cfg = await api.get(
+        "/api/project/config?name=" + encodeURIComponent(projectName)
+      );
 
       document.querySelector('[name="name"]').value = cfg.name || projectName;
       document.querySelector('[name="update_time"]').value = cfg.update_time != null ? cfg.update_time : 5;
@@ -230,6 +231,7 @@
       document.querySelector('[name="end_date"]').value = cfg.end_date || "01/01/2024 00:01:00";
       document.querySelector('[name="isl_capacity"]').value = cfg.isl_capacity != null ? cfg.isl_capacity : 100000;
       document.querySelector('[name="gs_capacity"]').value = cfg.gs_capacity != null ? cfg.gs_capacity : 100000;
+      document.querySelector('[name="save_path"]').value = cfg.save_path || "";
 
       (cfg.walker_shells || []).forEach(function (s) {
         var cp = s.constellation_property || {};
@@ -263,7 +265,7 @@
         var cp = g.connectivity_properties || {};
         grounds.push({
           identifier: g.identifier || "Ground Stations",
-          stations: [],
+          stations: Array.isArray(g.stations) ? g.stations : [],
           type: g.type || "ground_station",
           connectivity_properties: {
             ground_to_space_connections_strategy: cp.ground_to_space_connections_strategy || "everything-visible",
@@ -277,28 +279,45 @@
       renderGrounds();
     } catch (err) {
       console.error("Could not load project config:", err);
+      alert("Could not load project config: " + String(err.message || err));
       seedDefaults();
     }
   }
 
-  async function waitForProjectCreation(projectName, maxAttempts, delayMs) {
+  async function waitForProjectReady(projectName, maxAttempts, delayMs) {
     maxAttempts = maxAttempts || 1200;
     delayMs = delayMs || 500;
     var attempts = 0;
+    var lastStatus = null;
     while (attempts < maxAttempts) {
       try {
-        var r = await fetch("/api/project/exists?name=" + encodeURIComponent(projectName));
-        if (r.ok) {
-          var j = await r.json();
-          if (j.exists) return;
+        lastStatus = await api.get("/api/project/status");
+        if (lastStatus.state === "error") {
+          var projectError = new Error(lastStatus.error || "Project creation failed");
+          projectError.projectFailure = true;
+          throw projectError;
+        }
+        if (lastStatus.state === "loaded") {
+          if (lastStatus.project_name === projectName) return;
+          var nameError = new Error(
+            "Project finished with an unexpected name: " +
+              String(lastStatus.project_name || "unknown")
+          );
+          nameError.projectFailure = true;
+          throw nameError;
         }
       } catch (e) {
-        // ignore network errors during polling
+        if (e && e.projectFailure) {
+          throw e;
+        }
       }
       attempts++;
       await new Promise(function (resolve) { setTimeout(resolve, delayMs); });
     }
-    throw new Error("Project creation timed out after 10 minutes");
+    throw new Error(
+      "Project creation timed out after 10 minutes" +
+        (lastStatus ? " (last state: " + String(lastStatus.state) + ")" : "")
+    );
   }
 
   createBtn.addEventListener("click", async function (e) {
@@ -328,18 +347,12 @@
       if (progLabel) progLabel.textContent = "Constellation";
       if (progFill) progFill.style.width = "10%";
 
-      var r = await fetch("/api/project/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      var j = await r.json().catch(function () { return {}; });
-      if (!r.ok || !j.ok) throw new Error(j.error || "Failed to start project creation");
+      await api.post("/api/project/create", payload);
 
       if (msgEl) msgEl.textContent = "Building constellation topology...";
       if (progFill) progFill.style.width = "30%";
 
-      await waitForProjectCreation(projectName);
+      await waitForProjectReady(projectName);
 
       if (progFill) progFill.style.width = "100%";
       if (msgEl) msgEl.textContent = "Done. Redirecting to dashboard...";
@@ -379,4 +392,3 @@
       seedDefaults();
     }
   }
-})();

@@ -5,6 +5,7 @@
  * /api/routing/status for routing state. Allows the user to start/stop
  * GoNetem and to apply or delete addressing and routing.
  */
+import { api } from "./api.js";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -106,10 +107,7 @@ function showRoutingMsg(text, isError) {
 
 async function pollStatus() {
   try {
-    const response = await fetch("/api/status");
-    if (!response.ok) return;
-    const data = await response.json();
-    applyStatus(data);
+    applyStatus(await api.get("/api/status"));
   } catch (_) {
     // Network error - keep last known state visible.
   }
@@ -117,12 +115,8 @@ async function pollStatus() {
 
 async function pollRoutingStatus() {
   try {
-    var r = await fetch("/api/routing/status");
-    if (!r.ok) return;
-    var data = await r.json();
-    if (data.ok) {
-      applyRoutingStatus(data);
-    }
+    const data = await api.get("/api/routing/status");
+    if (data.ok) applyRoutingStatus(data);
   } catch (_) {
     // Ignore network errors.
   }
@@ -141,13 +135,9 @@ el("btn-gonetem").addEventListener("click", async function () {
   gonetemBusy = true;
   btn.textContent = starting ? "Starting..." : "Stopping...";
   try {
-    var r = await fetch(endpoint, { method: "POST" });
-    var j = await r.json().catch(function () { return {}; });
-    if (!r.ok || !j.ok) {
-      alert((starting ? "Start" : "Stop") + " failed: " + (j.error || "Unknown error"));
-    }
+    await api.post(endpoint);
   } catch (err) {
-    alert("Error: " + String(err.message || err));
+    alert((starting ? "Start" : "Stop") + " failed: " + (err.message || "Unknown error"));
   } finally {
     gonetemBusy = false;
     await pollStatus();
@@ -158,19 +148,10 @@ el("btn-apply").addEventListener("click", async function () {
   var method = el("routing-method").value;
   showRoutingMsg("Applying addressing and routing...");
   try {
-    var r = await fetch("/api/routing/apply", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method: method }),
-    });
-    var j = await r.json().catch(function () { return {}; });
-    if (!r.ok || !j.ok) {
-      showRoutingMsg(j.error || "Apply failed.", true);
-    } else {
-      showRoutingMsg("Addressing and routing applied successfully.");
-    }
+    await api.post("/api/routing/apply", { method });
+    showRoutingMsg("Addressing and routing applied successfully.");
   } catch (err) {
-    showRoutingMsg("Error: " + String(err.message || err), true);
+    showRoutingMsg(err.message || "Apply failed.", true);
   }
   await pollRoutingStatus();
 });
@@ -181,15 +162,10 @@ el("btn-delete").addEventListener("click", async function () {
   }
   showRoutingMsg("Deleting routing...");
   try {
-    var r = await fetch("/api/routing/delete", { method: "POST" });
-    var j = await r.json().catch(function () { return {}; });
-    if (!r.ok || !j.ok) {
-      showRoutingMsg(j.error || "Delete failed.", true);
-    } else {
-      showRoutingMsg("Routing deleted successfully.");
-    }
+    await api.post("/api/routing/delete");
+    showRoutingMsg("Routing deleted successfully.");
   } catch (err) {
-    showRoutingMsg("Error: " + String(err.message || err), true);
+    showRoutingMsg(err.message || "Delete failed.", true);
   }
   await pollRoutingStatus();
 });

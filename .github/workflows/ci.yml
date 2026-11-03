@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Run JavaScript tests
+        run: npm run test:js
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "latest"
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Check formatting of new Python files
+        run: uv run ruff format --check tests
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov=satgonetem_gui --cov-report=term-missing
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser smoke tests
+        run: npm run test:e2e
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Verify wheel contents
+        run: |
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          wheel = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(wheel) as archive:
+              names = set(archive.namelist())
+
+          required = {
+              "satgonetem_gui/adapters/satgonetem_topology.py",
+              "satgonetem_gui/routes/projects.py",
+              "satgonetem_gui/services/project_service.py",
+              "satgonetem_gui/config.py",
+              "satgonetem_gui/schemas.py",
+              "satgonetem_gui/data/ground_stations/representative.txt",
+              "satgonetem_gui/data/gonetem_config/config.yaml",
+              "satgonetem_gui/static/api.js",
+              "satgonetem_gui/static/queue_model.js",
+              "satgonetem_gui/static/world_boot.js",
+              "satgonetem_gui/static/base.css",
+              "satgonetem_gui/templates/base.html",
+          }
+          missing = required - names
+          if missing:
+              raise SystemExit(f"wheel is missing: {sorted(missing)}")
+          print(f"wheel OK: {wheel}")
+          PY
+
+      - name: Smoke-test installed wheel
+        run: |
+          rm -rf /tmp/sgnt-wheel /tmp/sgnt-wheel-mpl
+          uv pip install --no-deps --target /tmp/sgnt-wheel dist/*.whl
+          cd /tmp
+          MPLCONFIGDIR=/tmp/sgnt-wheel-mpl PYTHONPATH=/tmp/sgnt-wheel "$GITHUB_WORKSPACE/.venv/bin/python" - <<'PY'
+          from pathlib import Path
+
+          from satgonetem_gui.app import create_app
+          from satgonetem_gui.config import Settings
+          from satgonetem_gui.resources import GROUND_STATIONS_DIR
+
+          assert str(GROUND_STATIONS_DIR).startswith("/tmp/sgnt-wheel/")
+          assert (GROUND_STATIONS_DIR / "representative.txt").is_file()
+          app = create_app(settings=Settings("127.0.0.1", 8000, Path("/tmp")))
+          assert app is not None
+          print("installed wheel OK")
+          PY

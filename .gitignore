@@ -1,3 +1,6 @@
+# IDE files
+.idea/
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -9,6 +12,18 @@ wheels/
 # Virtual environments
 .venv
 
+# Test and lint caches
+.coverage
+.coverage.*
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+
 # uv generated files
-uv.lock
 .python-version
+# JavaScript tooling
+node_modules/
+.npm-cache/
+.playwright-browsers/
+playwright-report/
+test-results/

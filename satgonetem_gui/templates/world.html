@@ -208,6 +208,11 @@
 {% block content %}
 <h2 style="margin-bottom:4px;">World View</h2>
 
+<div id="world-fallback" class="card" style="display:none; margin-top:8px;">
+  <h3>3D view unavailable</h3>
+  <p class="muted">This browser does not provide WebGL. The rest of the dashboard still works.</p>
+</div>
+
 <div id="world">
   <div class="plot-controls collapsed" id="plot-controls">
     <div class="plot-controls-header" id="plot-controls-header">
@@ -283,5 +288,5 @@
   </div>
 </div>
 
-<script src="/static/world.js"></script>
+<script type="module" src="/static/world_boot.js?v=1"></script>
 {% endblock %}
