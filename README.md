@@ -19,7 +19,8 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 - Python >= 3.10 (CI runs 3.12)
 - Node >= 24 for the frontend test suite
 - SatGoNetEm
-- A modern web browser with WebGL support (for the 3D globe)
+- A modern web browser with WebGL support (for the 3D globe; unsupported
+  browsers get a fallback message)
 
 ## Installation
 

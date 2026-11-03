@@ -97,3 +97,18 @@ test("edit page populates an existing project", async ({ page, request }) => {
   await page.click("#tg-add-queue");
   await expect(page.locator(".queue-item")).toHaveCount(1);
 });
+
+
+test("world view shows a fallback when WebGL is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+      if (String(type).startsWith("webgl")) return null;
+      return original.call(this, type, ...args);
+    };
+  });
+
+  await page.goto("/world");
+  await expect(page.locator("#world-fallback")).toBeVisible();
+  await expect(page.locator("#world")).toBeHidden();
+});

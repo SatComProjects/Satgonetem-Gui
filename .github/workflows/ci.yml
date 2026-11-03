@@ -79,6 +79,7 @@ jobs:
               "satgonetem_gui/data/gonetem_config/config.yaml",
               "satgonetem_gui/static/api.js",
               "satgonetem_gui/static/queue_model.js",
+              "satgonetem_gui/static/world_boot.js",
               "satgonetem_gui/static/base.css",
               "satgonetem_gui/templates/base.html",
           }
