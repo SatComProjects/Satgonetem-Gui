@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from ..state import RuntimeState
+from .policy_service import PolicyService
 from .project_service import ProjectService
 from .routing_service import RoutingService
 from .security_service import SecurityService
@@ -20,3 +21,4 @@ class ApplicationServices:
     routing: RoutingService
     traffic: TrafficService
     security: SecurityService
+    policy: PolicyService

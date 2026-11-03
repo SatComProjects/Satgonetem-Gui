@@ -5,6 +5,8 @@ import {
   buildDdosPlan,
   buildFloodFlow,
   buildIperf3Flow,
+  buildPolicyPayload,
+  buildMitigationPolicy,
   buildSpoofFlow,
   splitThroughput,
   summarizeDdos,
@@ -154,5 +156,72 @@ describe("security model", () => {
     const plan = buildDdosPlan({ baselineSec: 5, attackSec: 2 });
     expect(plan.attackStart).toBe(3);
     expect(plan.attackStart + 1).toBeLessThan(plan.baselineSec);
+  });
+});
+
+describe("policy payload builder", () => {
+  it("parses sources and ports and adds optional limits", () => {
+    const payload = buildPolicyPayload({
+      node: "Gnd24",
+      defaultInbound: "drop",
+      allowEstablished: true,
+      managementSources: "10.0.0.0/8, 192.0.2.0/24",
+      managementPorts: "22, 443",
+      rateEnabled: true,
+      rateProtocol: "tcp",
+      ratePort: "5201",
+      rateSource: "192.0.2.0/24",
+      ratePps: "100",
+      rateBurst: "200",
+      rateSyn: true,
+      connEnabled: true,
+      connPort: "5201",
+      connMax: "10",
+      ingressEnabled: true,
+      ingressInterface: "eth5",
+      ingressRate: "1000",
+      dscpEnabled: true,
+      dscp: "46",
+    });
+
+    expect(payload.management_sources).toEqual([
+      "10.0.0.0/8",
+      "192.0.2.0/24",
+    ]);
+    expect(payload.management_ports).toEqual([22, 443]);
+    expect(payload.rate_limits[0]).toMatchObject({
+      port: 5201,
+      syn_only: true,
+    });
+    expect(payload.connection_limits[0].max_connections).toBe(10);
+    expect(payload.ingress_policing[0].interface).toBe("eth5");
+    expect(payload.dscp_marks[0].dscp).toBe(46);
+  });
+
+  it("builds a source-specific mitigation policy", () => {
+    const payload = buildMitigationPolicy({
+      node: "Gnd25",
+      attackerIp: "192.0.2.9",
+      protocol: "udp",
+      port: 5201,
+      synOnly: false,
+    });
+
+    expect(payload.default_inbound).toBe("accept");
+    expect(payload.rate_limits[0].source_cidr).toBe("192.0.2.9/32");
+    expect(payload.connection_limits).toEqual([]);
+  });
+
+  it("uses an IPv6 host prefix for a v6 attacker", () => {
+    const payload = buildMitigationPolicy({
+      node: "Gnd25",
+      attackerIp: "2001:db8::9",
+      protocol: "tcp",
+      port: 5201,
+      synOnly: true,
+    });
+
+    expect(payload.family).toBe("ipv6");
+    expect(payload.rate_limits[0].source_cidr).toBe("2001:db8::9/128");
   });
 });

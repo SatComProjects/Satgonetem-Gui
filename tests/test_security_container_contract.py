@@ -11,10 +11,15 @@ import time
 
 import pytest
 
+from satgonetem_gui.adapters.satgonetem_policy import SatGoNetemPolicyAdapter
 from satgonetem_gui.adapters.satgonetem_security import SatGoNetemSecurityAdapter
 from satgonetem_gui.adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from satgonetem_gui.resources import GROUND_STATIONS_DIR, SECURITY_DIR
-from satgonetem_gui.schemas import CaptureStartRequest, ProjectCreateRequest
+from satgonetem_gui.schemas import (
+    CaptureStartRequest,
+    NodePolicyRequest,
+    ProjectCreateRequest,
+)
 from satgonetem_gui.services.project_service import ProjectService
 from satgonetem_gui.services.routing_service import RoutingService
 from satgonetem_gui.services.security_service import SecurityService
@@ -44,6 +49,7 @@ def test_real_security_capture_failure_and_reset(settings) -> None:
 
     adapter = SatGoNetemTopologyAdapter(settings)
     security_adapter = SatGoNetemSecurityAdapter()
+    policy_adapter = SatGoNetemPolicyAdapter()
     result = adapter.build(payload)
     topology_manager = result.topology_manager
 
@@ -61,6 +67,29 @@ def test_real_security_capture_failure_and_reset(settings) -> None:
         links = adapter.links(topology_manager)
         assert len(links) > 0
         assert all(link["capacity_kbps"] == 5000 for link in links)
+
+        policy = NodePolicyRequest(
+            node="Gnd24",
+            preset="ddos-mitigation",
+            default_inbound="accept",
+            allow_established=True,
+            allow_icmp=True,
+            rate_limits=[
+                {
+                    "protocol": "udp",
+                    "port": 5201,
+                    "source_cidr": "192.0.2.0/24",
+                    "packets_per_second": 100,
+                    "burst": 200,
+                }
+            ],
+            dscp_marks=[{"protocol": "udp", "port": 5201, "dscp": 46}],
+        )
+        applied = policy_adapter.apply(topology_manager, policy)
+        assert applied["applied"] is True
+        assert applied["rules"]
+        policy_adapter.clear(topology_manager, "Gnd24", applied["qos"])
+        assert policy_adapter.status(topology_manager, "Gnd24")["applied"] is False
 
         key = next(link["key"] for link in links if link["type"] == "InterSatelliteLink")
         security.fail_link(key)

@@ -164,9 +164,12 @@ not import those dependency internals.
 - Extended link responses with stable keys, capacity, delay, and state.
 - Added capture lifecycle and download endpoints, bounded link-failure and
   reset operations, and spoofing fields on the hping3 request.
-- The five units are reconnaissance, availability (DDoS), resilience,
-  confidentiality, and trust/spoofing. Tabletop and capstone units remain out
-  of scope.
+- Added a typed policy plane: `routes/policies.py`, `services/policy_service.py`,
+  `adapters/satgonetem_policy.py`, and `PolicyGateway` for per-node
+  firewall/QoS apply, preview, status, counters, and rollback.
+- The security page now exposes six units: reconnaissance, availability
+  (DDoS), resilience, confidentiality, trust/spoofing, and policy/QoS. The
+  tabletop and capstone units remain out of scope.
 
 ## Test strategy
 
@@ -202,20 +205,25 @@ Measured on 2026-11-03 with Python 3.15.0, pytest 9.2.0, and coverage 7.17.1:
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **148 passed, 1 skipped** in about 1.8 s. Frontend: **14 Vitest tests**, **10 Playwright smoke tests**.
+Result: **216 passed, 2 skipped** in about 2.6 s (one existing and one security
+real-container test are opt-in). Frontend: **27 Vitest tests**, **12 Playwright
+smoke tests**. Total line coverage is **88%**, branch coverage **87.55%**.
 
 | Module | Statements | Coverage |
 |---|---:|---:|
-| `adapters/satgonetem_topology.py` | 166 | 88% |
+| `adapters/satgonetem_topology.py` | 194 | 89% |
 | `adapters/satgonetem_traffic.py` | 76 | 76% |
+| `adapters/satgonetem_policy.py` | 295 | 85% |
+| `adapters/satgonetem_security.py` | 88 | 79% |
+| `services/policy_service.py` | 75 | 81% |
 | `services/project_service.py` | 73 | 86% |
 | `services/routing_service.py` | 63 | 82% |
 | `services/topology_service.py` | 37 | 98% |
 | `services/traffic_service.py` | 155 | 88% |
 | `state.py` | 123 | 95% |
-| `schemas.py` | 120 | 98% |
+| `schemas.py` | 282 | 97% |
 | `storage.py` | 29 | 95% |
-| **Total** | **1201** | **90%** |
+| **Total** | **2102** | **88%** |
 
 Branch coverage is enabled with an 85% minimum; the current suite is at 90%.
 

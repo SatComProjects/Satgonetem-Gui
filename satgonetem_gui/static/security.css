@@ -361,3 +361,37 @@ button:disabled {
     flex: 1 1 140px;
   }
 }
+
+/* Policy editor */
+.sec-policy-group {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 16px;
+  padding-top: 12px;
+}
+
+.sec-policy-group h4 {
+  margin-top: 0;
+}
+
+.sec-grid label.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.sec-grid label.inline input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.sec-warnings {
+  color: #fbbf24;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 8px 0;
+  white-space: pre-wrap;
+}
+
+#policy-plan {
+  min-height: 80px;
+}

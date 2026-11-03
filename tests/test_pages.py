@@ -69,5 +69,9 @@ def test_openapi_schema_contains_all_public_routes(client) -> None:
         "/api/security/captures",
         "/api/security/captures/{capture_id}/stop",
         "/api/security/captures/{capture_id}",
+        "/api/security/policies",
+        "/api/security/policies/preview",
+        "/api/security/policies/{node}",
+        "/api/security/policies/{node}/clear",
     }
     assert expected.issubset(paths)

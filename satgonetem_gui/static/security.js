@@ -5,6 +5,8 @@ import {
   buildDdosPlan,
   buildFloodFlow,
   buildIperf3Flow,
+  buildMitigationPolicy,
+  buildPolicyPayload,
   buildSpoofFlow,
   summarizeDdos,
   throughputPoints,
@@ -20,6 +22,7 @@ const state = {
   activeCaptureId: null,
   reconLink: null,
   reconTargetDetail: null,
+  ddosMitigation: null,
 };
 
 function byId(id) {
@@ -473,6 +476,8 @@ function setDdosRunning(running) {
   if (runButton) runButton.disabled = running;
   const stop = byId("ddos-stop");
   if (stop) stop.disabled = !running;
+  const mitigate = byId("ddos-mitigate");
+  if (mitigate) mitigate.disabled = !running;
 }
 
 function sleep(ms) {
@@ -594,6 +599,9 @@ async function runDdos() {
   if (attacker === target) {
     setDdosStatus("Attacker and attack target must be different nodes.", true);
     return;
+  }
+  if (state.ddosMitigation) {
+    await clearDdosMitigation(true);
   }
 
   const protocol = byId("ddos-protocol")?.value || "udp";
@@ -768,10 +776,15 @@ async function loadAllNodes() {
       .sort((a, b) => (a.type === "satellite" ? 0 : 1) - (b.type === "satellite" ? 0 : 1));
     fillSelect("res-node", options);
     fillSelect("conf-node", options);
+    fillSelect("policy-node", options);
     if (state.range?.readiness?.project_loaded) {
       await refreshResRoute();
     }
     await loadConfInterfaces();
+    await loadPolicyInterfaces();
+    if (state.range?.readiness?.project_loaded) {
+      await refreshPolicyStatus();
+    }
   } catch {
     /* no project yet */
   }
@@ -1160,6 +1173,270 @@ async function stopTrustTest() {
   setTrustRunning(false);
 }
 
+
+function setPolicyStatus(text, isError = false) {
+  const element = byId("policy-status");
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function renderPolicyPlan(plan) {
+  const planElement = byId("policy-plan");
+  if (planElement) {
+    planElement.textContent = (plan.commands || []).join("\n") || "No commands.";
+  }
+  const warnings = byId("policy-warnings");
+  if (warnings) {
+    warnings.textContent = (plan.warnings || []).join("\n");
+  }
+}
+
+function renderPolicyStatus(status) {
+  const body = byId("policy-rules-body");
+  if (body) {
+    body.replaceChildren();
+    const rules = status?.rules || [];
+    if (rules.length === 0) {
+      body.innerHTML = '<tr><td colspan="5" class="muted">No applied rules.</td></tr>';
+    } else {
+      for (const rule of rules) {
+        const row = document.createElement("tr");
+        row.innerHTML =
+          `<td>${escapeHtml(rule.chain || "-")}</td>` +
+          `<td>${escapeHtml(rule.rule || "-")}</td>` +
+          `<td>${escapeHtml(rule.packets ?? 0)}</td>` +
+          `<td>${escapeHtml(rule.bytes ?? 0)}</td>` +
+          `<td>${escapeHtml(rule.target || "-")}</td>`;
+        body.appendChild(row);
+      }
+    }
+  }
+  if (status?.applied) {
+    setPolicyStatus(
+      `Policy applied on ${status.node} (${status.family}); ${status.rules.length} counter rows.`,
+    );
+  } else {
+    setPolicyStatus("No managed policy chain on this node.");
+  }
+}
+
+function policyFields() {
+  return {
+    node: byId("policy-node")?.value,
+    family: byId("policy-family")?.value,
+    preset: byId("policy-preset")?.value,
+    defaultInbound: byId("policy-default")?.value,
+    allowEstablished: byId("policy-established")?.checked,
+    allowIcmp: byId("policy-icmp")?.checked,
+    allowLoopback: byId("policy-loopback")?.checked,
+    managementSources: byId("policy-management-sources")?.value,
+    managementPorts: byId("policy-management-ports")?.value,
+    managementProtocol: byId("policy-management-proto")?.value,
+    ttcSources: byId("policy-ttc-sources")?.value,
+    ttcPorts: byId("policy-ttc-ports")?.value,
+    ttcProtocol: byId("policy-ttc-proto")?.value,
+    telemetrySources: byId("policy-telemetry-sources")?.value,
+    telemetryPorts: byId("policy-telemetry-ports")?.value,
+    telemetryProtocol: byId("policy-telemetry-proto")?.value,
+    bcp38: byId("policy-bcp38")?.checked,
+    bcp38Egress: byId("policy-bcp38-egress")?.value,
+    rateEnabled: byId("policy-rate-enabled")?.checked,
+    rateProtocol: byId("policy-rate-proto")?.value,
+    ratePort: byId("policy-rate-port")?.value,
+    rateSource: byId("policy-rate-source")?.value,
+    ratePps: byId("policy-rate-pps")?.value,
+    rateBurst: byId("policy-rate-burst")?.value,
+    rateSyn: byId("policy-rate-syn")?.checked,
+    connEnabled: byId("policy-conn-enabled")?.checked,
+    connPort: byId("policy-conn-port")?.value,
+    connSource: byId("policy-conn-source")?.value,
+    connMax: byId("policy-conn-max")?.value,
+    ingressEnabled: byId("policy-ingress-enabled")?.checked,
+    ingressInterface: byId("policy-interface")?.value,
+    ingressProtocol: byId("policy-ingress-proto")?.value,
+    ingressPort: byId("policy-ingress-port")?.value,
+    ingressRate: byId("policy-ingress-rate")?.value,
+    ingressBurst: byId("policy-ingress-burst")?.value,
+    dscpEnabled: byId("policy-dscp-enabled")?.checked,
+    dscpProtocol: byId("policy-dscp-proto")?.value,
+    dscpPort: byId("policy-dscp-port")?.value,
+    dscp: byId("policy-dscp")?.value,
+  };
+}
+
+function policyPayload() {
+  const fields = policyFields();
+  if (!fields.node) throw new Error("Select a policy node.");
+  return buildPolicyPayload(fields);
+}
+
+async function previewPolicy() {
+  try {
+    const payload = policyPayload();
+    setPolicyStatus("Building preview...");
+    const plan = await api.post("/api/security/policies/preview", payload);
+    renderPolicyPlan(plan);
+    setPolicyStatus(`Preview ready: ${plan.commands.length} commands.`);
+  } catch (error) {
+    setPolicyStatus(error.message || "Preview failed.", true);
+  }
+}
+
+async function applyPolicy() {
+  try {
+    const payload = policyPayload();
+    setPolicyStatus("Applying policy...");
+    const status = await api.post("/api/security/policies", payload);
+    renderPolicyStatus(status);
+    setPolicyStatus(`Policy applied on ${status.node}.`);
+  } catch (error) {
+    setPolicyStatus(error.message || "Policy apply failed.", true);
+  }
+}
+
+async function clearPolicy() {
+  const node = byId("policy-node")?.value;
+  if (!node) {
+    setPolicyStatus("Select a policy node.", true);
+    return;
+  }
+  try {
+    setPolicyStatus("Clearing policy...");
+    await api.post(`/api/security/policies/${encodeURIComponent(node)}/clear`);
+    renderPolicyStatus({ applied: false, node, family: "ipv4", rules: [], qos: [] });
+    setPolicyStatus(`Policy cleared on ${node}.`);
+  } catch (error) {
+    setPolicyStatus(error.message || "Policy clear failed.", true);
+  }
+}
+
+async function refreshPolicyStatus() {
+  const node = byId("policy-node")?.value;
+  if (!node) return;
+  try {
+    const status = await api.get(`/api/security/policies/${encodeURIComponent(node)}`);
+    renderPolicyStatus(status);
+  } catch (error) {
+    if (error.status === 404) {
+      renderPolicyStatus({ applied: false, node, family: "ipv4", rules: [], qos: [] });
+      setPolicyStatus("Node is not running; preview still works.", true);
+    } else {
+      setPolicyStatus(error.message || "Could not read policy status.", true);
+    }
+  }
+}
+
+async function loadPolicyInterfaces() {
+  const node = byId("policy-node")?.value;
+  const select = byId("policy-interface");
+  if (!select) return;
+  select.replaceChildren();
+  if (!node) return;
+  try {
+    const data = await api.get(`/api/nodes/${encodeURIComponent(node)}`);
+    const interfaces = data?.node?.interfaces || [];
+    for (const iface of interfaces) {
+      const option = document.createElement("option");
+      option.value = iface.iname || iface.name;
+      option.textContent = `${iface.iname || iface.name} (${iface.ipv4 || "-"})`;
+      select.appendChild(option);
+    }
+  } catch {
+    /* node details are unavailable before the project is loaded */
+  }
+}
+
+function applyPolicyPreset() {
+  const preset = byId("policy-preset")?.value;
+  const set = (id, value) => {
+    const element = byId(id);
+    if (element) element.value = value;
+  };
+  const check = (id, value) => {
+    const element = byId(id);
+    if (element) element.checked = value;
+  };
+  if (preset === "default-deny") {
+    set("policy-default", "drop");
+    check("policy-established", true);
+    check("policy-icmp", false);
+  } else if (preset === "ttc-only") {
+    set("policy-default", "drop");
+    check("policy-established", true);
+    check("policy-icmp", false);
+    set("policy-ttc-ports", "5201");
+    set("policy-telemetry-ports", "5201");
+  } else if (preset === "ddos-mitigation") {
+    set("policy-default", "accept");
+    check("policy-established", true);
+    check("policy-icmp", false);
+    check("policy-rate-enabled", true);
+    check("policy-conn-enabled", true);
+    set("policy-rate-proto", "tcp");
+    set("policy-rate-port", "5201");
+    set("policy-rate-pps", "100");
+    set("policy-rate-burst", "200");
+    set("policy-conn-port", "5201");
+    set("policy-conn-max", "10");
+  }
+}
+
+async function applyDdosMitigation() {
+  const target = byId("ddos-target")?.value;
+  const attacker = byId("ddos-attacker")?.value;
+  if (!target || !attacker) {
+    setDdosStatus("Select a target and attacker first.", true);
+    return;
+  }
+  if (!state.ddosRun?.attackJob) {
+    setDdosStatus("Wait until the attack is running, then apply mitigation.", true);
+    return;
+  }
+  const protocol = byId("ddos-protocol")?.value || "udp";
+  const port = Number(byId("ddos-port")?.value) || 5201;
+  const flags = byId("ddos-flags")?.value || "S";
+  try {
+    const attackerIp = await resolveNodeIp(attacker);
+    if (!attackerIp) throw new Error("Attacker has no IPv4 address.");
+    const policy = buildMitigationPolicy({
+      node: target,
+      attackerIp,
+      protocol,
+      port,
+      synOnly: protocol === "tcp" && flags.includes("S"),
+    });
+    const status = await api.post("/api/security/policies", policy);
+    state.ddosMitigation = { node: target, policy };
+    const clear = byId("ddos-clear-mitigation");
+    if (clear) clear.disabled = false;
+    setDdosStatus(
+      `Mitigation applied to ${target} for ${attackerIp}: 100 pps and 10 connections.`,
+    );
+    renderPolicyStatus(status);
+  } catch (error) {
+    setDdosStatus(error.message || "Could not apply DDoS mitigation.", true);
+  }
+}
+
+async function clearDdosMitigation(silent = false) {
+  const mitigation = state.ddosMitigation;
+  if (!mitigation) return;
+  try {
+    await api.post(
+      `/api/security/policies/${encodeURIComponent(mitigation.node)}/clear`,
+    );
+    state.ddosMitigation = null;
+    const clear = byId("ddos-clear-mitigation");
+    if (clear) clear.disabled = true;
+    if (!silent) setDdosStatus(`Mitigation cleared on ${mitigation.node}.`);
+  } catch (error) {
+    if (!silent) {
+      setDdosStatus(error.message || "Could not clear DDoS mitigation.", true);
+    }
+  }
+}
+
 for (const button of document.querySelectorAll(".sec-unit-button[data-unit]")) {
   button.addEventListener("click", () => activateUnit(button.dataset.unit));
 }
@@ -1181,6 +1458,8 @@ byId("recon-links-body")?.addEventListener("keydown", (event) => {
 });
 byId("ddos-run")?.addEventListener("click", runDdos);
 byId("ddos-stop")?.addEventListener("click", stopDdos);
+byId("ddos-mitigate")?.addEventListener("click", applyDdosMitigation);
+byId("ddos-clear-mitigation")?.addEventListener("click", () => clearDdosMitigation());
 byId("ddos-rate")?.addEventListener("change", toggleDdosOptions);
 byId("ddos-protocol")?.addEventListener("change", toggleDdosOptions);
 byId("res-fail")?.addEventListener("click", failSelectedLink);
@@ -1193,6 +1472,15 @@ byId("conf-stop")?.addEventListener("click", stopConfCapture);
 byId("trust-spoof")?.addEventListener("change", refreshTrustIp);
 byId("trust-run")?.addEventListener("click", runTrustTest);
 byId("trust-stop")?.addEventListener("click", stopTrustTest);
+byId("policy-preset")?.addEventListener("change", applyPolicyPreset);
+byId("policy-preview")?.addEventListener("click", previewPolicy);
+byId("policy-apply")?.addEventListener("click", applyPolicy);
+byId("policy-clear")?.addEventListener("click", clearPolicy);
+byId("policy-refresh")?.addEventListener("click", refreshPolicyStatus);
+byId("policy-node")?.addEventListener("change", async () => {
+  await loadPolicyInterfaces();
+  await refreshPolicyStatus();
+});
 
 toggleDdosOptions();
 loadRange().then(loadAllNodes).then(refreshTrustIp);

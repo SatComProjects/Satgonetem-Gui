@@ -24,7 +24,7 @@ for (const [path, heading] of pages) {
   });
 }
 
-test("security page exposes all five units", async ({ page }) => {
+test("security page exposes all six units", async ({ page }) => {
   await page.goto("/security");
   await page.waitForLoadState("networkidle");
 
@@ -34,6 +34,7 @@ test("security page exposes all five units", async ({ page }) => {
     "Resilience",
     "Confidentiality",
     "Trust / spoofing",
+    "Policy & QoS",
   ]) {
     await expect(page.getByRole("button", { name: new RegExp(label) })).toBeVisible();
   }

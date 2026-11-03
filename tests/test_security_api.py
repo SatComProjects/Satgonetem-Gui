@@ -127,8 +127,8 @@ def test_security_download_missing_capture(client) -> None:
     assert response.json()["ok"] is False
 
 
-def test_security_page_lists_the_five_units(settings) -> None:
-    """The rendered security page exposes all five labs."""
+def test_security_page_lists_the_security_units(settings) -> None:
+    """The rendered security page exposes the labs and policy editor."""
     with TestClient(create_app(settings=settings)) as client:
         response = client.get("/security")
 
@@ -139,5 +139,6 @@ def test_security_page_lists_the_five_units(settings) -> None:
         "Resilience",
         "Confidentiality",
         "Trust / spoofing",
+        "Policy &amp; QoS",
     ):
         assert label in response.text

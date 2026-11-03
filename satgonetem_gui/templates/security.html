@@ -31,6 +31,7 @@
     <button type="button" class="sec-unit-button" data-unit="resilience">2. Resilience</button>
     <button type="button" class="sec-unit-button" data-unit="confidentiality">3. Confidentiality</button>
     <button type="button" class="sec-unit-button" data-unit="trust">4. Trust / spoofing</button>
+    <button type="button" class="sec-unit-button" data-unit="policy">5. Policy &amp; QoS</button>
     <button type="button" class="sec-unit-button" id="sec-refresh" data-action="refresh">Refresh range</button>
   </nav>
 
@@ -183,6 +184,12 @@
       <div class="sec-actions">
         <button type="button" id="ddos-run">Run baseline + attack</button>
         <button type="button" class="secondary" id="ddos-stop" disabled>Stop</button>
+        <button type="button" class="secondary" id="ddos-mitigate" disabled>
+          Apply mitigation to target
+        </button>
+        <button type="button" class="secondary" id="ddos-clear-mitigation" disabled>
+          Clear mitigation
+        </button>
       </div>
       <p class="muted" id="ddos-status">Idle.</p>
       <div class="sec-metrics" id="ddos-metrics"></div>
@@ -313,6 +320,239 @@
           <h4>Capture evidence</h4>
           <div id="trust-evidence" class="sec-captures"></div>
         </div>
+      </div>
+    </section>
+
+    <section class="card sec-panel" data-panel="policy">
+      <h3 class="card-title">5. Policy &amp; QoS</h3>
+      <p class="muted">
+        Apply a typed firewall and QoS policy to one node. Preview shows the
+        exact commands; Apply uses a saved firewall backup for rollback.
+      </p>
+
+      <div class="sec-grid">
+        <label>Node
+          <select id="policy-node"></select>
+        </label>
+        <label>Family
+          <select id="policy-family">
+            <option value="ipv4">IPv4</option>
+            <option value="ipv6">IPv6</option>
+          </select>
+        </label>
+        <label>Preset
+          <select id="policy-preset">
+            <option value="custom">Custom</option>
+            <option value="default-deny">Default deny inbound</option>
+            <option value="ttc-only">TT&amp;C / telemetry only</option>
+            <option value="ddos-mitigation">DDoS mitigation</option>
+          </select>
+        </label>
+        <label>Default inbound
+          <select id="policy-default">
+            <option value="drop">Drop</option>
+            <option value="accept">Accept</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="sec-grid">
+        <label class="inline">
+          <input type="checkbox" id="policy-established" checked>
+          Allow established/related
+        </label>
+        <label class="inline">
+          <input type="checkbox" id="policy-icmp">
+          Allow ICMP
+        </label>
+        <label class="inline">
+          <input type="checkbox" id="policy-loopback" checked>
+          Allow loopback
+        </label>
+        <label class="inline">
+          <input type="checkbox" id="policy-bcp38">
+          BCP38 ingress rpfilter
+        </label>
+      </div>
+
+      <div class="sec-policy-group">
+        <h4>Management allowlist</h4>
+        <div class="sec-grid">
+          <label>Sources (CIDR, comma)
+            <input type="text" id="policy-management-sources" placeholder="10.0.0.0/8">
+          </label>
+          <label>Ports (comma)
+            <input type="text" id="policy-management-ports" placeholder="22">
+          </label>
+          <label>Protocol
+            <select id="policy-management-proto">
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="sec-policy-group">
+        <h4>TT&amp;C allowlist</h4>
+        <div class="sec-grid">
+          <label>Sources (CIDR, comma)
+            <input type="text" id="policy-ttc-sources" placeholder="10.0.0.0/8">
+          </label>
+          <label>Ports (comma)
+            <input type="text" id="policy-ttc-ports" placeholder="5201">
+          </label>
+          <label>Protocol
+            <select id="policy-ttc-proto">
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="sec-policy-group">
+        <h4>Telemetry allowlist</h4>
+        <div class="sec-grid">
+          <label>Sources (CIDR, comma)
+            <input type="text" id="policy-telemetry-sources" placeholder="10.0.0.0/8">
+          </label>
+          <label>Ports (comma)
+            <input type="text" id="policy-telemetry-ports" placeholder="5201">
+          </label>
+          <label>Protocol
+            <select id="policy-telemetry-proto">
+              <option value="udp">UDP</option>
+              <option value="tcp">TCP</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <label>BCP38 egress source CIDRs (optional)
+        <input type="text" id="policy-bcp38-egress" placeholder="192.0.2.0/24, 2001:db8::/32">
+      </label>
+
+      <div class="sec-policy-group">
+        <h4>Rate and connection limits</h4>
+        <div class="sec-grid">
+          <label class="inline">
+            <input type="checkbox" id="policy-rate-enabled">
+            Rate limit
+          </label>
+          <label>Protocol
+            <select id="policy-rate-proto">
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+              <option value="icmp">ICMP</option>
+            </select>
+          </label>
+          <label>Port
+            <input type="number" id="policy-rate-port" min="0" max="65535" value="5201">
+          </label>
+          <label>Source CIDR
+            <input type="text" id="policy-rate-source" value="0.0.0.0/0">
+          </label>
+          <label>Packets/sec
+            <input type="number" id="policy-rate-pps" min="1" value="100">
+          </label>
+          <label>Burst
+            <input type="number" id="policy-rate-burst" min="1" value="200">
+          </label>
+          <label class="inline">
+            <input type="checkbox" id="policy-rate-syn">
+            SYN only
+          </label>
+        </div>
+        <div class="sec-grid">
+          <label class="inline">
+            <input type="checkbox" id="policy-conn-enabled">
+            Connection limit
+          </label>
+          <label>Port
+            <input type="number" id="policy-conn-port" min="0" max="65535" value="5201">
+          </label>
+          <label>Source CIDR
+            <input type="text" id="policy-conn-source" value="0.0.0.0/0">
+          </label>
+          <label>Max connections
+            <input type="number" id="policy-conn-max" min="1" value="20">
+          </label>
+        </div>
+      </div>
+
+      <div class="sec-policy-group">
+        <h4>QoS</h4>
+        <div class="sec-grid">
+          <label class="inline">
+            <input type="checkbox" id="policy-ingress-enabled">
+            Ingress policing
+          </label>
+          <label>Interface
+            <select id="policy-interface"></select>
+          </label>
+          <label>Protocol
+            <select id="policy-ingress-proto">
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+            </select>
+          </label>
+          <label>Port
+            <input type="number" id="policy-ingress-port" min="0" max="65535" value="5201">
+          </label>
+          <label>Rate (Kbps)
+            <input type="number" id="policy-ingress-rate" min="1" value="1000">
+          </label>
+          <label>Burst (KB)
+            <input type="number" id="policy-ingress-burst" min="1" value="32">
+          </label>
+        </div>
+        <div class="sec-grid">
+          <label class="inline">
+            <input type="checkbox" id="policy-dscp-enabled">
+            DSCP marking
+          </label>
+          <label>Protocol
+            <select id="policy-dscp-proto">
+              <option value="udp">UDP</option>
+              <option value="tcp">TCP</option>
+            </select>
+          </label>
+          <label>Port
+            <input type="number" id="policy-dscp-port" min="0" max="65535" value="5201">
+          </label>
+          <label>DSCP
+            <input type="number" id="policy-dscp" min="0" max="63" value="46">
+          </label>
+        </div>
+      </div>
+
+      <div class="sec-actions">
+        <button type="button" class="secondary" id="policy-preview">Preview plan</button>
+        <button type="button" id="policy-apply">Apply policy</button>
+        <button type="button" class="secondary" id="policy-clear">Clear policy</button>
+        <button type="button" class="secondary" id="policy-refresh">Refresh status</button>
+      </div>
+      <p class="muted" id="policy-status">Idle.</p>
+      <div id="policy-warnings" class="sec-warnings"></div>
+      <h4>Preview</h4>
+      <pre class="sec-route" id="policy-plan">No preview yet.</pre>
+      <h4>Applied rules and counters</h4>
+      <div class="sec-table-wrap">
+        <table class="sec-table">
+          <thead>
+            <tr>
+              <th>Chain</th>
+              <th>Rule</th>
+              <th>Packets</th>
+              <th>Bytes</th>
+              <th>Target</th>
+            </tr>
+          </thead>
+          <tbody id="policy-rules-body">
+            <tr><td colspan="5" class="muted">No policy status loaded.</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
   </div>

@@ -4,7 +4,7 @@ import ipaddress
 import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ErrorResponse(BaseModel):
@@ -414,3 +414,197 @@ class CaptureStartRequest(BaseModel):
     interface: str = Field(min_length=1)
     packet_limit: int = Field(default=200, ge=1, le=1000)
     duration_sec: int = Field(default=15, ge=1, le=60)
+
+
+def _validate_cidr(value: str) -> str:
+    """Return a normalized CIDR or raise a validation error."""
+    try:
+        network = ipaddress.ip_network(value, strict=False)
+    except ValueError as exc:
+        raise ValueError("must be a valid IPv4 or IPv6 CIDR") from exc
+    return str(network)
+
+
+def _validate_port_list(values: list[int]) -> list[int]:
+    """Validate a list of TCP/UDP ports."""
+    for value in values:
+        if value < 0 or value > 65535:
+            raise ValueError("ports must be between 0 and 65535")
+    return values
+
+
+class PolicyRateLimit(BaseModel):
+    """Per-source packet rate limit for a port."""
+
+    protocol: Literal["tcp", "udp", "icmp"] = "tcp"
+    port: int | None = Field(default=None, ge=0, le=65535)
+    source_cidr: str = "0.0.0.0/0"
+    packets_per_second: int = Field(default=100, ge=1, le=1_000_000)
+    burst: int = Field(default=200, ge=1, le=1_000_000)
+    syn_only: bool = False
+
+    @field_validator("source_cidr")
+    @classmethod
+    def _source_cidr(cls, value: str) -> str:
+        return _validate_cidr(value)
+
+
+class PolicyConnectionLimit(BaseModel):
+    """Per-source TCP connection limit for a port."""
+
+    protocol: Literal["tcp"] = "tcp"
+    port: int = Field(ge=0, le=65535)
+    source_cidr: str = "0.0.0.0/0"
+    max_connections: int = Field(default=20, ge=1, le=100_000)
+
+    @field_validator("source_cidr")
+    @classmethod
+    def _source_cidr(cls, value: str) -> str:
+        return _validate_cidr(value)
+
+
+class PolicyRule(BaseModel):
+    """A custom firewall rule evaluated before the default policy."""
+
+    name: str = ""
+    action: Literal["accept", "drop", "reject"] = "accept"
+    direction: Literal["in", "out"] = "in"
+    protocol: Literal["tcp", "udp", "icmp", "any"] = "any"
+    port: int | None = Field(default=None, ge=0, le=65535)
+    source_cidr: str | None = None
+    destination_cidr: str | None = None
+    log: bool = False
+
+    @field_validator("source_cidr", "destination_cidr")
+    @classmethod
+    def _rule_cidr(cls, value: str | None) -> str | None:
+        return _validate_cidr(value) if value else None
+
+
+class IngressPolice(BaseModel):
+    """Ingress policing applied with a tc u32 filter."""
+
+    interface: str = Field(min_length=1)
+    protocol: Literal["tcp", "udp"] = "tcp"
+    port: int | None = Field(default=None, ge=0, le=65535)
+    rate_kbps: int = Field(default=1000, ge=1, le=10_000_000)
+    burst_kb: int = Field(default=32, ge=1, le=1_000_000)
+
+
+class DscpMark(BaseModel):
+    """DSCP marking applied in the mangle table."""
+
+    protocol: Literal["tcp", "udp"] = "udp"
+    port: int | None = Field(default=None, ge=0, le=65535)
+    dscp: int = Field(default=46, ge=0, le=63)
+
+
+class NodePolicyRequest(BaseModel):
+    """One node's firewall and QoS policy."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    node: str = Field(min_length=1)
+    family: Literal["ipv4", "ipv6"] = "ipv4"
+    preset: Literal["default-deny", "ttc-only", "ddos-mitigation", "custom"] = (
+        "custom"
+    )
+    default_inbound: Literal["accept", "drop"] = "drop"
+    allow_established: bool = True
+    allow_icmp: bool = False
+    allow_loopback: bool = True
+    management_sources: list[str] = Field(default_factory=list)
+    management_ports: list[int] = Field(default_factory=list)
+    management_protocol: Literal["tcp", "udp"] = "tcp"
+    ttc_sources: list[str] = Field(default_factory=list)
+    ttc_ports: list[int] = Field(default_factory=list)
+    ttc_protocol: Literal["tcp", "udp"] = "tcp"
+    telemetry_sources: list[str] = Field(default_factory=list)
+    telemetry_ports: list[int] = Field(default_factory=list)
+    telemetry_protocol: Literal["tcp", "udp"] = "udp"
+    bcp38_ingress: bool = False
+    bcp38_egress_cidrs: list[str] = Field(default_factory=list)
+    rate_limits: list[PolicyRateLimit] = Field(default_factory=list)
+    connection_limits: list[PolicyConnectionLimit] = Field(default_factory=list)
+    rules: list[PolicyRule] = Field(default_factory=list)
+    ingress_policing: list[IngressPolice] = Field(default_factory=list)
+    dscp_marks: list[DscpMark] = Field(default_factory=list)
+
+    @field_validator(
+        "management_sources",
+        "ttc_sources",
+        "telemetry_sources",
+        "bcp38_egress_cidrs",
+    )
+    @classmethod
+    def _source_lists(cls, values: list[str]) -> list[str]:
+        return [_validate_cidr(value) for value in values]
+
+    @field_validator("management_ports", "ttc_ports", "telemetry_ports")
+    @classmethod
+    def _port_lists(cls, values: list[int]) -> list[int]:
+        return _validate_port_list(values)
+
+    @model_validator(mode="after")
+    def _family_matches_cidrs(self) -> "NodePolicyRequest":
+        expected = 4 if self.family == "ipv4" else 6
+        cidrs = (
+            self.management_sources
+            + self.ttc_sources
+            + self.telemetry_sources
+            + self.bcp38_egress_cidrs
+            + [limit.source_cidr for limit in self.rate_limits]
+            + [limit.source_cidr for limit in self.connection_limits]
+            + [
+                cidr
+                for rule in self.rules
+                for cidr in (rule.source_cidr, rule.destination_cidr)
+                if cidr
+            ]
+        )
+        for cidr in cidrs:
+            if ipaddress.ip_network(cidr, strict=False).version != expected:
+                raise ValueError(
+                    f"{cidr} does not match policy family {self.family}"
+                )
+        return self
+
+
+class PolicyPlanResponse(BaseModel):
+    """Dry-run plan for one policy."""
+
+    ok: bool = True
+    node: str
+    family: str
+    commands: list[str] = Field(default_factory=list)
+    diff: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PolicyRuleStatus(BaseModel):
+    """Packet/byte counters for one chain rule."""
+
+    chain: str = ""
+    rule: str
+    packets: int = 0
+    bytes: int = 0
+    target: str = ""
+
+
+class PolicyStatusResponse(BaseModel):
+    """Applied policy status and counters for one node."""
+
+    ok: bool = True
+    node: str
+    applied: bool
+    family: str
+    chain: str | None = None
+    rules: list[PolicyRuleStatus] = Field(default_factory=list)
+    qos: list[str] = Field(default_factory=list)
+
+
+class PolicyListResponse(BaseModel):
+    """Nodes with a policy chain present."""
+
+    ok: bool = True
+    nodes: list[str] = Field(default_factory=list)

@@ -3,7 +3,13 @@
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from ..schemas import Hping3Request, Iperf3Request, PingRequest, ProjectCreateRequest
+from ..schemas import (
+    Hping3Request,
+    Iperf3Request,
+    NodePolicyRequest,
+    PingRequest,
+    ProjectCreateRequest,
+)
 from ..state import ProjectResult
 
 
@@ -118,3 +124,24 @@ class SecurityGateway(Protocol):
     def read_capture(self, topology: Any, node: str, path: str) -> bytes: ...
 
     def delete_capture(self, topology: Any, node: str, path: str) -> None: ...
+
+
+class PolicyGateway(Protocol):
+    """Per-node firewall and QoS policy operations."""
+
+    def preview(
+        self, topology: Any, policy: NodePolicyRequest
+    ) -> dict[str, Any]: ...
+
+    def apply(
+        self, topology: Any, policy: NodePolicyRequest
+    ) -> dict[str, Any]: ...
+
+    def clear(
+        self,
+        topology: Any,
+        node: str,
+        interfaces: list[str] | None = None,
+    ) -> None: ...
+
+    def status(self, topology: Any, node: str) -> dict[str, Any]: ...

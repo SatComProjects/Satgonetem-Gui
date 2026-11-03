@@ -115,3 +115,115 @@ export function buildDdosPlan(options) {
     rate: options.rate || "flood",
   };
 }
+
+export function splitCsv(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function hostCidr(value) {
+  const address = String(value || "").trim();
+  return address.includes(":") ? `${address}/128` : `${address}/32`;
+}
+
+function numberList(values) {
+  return splitCsv(values)
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value >= 0 && value <= 65535);
+}
+
+export function buildPolicyPayload(fields) {
+  const payload = {
+    node: fields.node,
+    family: fields.family || "ipv4",
+    preset: fields.preset || "custom",
+    default_inbound: fields.defaultInbound || "drop",
+    allow_established: Boolean(fields.allowEstablished),
+    allow_icmp: Boolean(fields.allowIcmp),
+    allow_loopback: Boolean(fields.allowLoopback),
+    management_sources: splitCsv(fields.managementSources),
+    management_ports: numberList(fields.managementPorts),
+    management_protocol: fields.managementProtocol || "tcp",
+    ttc_sources: splitCsv(fields.ttcSources),
+    ttc_ports: numberList(fields.ttcPorts),
+    ttc_protocol: fields.ttcProtocol || "tcp",
+    telemetry_sources: splitCsv(fields.telemetrySources),
+    telemetry_ports: numberList(fields.telemetryPorts),
+    telemetry_protocol: fields.telemetryProtocol || "udp",
+    bcp38_ingress: Boolean(fields.bcp38),
+    bcp38_egress_cidrs: splitCsv(fields.bcp38Egress),
+    rate_limits: [],
+    connection_limits: [],
+    ingress_policing: [],
+    dscp_marks: [],
+  };
+
+  if (fields.rateEnabled) {
+    payload.rate_limits.push({
+      protocol: fields.rateProtocol || "tcp",
+      port: Number(fields.ratePort) || 0,
+      source_cidr: fields.rateSource || "0.0.0.0/0",
+      packets_per_second: Math.max(1, Number(fields.ratePps) || 100),
+      burst: Math.max(1, Number(fields.rateBurst) || 200),
+      syn_only: Boolean(fields.rateSyn),
+    });
+  }
+  if (fields.connEnabled) {
+    payload.connection_limits.push({
+      port: Number(fields.connPort) || 0,
+      source_cidr: fields.connSource || "0.0.0.0/0",
+      max_connections: Math.max(1, Number(fields.connMax) || 20),
+    });
+  }
+  if (fields.ingressEnabled && fields.ingressInterface) {
+    payload.ingress_policing.push({
+      interface: fields.ingressInterface,
+      protocol: fields.ingressProtocol || "tcp",
+      port: Number(fields.ingressPort) || 0,
+      rate_kbps: Math.max(1, Number(fields.ingressRate) || 1000),
+      burst_kb: Math.max(1, Number(fields.ingressBurst) || 32),
+    });
+  }
+  if (fields.dscpEnabled) {
+    payload.dscp_marks.push({
+      protocol: fields.dscpProtocol || "udp",
+      port: Number(fields.dscpPort) || 0,
+      dscp: Math.min(63, Math.max(0, Number(fields.dscp) || 0)),
+    });
+  }
+  return payload;
+}
+
+export function buildMitigationPolicy({ node, attackerIp, protocol, port, synOnly }) {
+  const tcp = protocol === "tcp";
+  return {
+    node,
+    family: String(attackerIp || "").includes(":") ? "ipv6" : "ipv4",
+    preset: "ddos-mitigation",
+    default_inbound: "accept",
+    allow_established: true,
+    allow_icmp: false,
+    allow_loopback: true,
+    rate_limits: [
+      {
+        protocol,
+        port: Number(port) || 0,
+        source_cidr: hostCidr(attackerIp),
+        packets_per_second: 100,
+        burst: 200,
+        syn_only: tcp && Boolean(synOnly),
+      },
+    ],
+    connection_limits: tcp
+      ? [
+          {
+            port: Number(port) || 0,
+            source_cidr: hostCidr(attackerIp),
+            max_connections: 10,
+          },
+        ]
+      : [],
+  };
+}

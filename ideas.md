@@ -234,10 +234,15 @@ Both ideas need the same core pieces:
 
 ## Broader security roadmap
 
-These are the next workstreams after the two detailed labs above. They are all
-proposed; none is implemented yet.
+These are the next workstreams after the two detailed labs above. Workstream 1
+(policy plane) is implemented on `feat-SatSec`; the remaining workstreams are
+proposed.
 
 ### 1. Firewall and QoS control plane
+
+Status: implemented in `PolicyService`, `SatGoNetemPolicyAdapter`, and the
+`/api/security/policies` routes. Egress per-flow classes remain deferred because
+the emulator owns the root qdisc.
 
 Add a first-class policy interface to SatGoNetEm, not just GUI buttons:
 

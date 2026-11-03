@@ -36,6 +36,8 @@ def test_every_api_route_declares_a_json_success_schema(client) -> None:
         "/api/traffic/hping3",
         "/api/traffic/cancel",
         "/api/security/captures",
+        "/api/security/policies",
+        "/api/security/policies/preview",
     ],
 )
 def test_post_routes_declare_request_schemas(client, path: str) -> None:

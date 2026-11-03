@@ -352,3 +352,31 @@ def test_stop_clears_addressing_without_unloading_project(
     assert response.status_code == 200
     assert routing["addressing_applied"] is False
     assert services.topology.status()["constellation_loaded"] is True
+
+
+def test_policy_preview_with_project(project_client) -> None:
+    """The loaded topology can produce a policy preview without containers."""
+    response = project_client.post(
+        "/api/security/policies/preview",
+        json={
+            "node": "Gnd100",
+            "preset": "ddos-mitigation",
+            "default_inbound": "accept",
+            "allow_established": True,
+            "rate_limits": [
+                {
+                    "protocol": "udp",
+                    "port": 5201,
+                    "source_cidr": "192.0.2.0/24",
+                    "packets_per_second": 100,
+                    "burst": 200,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["node"] == "Gnd100"
+    assert data["commands"]
+    assert any("hashlimit" in command for command in data["commands"])

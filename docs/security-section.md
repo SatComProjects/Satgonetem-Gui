@@ -14,11 +14,13 @@ through [#20](https://github.com/SatComProjects/Satgonetem-Gui/issues/20).
 | Resilience | `SecurityService.fail_link/reset`, `SatGoNetemSecurityAdapter.fail_link`, route diff in the page |
 | Confidentiality | `SecurityService` capture lifecycle, `SatGoNetemSecurityAdapter` tcpdump/base64 path, capture download route |
 | Trust / spoofing | `Hping3Request` spoof fields, traffic adapter pass-through, trust panel capture evidence |
+| Policy & QoS | `PolicyService`, `SatGoNetemPolicyAdapter`, `/api/security/policies`, policy panel in `security.html` |
 
 The five labs require a running GoNetEm network for capture, link failure, and
-traffic actions. The default test suite uses fakes; the real-container path is
-documented as an opt-in verification. The tabletop and capstone units remain
-out of scope for this implementation.
+traffic actions. The policy workstream adds typed firewall/QoS apply, preview,
+status, counters, and rollback. The default test suite uses fakes; the
+real-container path is documented as an opt-in verification. The tabletop and
+capstone units remain out of scope for this implementation.
 
 ## Purpose
 
@@ -237,6 +239,58 @@ adapter, and expose `flags` plus the new fields only in the security lab (not as
 general traffic options) to keep the traffic page simple. Verify return-path
 behaviour in the container network before class.
 
+### Policy and QoS lab (live, policy workstream)
+
+This is the defense counterpart to the DDoS unit. Students apply a policy to a
+node, inspect the exact plan, and use counters to see what the rule matched.
+
+1. Preview a default-deny policy for a ground station or satellite. Read the
+   generated `iptables`/`ip6tables` chain and the warnings before applying it.
+2. Apply the policy, then inspect the rule counters. Confirm that loopback and
+   established traffic still work, then clear the policy and confirm the saved
+   ruleset was restored.
+3. Run the DDoS lab. While the attack is active, use **Apply mitigation to
+   target**. The page builds a source-specific rate/connection limit for the
+   attacker IP and leaves the legitimate iperf3 flow in the default-accept
+   policy.
+4. Compare throughput before, during, and after mitigation. If the original
+   TCP flow collapses before the policy lands, start a fresh baseline while the
+   policy is applied; the mitigation counters should show the flood being
+   dropped. Clear the policy and confirm the attack effect returns.
+5. Optional: compare `DROP` with `REJECT --reject-with tcp-reset` and measure
+   CPU/reply differences (see [`ideas.md`](ideas.md) for the detailed lab).
+
+The policy schema covers:
+
+- default inbound accept/drop, established/related, loopback, ICMP;
+- management, TT&C, and telemetry source/port allowlists;
+- BCP38 ingress rpfilter and explicit egress source CIDRs;
+- per-source hashlimit rate limits, including SYN-only limits;
+- per-source connection limits;
+- custom accept/drop/reject rules;
+- ingress policing with a `tc` u32 police filter;
+- DSCP marking in the mangle table.
+
+API:
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/security/policies/preview` | Build the command plan without changing the node |
+| POST | `/api/security/policies` | Apply/replace a policy and return counters |
+| GET | `/api/security/policies/{node}` | Read chain status and counters |
+| POST | `/api/security/policies/{node}/clear` | Restore the saved ruleset |
+| GET | `/api/security/policies` | List policies applied in this process |
+
+Limitations:
+
+- The existing root qdisc is owned by SatGoNetEm's netem/TBF setup. The policy
+  layer applies ingress policing and DSCP marking; full egress per-flow class
+  scheduling needs a coordinated SatGoNetEm qdisc change.
+- `rpfilter` is IPv4-only in the current image; IPv6 BCP38 egress uses explicit
+  source CIDRs.
+- The controller is GUI-local. The GUI has no authentication, so policy apply
+  and clear are trusted-local actions.
+
 ### Unit 6 - Ground segment, firmware, crypto, and GNSS (45 min, tabletop)
 
 These are the parts SatGoNetEm does not model, and the section should say so
@@ -317,6 +371,9 @@ Key elements:
   existing Chart.js and queue result shapes where possible.
 - **Debrief tab.** Three to five questions with free-text answers, plus an
   "export observations" button (Markdown or JSON) for the student's report.
+- **Policy tab.** Node policy editor with preset selection, preview/diff,
+  apply, clear, rule counters, and QoS warnings. The DDoS panel can apply a
+  source-specific mitigation while the attack is running.
 - **Instructor mode.** A query parameter or toggle that reveals answer notes,
   suggested timings, reset controls, and the scoring rubric. Do not ship the
   answer key in the student bundle if the course uses it for assessment.
@@ -337,11 +394,14 @@ Key elements:
 Follow the existing route -> service -> port -> adapter direction.
 
 ```text
-routes/security.py          thin HTTP translation
+routes/security.py          thin HTTP translation for the five labs
+routes/policies.py          policy preview/apply/status/clear
 services/security_service.py orchestration of labs and runs
-services/ports.py           new SecurityGateway protocol
+services/policy_service.py  policy orchestration and replace/rollback
+services/ports.py           SecurityGateway and PolicyGateway protocols
 adapters/satgonetem_security.py  link inventory, failure, capture, reset
-schemas.py                  lab request/response models
+adapters/satgonetem_policy.py    iptables/ip6tables and tc policy commands
+schemas.py                  lab and policy request/response models
 static/security.js          module UI and polling
 static/security.css         page styles
 templates/security.html     page shell
@@ -409,9 +469,10 @@ The existing project builder can create it; no new constellation code is needed.
 | C | Link failure, route diff, reset, routing comparison | Implemented (#17) |
 | D | Capture lifecycle and pcap download | Implemented (#18) |
 | E | Spoofing fields, trust lab, capture evidence | Implemented (#19) |
-| F | Docs, browser coverage, real-container verification | This phase (#20) |
+| F | Docs, browser coverage, real-container verification | Implemented (#20) |
+| G | Firewall/QoS policy API, policy panel, DDoS mitigation | Implemented (#21 workstream 1) |
 
-The five labs share the bundled range through **Load SatSec range**. The
+The labs share the bundled range through **Load SatSec range**. The
 default suite covers their orchestration with fakes. The destructive reset and
 capture paths were verified against a real GoNetEm server with the opt-in test
 below.
@@ -426,9 +487,10 @@ SATGONETEM_RUN_CONTAINER_TESTS=1 .venv/bin/pytest \
 ```
 
 The test builds the 24-satellite SatSec range, starts the containers, applies
-static routing, fails one inter-satellite link, captures a pcap on `Sat0`,
-stops the capture, resets the range, and checks that the failed-link list is
-empty and the original link count is restored. A separate manual run after the
+static routing, applies a firewall/DSCP policy and clears it, fails one
+inter-satellite link, captures a pcap on `Sat0`, stops the capture, resets the
+range, and checks that the failed-link list is empty and the original link
+count is restored. A separate manual run after the
 reset completed a 3-packet ping with 3/3 replies, confirming that the rebuilt
 addressing and routing were usable.
 
