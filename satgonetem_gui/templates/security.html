@@ -41,6 +41,22 @@
         Read-only. Map the topology, find bottlenecks, and choose a target
         before sending any attack traffic.
       </p>
+
+      <div class="sec-mission">
+        <h4>Mission</h4>
+        <ol>
+          <li>Find the lowest-capacity links in the table. Those are the
+            bottleneck candidates.</li>
+          <li>Click a link row to inspect its endpoints, capacity, delay, and
+            state. Add it to your evidence.</li>
+          <li>Pick an addressable target and inspect its interfaces, loopback,
+            and routing table in the dossier.</li>
+          <li>Write the target card: why this target, what the attacker gains,
+            and which path or link you expect to use.</li>
+          <li>Export the dossier for your lab report.</li>
+        </ol>
+      </div>
+
       <div class="sec-stats" id="recon-stats"></div>
 
       <h4>Links</h4>
@@ -60,16 +76,48 @@
           </tbody>
         </table>
       </div>
+      <div class="sec-link-detail" id="recon-link-detail">
+        <span class="muted">Click a link row to inspect it.</span>
+      </div>
+      <div class="sec-actions">
+        <button type="button" class="secondary" id="recon-add-link" disabled>
+          Add selected link to evidence
+        </button>
+      </div>
 
-      <h4>Addressable targets</h4>
-      <div class="sec-targets" id="recon-targets"></div>
+      <h4>Target dossier</h4>
+      <div class="sec-grid">
+        <label>Addressable target
+          <select id="recon-target"></select>
+        </label>
+        <label>Primary concern
+          <select id="recon-concern">
+            <option value="availability">Availability</option>
+            <option value="confidentiality">Confidentiality</option>
+            <option value="integrity">Integrity</option>
+            <option value="safety">Safety</option>
+          </select>
+        </label>
+      </div>
+      <div class="sec-target-detail" id="recon-target-detail">
+        <span class="muted">Select a target to inspect its interfaces and routes.</span>
+      </div>
 
-      <label>Target notes
-        <textarea id="recon-notes" rows="3" placeholder="Which target, why, and what would the attacker gain?"></textarea>
-      </label>
+      <div class="sec-grid">
+        <label>Why this target?
+          <textarea id="recon-why" rows="3" placeholder="What is exposed, and why is it worth attacking?"></textarea>
+        </label>
+        <label>Expected impact
+          <textarea id="recon-impact" rows="3" placeholder="What would the attacker gain, and who would notice?"></textarea>
+        </label>
+        <label>Evidence / likely path
+          <textarea id="recon-evidence" rows="3" placeholder="Bottleneck link, route, or observation that supports the choice."></textarea>
+        </label>
+      </div>
+
       <div class="sec-actions">
         <button type="button" id="recon-load-range">Load SatSec range</button>
-        <button type="button" class="secondary" id="recon-export">Export notes</button>
+        <button type="button" class="secondary" id="recon-export">Export dossier</button>
       </div>
     </section>
 
@@ -99,11 +147,30 @@
             <option value="icmp">ICMP flood</option>
           </select>
         </label>
-        <label>Attack rate
+        <label>Rate mode
           <select id="ddos-rate">
-            <option value="fast">--fast</option>
-            <option value="faster">--faster</option>
             <option value="flood" selected>--flood</option>
+            <option value="faster">--faster</option>
+            <option value="fast">--fast</option>
+            <option value="interval">Packets/sec</option>
+          </select>
+        </label>
+        <label id="ddos-pps-wrap">Packets/sec
+          <input type="number" id="ddos-pps" min="1" max="100000" value="5000">
+        </label>
+        <label>Packet payload (bytes)
+          <input type="number" id="ddos-size" min="0" max="65507" value="0">
+        </label>
+        <label>Destination port
+          <input type="number" id="ddos-port" min="0" max="65535" value="5201">
+        </label>
+        <label id="ddos-flags-wrap">TCP flags
+          <select id="ddos-flags">
+            <option value="S" selected>SYN (-S)</option>
+            <option value="SA">SYN+ACK (-S -A)</option>
+            <option value="A">ACK (-A)</option>
+            <option value="F">FIN (-F)</option>
+            <option value="R">RST (-R)</option>
           </select>
         </label>
         <label>Attack duration (s)

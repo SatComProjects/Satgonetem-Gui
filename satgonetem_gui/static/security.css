@@ -91,6 +91,82 @@
   margin: 10px 0 14px;
 }
 
+.sec-mission {
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 14px 0;
+}
+
+.sec-mission h4 {
+  margin: 0 0 6px;
+}
+
+.sec-mission ol {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.sec-link-detail,
+.sec-target-detail {
+  border: 1px dashed var(--border);
+  background: var(--input-bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.sec-link-detail strong,
+.sec-target-detail strong {
+  color: var(--text);
+}
+
+.sec-target-detail h5 {
+  margin: 12px 0 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sec-detail-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.sec-detail-list dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sec-detail-list dd {
+  margin: 2px 0 0;
+  font-size: 0.88rem;
+}
+
+.sec-table tbody tr[data-key] {
+  cursor: pointer;
+}
+
+.sec-table tbody tr[data-key]:hover,
+.sec-table tbody tr.selected {
+  background: #162433;
+}
+
+.sec-table tbody tr.selected td {
+  color: var(--accent);
+}
+
 .sec-stat,
 .sec-metric {
   border: 1px solid var(--border);

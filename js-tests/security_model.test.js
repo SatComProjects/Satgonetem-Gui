@@ -51,6 +51,41 @@ describe("security model", () => {
     expect(flow.rate_type).toBe("flood");
   });
 
+  it("supports packet size, rate, port, and flags", () => {
+    const flow = buildFloodFlow({
+      src: "Gnd2",
+      dst: "Gnd1",
+      protocol: "tcp",
+      rate: "interval",
+      pps: 5000,
+      size: 120,
+      dport: 80,
+      flags: "SA",
+    });
+
+    expect(flow).toMatchObject({
+      rate_type: "interval",
+      interval: "u200",
+      size: 120,
+      dport: 80,
+      flags: ["S", "A"],
+    });
+  });
+
+  it("clamps packet size and ignores ports for ICMP", () => {
+    const flow = buildFloodFlow({
+      src: "Gnd2",
+      dst: "Gnd1",
+      protocol: "icmp",
+      size: 999999,
+      dport: 80,
+    });
+
+    expect(flow.size).toBe(65507);
+    expect(flow.dport).toBe(0);
+    expect(flow.flags).toEqual([]);
+  });
+
   it("builds a spoofed SYN flow", () => {
     expect(
       buildSpoofFlow({

@@ -11,17 +11,41 @@ export function buildIperf3Flow({ src, dst, duration = 15 }) {
   };
 }
 
-export function buildFloodFlow({ src, dst, protocol = "udp", rate = "flood" }) {
+function clamp(value, minimum, maximum) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return minimum;
+  return Math.min(maximum, Math.max(minimum, parsed));
+}
+
+export function buildFloodFlow({
+  src,
+  dst,
+  protocol = "udp",
+  rate = "flood",
+  pps = 5000,
+  size = 0,
+  dport = 5201,
+  flags = "S",
+}) {
   const proto = ["tcp", "udp", "icmp"].includes(protocol) ? protocol : "udp";
+  const rateType = ["fast", "faster", "flood", "interval"].includes(rate)
+    ? rate
+    : "flood";
+  const safePps = clamp(pps, 1, 1000000);
+  const interval = rateType === "interval" ? `u${Math.max(1, Math.round(1000000 / safePps))}` : "";
+  const flagLetters = proto === "tcp"
+    ? String(flags || "S").split("").filter((flag) => "SAFRPU".includes(flag))
+    : [];
   return {
     src,
     dst,
     proto,
-    dport: proto === "icmp" ? 0 : 5201,
+    dport: proto === "icmp" ? 0 : clamp(dport, 0, 65535),
     count: 500000,
-    size: 0,
-    rate_type: ["fast", "faster", "flood"].includes(rate) ? rate : "flood",
-    flags: proto === "tcp" ? ["S"] : [],
+    size: clamp(size, 0, 65507),
+    rate_type: rateType,
+    interval,
+    flags: flagLetters,
     spoof_src: null,
   };
 }

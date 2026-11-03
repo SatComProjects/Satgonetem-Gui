@@ -18,6 +18,8 @@ const state = {
   ddosChart: null,
   captureTimer: null,
   activeCaptureId: null,
+  reconLink: null,
+  reconTargetDetail: null,
 };
 
 function byId(id) {
@@ -136,6 +138,9 @@ function renderRecon(range) {
       });
       for (const link of sorted) {
         const row = document.createElement("tr");
+        row.dataset.key = link.key;
+        row.tabIndex = 0;
+        row.classList.toggle("selected", state.reconLink?.key === link.key);
         row.innerHTML =
           `<td title="${escapeHtml(link.key)}">${escapeHtml(link.src)} → ${escapeHtml(link.dst)}</td>` +
           `<td>${escapeHtml(shortLinkType(link.type))}</td>` +
@@ -143,22 +148,6 @@ function renderRecon(range) {
           `<td>${escapeHtml(fmt(link.delay_ms))} ms</td>` +
           `<td>${escapeHtml(link.state || "-")}</td>`;
         body.appendChild(row);
-      }
-    }
-  }
-
-  const targets = byId("recon-targets");
-  if (targets) {
-    targets.replaceChildren();
-    if (nodes.length === 0) {
-      targets.innerHTML = '<span class="muted">No addressable targets.</span>';
-    } else {
-      for (const node of nodes) {
-        const card = document.createElement("div");
-        card.className = "sec-target";
-        card.innerHTML = `<strong>${escapeHtml(node.label || node.name)}</strong><br>` +
-          `<span class="muted">${escapeHtml(node.type)}</span>`;
-        targets.appendChild(card);
       }
     }
   }
@@ -179,10 +168,16 @@ function renderRecon(range) {
       `<dl class="sec-stat"><dt>Link types</dt><dd>${types.size}</dd></dl>` +
       `<dl class="sec-stat"><dt>Lowest-capacity links</dt><dd>${bottlenecks}</dd></dl>`;
   }
+
+  if (state.reconLink) {
+    const selected = links.find((link) => link.key === state.reconLink.key);
+    renderLinkDetail(selected || null);
+  }
 }
 
 function renderTargetSelects(range) {
   const nodes = nodeOptions(range?.nodes);
+  fillSelect("recon-target", nodes);
   for (const id of ["ddos-src", "ddos-dst", "ddos-attacker", "ddos-target"]) {
     fillSelect(id, nodes);
   }
@@ -220,6 +215,96 @@ function renderLinkSelect(range) {
 
 function shortLinkType(type) {
   return String(type || "").replace("Link", "");
+}
+
+function renderLinkDetail(link) {
+  const element = byId("recon-link-detail");
+  const button = byId("recon-add-link");
+  state.reconLink = link;
+  if (button) button.disabled = !link;
+  if (!element) return;
+  if (!link) {
+    element.innerHTML = '<span class="muted">Click a link row to inspect it.</span>';
+    return;
+  }
+  element.innerHTML =
+    `<strong>${escapeHtml(link.src)} → ${escapeHtml(link.dst)}</strong><br>` +
+    `${escapeHtml(link.type)} · ${escapeHtml(fmtCapacity(link.capacity_kbps))} · ` +
+    `${escapeHtml(fmt(link.delay_ms))} ms · ${escapeHtml(link.state || "unknown")}<br>` +
+    `<span class="muted">${escapeHtml(link.key)}</span>`;
+}
+
+function selectReconLink(key) {
+  const link = (state.range?.links || []).find((item) => item.key === key);
+  if (!link) return;
+  renderLinkDetail(link);
+  for (const row of document.querySelectorAll("#recon-links-body tr[data-key]")) {
+    row.classList.toggle("selected", row.dataset.key === key);
+  }
+}
+
+function appendLinkEvidence() {
+  const link = state.reconLink;
+  const field = byId("recon-evidence");
+  if (!link || !field) return;
+  const line =
+    `- Link ${link.src} -> ${link.dst} (${link.type}): ` +
+    `${fmtCapacity(link.capacity_kbps)}, ${fmt(link.delay_ms)} ms, ${link.state}`;
+  field.value = field.value ? `${field.value}\n${line}` : line;
+}
+
+function renderReconTarget(node) {
+  const view = byId("recon-target-detail");
+  if (!view) return;
+  const loopback = node.loopback?.ipv4 || "-";
+  const interfaces = Array.isArray(node.interfaces) ? node.interfaces : [];
+  let html =
+    `<div class="sec-detail-list">` +
+    `<div><dt>Name</dt><dd>${escapeHtml(node.name)}</dd></div>` +
+    `<div><dt>Type</dt><dd>${escapeHtml(node.type)}</dd></div>` +
+    `<div><dt>Loopback</dt><dd>${escapeHtml(loopback)}</dd></div>` +
+    `</div>`;
+  html += "<h5>Interfaces</h5>";
+  if (interfaces.length === 0) {
+    html += '<span class="muted">No interfaces.</span>';
+  } else {
+    html +=
+      '<table class="sec-table"><thead><tr><th>Name</th><th>Dev</th><th>IPv4</th><th>State</th><th>Peer</th></tr></thead><tbody>';
+    for (const iface of interfaces) {
+      html +=
+        `<tr><td>${escapeHtml(iface.name)}</td><td>${escapeHtml(iface.iname)}</td>` +
+        `<td>${escapeHtml(iface.ipv4 || "-")}</td>` +
+        `<td>${iface.is_active ? "active" : "inactive"}</td>` +
+        `<td>${escapeHtml(iface.peer_name || "-")}</td></tr>`;
+    }
+    html += "</tbody></table>";
+  }
+  html +=
+    "<h5>Routing table</h5>" +
+    `<pre class="sec-route">${escapeHtml(routeText(node.routing_table))}</pre>`;
+  view.innerHTML = html;
+}
+
+async function loadReconTarget() {
+  const name = byId("recon-target")?.value;
+  const view = byId("recon-target-detail");
+  state.reconTargetDetail = null;
+  if (!view) return;
+  if (!name) {
+    view.innerHTML =
+      '<span class="muted">Select a target to inspect its interfaces and routes.</span>';
+    return;
+  }
+  view.innerHTML = '<span class="muted">Loading target details...</span>';
+  try {
+    const data = await api.get(`/api/nodes/${encodeURIComponent(name)}`);
+    if (byId("recon-target")?.value !== name) return;
+    state.reconTargetDetail = data?.node || null;
+    renderReconTarget(data.node);
+  } catch (error) {
+    if (byId("recon-target")?.value !== name) return;
+    view.innerHTML = `<span class="muted">${escapeHtml(error.message || "Could not load target details.")}</span>`;
+  }
 }
 
 function renderCaptures(captures) {
@@ -260,7 +345,8 @@ function renderRange(range) {
   renderLinkSelect(range);
   renderCaptures(range.captures || []);
   if (range?.readiness?.project_loaded) {
-    setMessage("Range loaded. Reconnaissance is read-only.");
+    void loadReconTarget();
+    setMessage("Range loaded. Start with the reconnaissance mission.");
   } else {
     setMessage("No project loaded. Create or load a project to begin.");
   }
@@ -286,17 +372,66 @@ function activateUnit(unit) {
 }
 
 function exportNotes() {
-  const notes = byId("recon-notes")?.value || "";
   const range = state.range || {};
   const links = range.links || [];
+  const target = byId("recon-target")?.value || "(not selected)";
+  const concern = byId("recon-concern")?.value || "-";
+  const why = byId("recon-why")?.value || "(not written)";
+  const impact = byId("recon-impact")?.value || "(not written)";
+  const evidence = byId("recon-evidence")?.value || "(no evidence)";
+  const selected = state.reconLink;
+  const detail = state.reconTargetDetail;
   const lines = [
-    "# SatSec reconnaissance notes",
+    "# SatSec reconnaissance dossier",
     "",
     `Project: ${range.project_name || "(none)"}`,
-    `Links: ${links.length}`,
+    `Target: ${target}`,
+    `Primary concern: ${concern}`,
     "",
-    "## Notes",
-    notes || "(no notes)",
+    "## Why this target",
+    why,
+    "",
+    "## Expected impact",
+    impact,
+    "",
+    "## Evidence and likely path",
+    evidence,
+  ];
+
+  if (selected) {
+    lines.push(
+      "",
+      "## Selected link",
+      `- ${selected.src} -> ${selected.dst} (${selected.type})`,
+      `- Capacity: ${fmtCapacity(selected.capacity_kbps)}`,
+      `- Delay: ${fmt(selected.delay_ms)} ms`,
+      `- State: ${selected.state}`,
+      `- Key: ${selected.key}`,
+    );
+  }
+
+  if (detail) {
+    lines.push(
+      "",
+      "## Target details",
+      `- Name: ${detail.name}`,
+      `- Type: ${detail.type}`,
+      `- Loopback: ${detail.loopback?.ipv4 || "-"}`,
+      "",
+      "### Interfaces",
+      ...(detail.interfaces || []).map(
+        (iface) =>
+          `- ${iface.name} (${iface.iname}): ${iface.ipv4 || "-"}, ${iface.is_active ? "active" : "inactive"}, peer ${iface.peer_name || "-"}`,
+      ),
+      "",
+      "### Routing table",
+      "```",
+      routeText(detail.routing_table),
+      "```",
+    );
+  }
+
+  lines.push(
     "",
     "## Lowest-capacity links",
     ...links
@@ -307,7 +442,8 @@ function exportNotes() {
         (link) =>
           `- ${link.src} -> ${link.dst} (${link.type}): ${fmtCapacity(link.capacity_kbps)}, ${link.delay_ms} ms`,
       ),
-  ];
+  );
+
   const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -435,6 +571,17 @@ function renderDdosChart(points, attackStart) {
   });
 }
 
+function toggleDdosOptions() {
+  const rate = byId("ddos-rate")?.value;
+  const ppsWrap = byId("ddos-pps-wrap");
+  if (ppsWrap) ppsWrap.style.display = rate === "interval" ? "flex" : "none";
+  const protocol = byId("ddos-protocol")?.value;
+  const flagsWrap = byId("ddos-flags-wrap");
+  if (flagsWrap) flagsWrap.style.display = protocol === "tcp" ? "flex" : "none";
+  const port = byId("ddos-port");
+  if (port) port.disabled = protocol === "icmp";
+}
+
 async function runDdos() {
   const src = byId("ddos-src")?.value;
   const dst = byId("ddos-dst")?.value;
@@ -449,11 +596,17 @@ async function runDdos() {
     return;
   }
 
+  const protocol = byId("ddos-protocol")?.value || "udp";
+  const rate = byId("ddos-rate")?.value || "flood";
+  const pps = byId("ddos-pps")?.value || 5000;
+  const size = byId("ddos-size")?.value || 0;
+  const dport = byId("ddos-port")?.value || 5201;
+  const flags = byId("ddos-flags")?.value || "S";
   const plan = buildDdosPlan({
     baselineSec: byId("ddos-baseline")?.value,
     attackSec: byId("ddos-duration")?.value,
-    protocol: byId("ddos-protocol")?.value,
-    rate: byId("ddos-rate")?.value,
+    protocol,
+    rate,
   });
   const run = { stop: false, iperfJob: null, attackJob: null };
   state.ddosRun = run;
@@ -489,13 +642,20 @@ async function runDdos() {
       buildFloodFlow({
         src: attacker,
         dst: target,
-        protocol: plan.protocol,
-        rate: plan.rate,
+        protocol,
+        rate,
+        pps,
+        size,
+        dport,
+        flags,
       }),
     );
     run.attackJob = attack.job_id;
+    const rateLabel =
+      rate === "interval" ? `${pps} packets/sec` : `--${rate === "flood" ? "flood" : rate}`;
     appendDdosLog(
-      `${plan.protocol.toUpperCase()} flood ${attacker} -> ${target} started (${run.attackJob})`,
+      `${protocol.toUpperCase()} flood ${attacker} -> ${target} started ` +
+        `(${rateLabel}, payload ${size} B, port ${protocol === "icmp" ? "-" : dport})`,
     );
 
     await sleep(plan.attackSec * 1000);
@@ -1006,8 +1166,23 @@ for (const button of document.querySelectorAll(".sec-unit-button[data-unit]")) {
 byId("sec-refresh")?.addEventListener("click", loadRange);
 byId("recon-load-range")?.addEventListener("click", loadSatSecRange);
 byId("recon-export")?.addEventListener("click", exportNotes);
+byId("recon-target")?.addEventListener("change", loadReconTarget);
+byId("recon-add-link")?.addEventListener("click", appendLinkEvidence);
+byId("recon-links-body")?.addEventListener("click", (event) => {
+  const row = event.target.closest("tr[data-key]");
+  if (row) selectReconLink(row.dataset.key);
+});
+byId("recon-links-body")?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const row = event.target.closest("tr[data-key]");
+  if (!row) return;
+  event.preventDefault();
+  selectReconLink(row.dataset.key);
+});
 byId("ddos-run")?.addEventListener("click", runDdos);
 byId("ddos-stop")?.addEventListener("click", stopDdos);
+byId("ddos-rate")?.addEventListener("change", toggleDdosOptions);
+byId("ddos-protocol")?.addEventListener("change", toggleDdosOptions);
 byId("res-fail")?.addEventListener("click", failSelectedLink);
 byId("res-apply")?.addEventListener("click", applyResRouting);
 byId("res-reset")?.addEventListener("click", resetSecurityRange);
@@ -1019,4 +1194,5 @@ byId("trust-spoof")?.addEventListener("change", refreshTrustIp);
 byId("trust-run")?.addEventListener("click", runTrustTest);
 byId("trust-stop")?.addEventListener("click", stopTrustTest);
 
+toggleDdosOptions();
 loadRange().then(loadAllNodes).then(refreshTrustIp);

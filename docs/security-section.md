@@ -109,57 +109,61 @@ and which are only discussed.
 ### Unit 1 - Reconnaissance and attack surface (30 min, live)
 
 Students load a range preset and enumerate it without sending attack traffic.
+The page presents a short mission and a target dossier so the exercise has a
+concrete deliverable.
 
-- List satellites, ground stations, links, interfaces, IP addresses, and
-  routing tables. The existing `/nodes` page already exposes most of this.
-- Add a link inventory to the security page: endpoints, type, capacity, delay,
-  and current state. Identify bottleneck links and single points of failure.
-- Pick a target ground station and a target satellite, then justify the choice
-  in one paragraph: what is exposed, what is behind it, and what the attacker
-  gains by taking it down.
-- Discuss what is public in real life: TLEs, ground-station coordinates,
-  frequency allocations, link budgets, and vendor documentation.
+1. Scan the sorted link table and identify the lowest-capacity links. Those are
+   the bottleneck candidates.
+2. Click a link row to inspect its endpoints, capacity, delay, and state, then
+   add it to the evidence field.
+3. Choose an addressable target and inspect its loopback, interfaces, peer
+   names, and routing table in the target dossier.
+4. Write the target card: why this target, what the attacker gains, and which
+   path or link the attack would use.
+5. Export the dossier as Markdown for the lab report.
 
-Deliverable: a ranked target list with a bottleneck map. No attack yet, so the
-range stays clean for unit 2.
+Discuss what is public in real life: TLEs, ground-station coordinates,
+frequency allocations, link budgets, and vendor documentation.
+
+Deliverable: a target dossier with a bottleneck link, a chosen target, its
+interfaces/routes, and a justified expected impact. No attack yet, so the range
+stays clean for unit 2.
 
 ### Unit 2 - Availability: saturating an inter-satellite link (45 min, live)
 
 This is the strongest lab because every ingredient already exists.
 
-Setup: a small constellation with two ground stations for the legitimate flow,
-a third "attacker" ground station, and 12 satellites, with deliberately low link
-capacity (5 Mbps, i.e. 5000 Kbps in the project form; 100 Mbps may not show a
-clear effect on a laptop). Static routing first, so the path is stable.
+Setup: the bundled range has three ground stations, 24 satellites, and
+deliberately low-capacity links (5000 Kbps). Static routing first, so the path is
+stable.
 
 1. Run a baseline `iperf3` TCP flow between two ground stations for 15-20 s.
    Record average throughput, retransmits, and RTT.
-2. Launch an `hping3` UDP or TCP-SYN flood from an "attacker" ground station or
-   a compromised node toward the victim ground station, or toward an addressable
-   satellite on the path. Start with one attacker, then two or three.
-3. Keep the legitimate flow running. Observe throughput collapse, packet loss,
+2. Launch an `hping3` UDP, TCP-SYN, or ICMP flood from an "attacker" ground
+   station or a compromised node toward the victim ground station, or toward an
+   addressable satellite on the path. Start with one attacker, then two or three.
+3. Vary the attack: protocol, rate mode (`--fast`, `--faster`, `--flood`, or an
+   explicit packets/sec interval), packet payload size, destination port, and
+   TCP flags. Keep the other variables fixed so the class can attribute the
+   change.
+4. Keep the legitimate flow running. Observe throughput collapse, packet loss,
    RTT growth, and the job queue's charts.
-4. Repeat with a higher-capacity link, a different target, and a different
+5. Repeat with a higher-capacity link, a different target, and a different
    routing method. Ask students which variable changed the outcome.
-5. Debrief: why a small amount of traffic can starve a shared link, why the
+6. Debrief: why a small amount of traffic can starve a shared link, why the
    attack is cheap, what collateral damage looks like, and how a defender would
    notice it. Connect to the ICARUS result.
 
 Defences to discuss: capacity planning, traffic policing and rate limits,
-admission control, rerouting, scrubbing, and baseline-based monitoring. If the
-GUI later adds a rate-limit control, students can test a mitigation instead of
-only discussing it.
+admission control, rerouting, scrubbing, and baseline-based monitoring. A
+rate-limit control would let students test a mitigation instead of only
+discussing it.
 
-GUI work: a lab runner that starts the baseline flow, waits for a stable
-measurement, starts the attack flow(s), stops them, and produces a single
-before/after chart. Reuse the existing traffic job registry and Chart.js rather
-than building a second job system.
-
-Small API gap: `Hping3Request` already carries `flags`, but the traffic page has
-no control for it, and the request model lacks `spoof_src`, `sport`, and `ttl`.
-A SYN flood or a spoofed-source test therefore cannot be expressed through the
-GUI even though `satgonetem` supports both. Add the missing fields, pass them
-through the adapter, and surface the relevant controls in the security lab.
+The security page exposes the attack controls directly: protocol, rate mode
+(fast/faster/flood or packets/sec), packet payload size, destination port, TCP
+flags, attack duration, and baseline duration. The runner starts the baseline,
+starts the attack after a short lead-in, stops the attack, and renders the
+before/after chart from the existing traffic job registry and Chart.js.
 
 ### Unit 3 - Resilience: link failure and routing recovery (40 min, live)
 
