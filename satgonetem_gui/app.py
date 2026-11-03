@@ -13,7 +13,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
 from sat_com_builder.models import (
     GroundObjectProperty,
     SimulationProperty,
@@ -31,7 +30,6 @@ from satgonetem.traffic import (
     PingFlow,
     PingStatus,
 )
-
 from satgonetem.utils.satcom_fix import apply_satcom_fix
 
 apply_satcom_fix()

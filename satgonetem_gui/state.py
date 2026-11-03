@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
+
 from satgonetem.services.topology_satcom import TopologyManager  # type: ignore[import]
 
 

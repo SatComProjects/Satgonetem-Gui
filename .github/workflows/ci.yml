@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "latest"
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Check formatting of new Python files
+        run: uv run ruff format --check tests
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov=satgonetem_gui --cov-report=term-missing
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Verify wheel contents
+        run: |
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          wheel = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(wheel) as archive:
+              names = set(archive.namelist())
+
+          required = {
+              "satgonetem_gui/static/base.css",
+              "satgonetem_gui/templates/base.html",
+          }
+          missing = required - names
+          if missing:
+              raise SystemExit(f"wheel is missing: {sorted(missing)}")
+          print(f"wheel OK: {wheel}")
+          PY

@@ -69,8 +69,8 @@ satgonetem_gui/
 ├── static/             # CSS and JavaScript assets
 ├── templates/          # Jinja2 HTML templates
 │   └── base.html       # Shared layout with navigation
-satgonetem_gui.egg-info/
-docs/                   # Project documentation (placeholder)
+tests/                  # pytest suite (10x10 in-process topology)
+docs/                   # Architecture notes and test baseline
 resources/              # Sample configuration and ground station data
 ```
 
@@ -93,6 +93,20 @@ To run the application in development mode with auto-reload:
 ```bash
 uvicorn satgonetem_gui.app:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Install the development tools and run the test suite:
+
+```bash
+uv sync --extra dev
+uv run pytest
+uv run ruff check .
+uv run ruff format --check tests
+```
+
+The default suite builds a 10x10 Walker constellation in-process; it does not
+require Docker or a running GoNetem server. See
+[`docs/architecture.md`](docs/architecture.md) for the test strategy, target
+module boundaries, and the current coverage baseline.
 
 ## License
 
