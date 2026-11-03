@@ -31,8 +31,16 @@ def clean_numeric(value: Any) -> Any:
         return str(value) if value is not None else None
 
 
-def serialize_iperf3_results(result: Any) -> dict[str, Any]:
-    """Extract chart-friendly data from an iperf3 result object."""
+def serialize_iperf3_results(
+    result: Any,
+    intervals: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Extract chart-friendly data from an iperf3 result object.
+
+    Args:
+        result: Parsed iperf3 result object.
+        intervals: Raw interval dictionaries extracted by the adapter.
+    """
     data: dict[str, Any] = {
         "protocol": result.protocol,
         "duration_seconds": result.duration_seconds,
@@ -58,8 +66,7 @@ def serialize_iperf3_results(result: Any) -> dict[str, Any]:
         data["total_out_of_order"] = result.total_out_of_order
 
     try:
-        raw_intervals = result._data.get("intervals", [])
-        for interval in raw_intervals:
+        for interval in intervals:
             entry: dict[str, Any] = {"t": 0.0, "sum": {}, "sums": {}, "streams": []}
             timestamp = 0.0
             for key in (

@@ -55,14 +55,13 @@ def test_invalid_project_file_returns_400(project_client) -> None:
     assert body["error"]
 
 
-def test_known_500_uses_the_envelope(project_client, monkeypatch) -> None:
+def test_known_500_uses_the_envelope(project_client, services, monkeypatch) -> None:
     """Handled server failures use the same envelope."""
-    from satgonetem_gui.state import app_state
 
-    def fail(*_args, **_kwargs):
+    def fail(_topology):
         raise RuntimeError("disk full")
 
-    monkeypatch.setattr(app_state.topology_manager, "to_file", fail)
+    monkeypatch.setattr(services.project.gateway, "save", fail)
 
     response = project_client.get("/api/project/save")
 
@@ -70,13 +69,11 @@ def test_known_500_uses_the_envelope(project_client, monkeypatch) -> None:
     assert response.json() == {"ok": False, "error": "Project save failed."}
 
 
-def test_unexpected_500_uses_the_envelope(client, monkeypatch) -> None:
+def test_unexpected_500_uses_the_envelope(client, services, monkeypatch) -> None:
     """Unhandled exceptions are converted to the common envelope."""
-    from satgonetem_gui.state import app_state
-
     monkeypatch.setattr(
-        app_state,
-        "get_status_dict",
+        services.topology,
+        "status",
         lambda: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 

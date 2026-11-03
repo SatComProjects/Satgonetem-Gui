@@ -1,4 +1,8 @@
-"""Global application state for the SatGoNetem GUI."""
+"""Project lifecycle and per-application runtime state.
+
+This module deliberately has no FastAPI or ``satgonetem`` imports. The concrete
+topology object is opaque here; adapters own its type.
+"""
 
 from __future__ import annotations
 
@@ -7,8 +11,6 @@ import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
-
-from satgonetem.services.topology_satcom import TopologyManager  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ class ProjectState(str, Enum):
 class ProjectResult:
     """Result returned by a successful project build or load."""
 
-    topology_manager: TopologyManager
+    topology_manager: Any
     project_name: str
     save_path: str = ""
 
@@ -40,7 +42,7 @@ class ProjectSession:
     show the failure instead of waiting for a project that will never arrive.
     """
 
-    topology_manager: Optional[TopologyManager] = None
+    topology_manager: Any = None
     project_name: Optional[str] = None
     save_path: str = ""
     state: ProjectState = ProjectState.IDLE
@@ -67,17 +69,7 @@ class ProjectSession:
         save_path: str = "",
         operation: str = "create",
     ) -> bool:
-        """Reserve the single build slot for a new operation.
-
-        Args:
-            name: User-facing name of the project being built.
-            save_path: Requested save path from the create form.
-            operation: ``create`` or ``load``.
-
-        Returns:
-            True if the slot was acquired, False if an operation is already
-            running.
-        """
+        """Reserve the single build slot for a new operation."""
         with self._lock:
             if self.state is ProjectState.CREATING:
                 return False
@@ -89,7 +81,7 @@ class ProjectSession:
 
     def succeed(
         self,
-        topology_manager: TopologyManager,
+        topology_manager: Any,
         project_name: str,
         save_path: str = "",
     ) -> None:
@@ -118,7 +110,7 @@ class ProjectSession:
                 and self.project_name == name
             )
 
-    def get_topology(self, name: Optional[str] = None) -> Optional[TopologyManager]:
+    def get_topology(self, name: Optional[str] = None) -> Any:
         """Return the loaded topology, optionally checked against a project name."""
         with self._lock:
             if self.topology_manager is None:
@@ -172,18 +164,7 @@ class ProjectTaskManager:
         operation: str,
         runner: Callable[[], ProjectResult],
     ) -> bool:
-        """Reserve the session and run the build in a background thread.
-
-        Args:
-            name: User-facing project name for status reporting.
-            save_path: Requested save path from the create form.
-            operation: ``create`` or ``load``.
-            runner: Callable that performs the build and returns a result.
-
-        Returns:
-            True if the build was started, False if another operation owns the
-            single build slot.
-        """
+        """Reserve the session and run the build in a background thread."""
         if not self.session.begin(name, save_path=save_path, operation=operation):
             return False
 
@@ -203,11 +184,7 @@ class ProjectTaskManager:
             raise
         return True
 
-    def _run(
-        self,
-        operation: str,
-        runner: Callable[[], ProjectResult],
-    ) -> None:
+    def _run(self, operation: str, runner: Callable[[], ProjectResult]) -> None:
         try:
             result = runner()
         except Exception as exc:
@@ -228,85 +205,11 @@ class ProjectTaskManager:
 
 
 @dataclass
-class AppState:
-    """Shared runtime state for the GUI process."""
+class RuntimeState:
+    """Per-application runtime state; no module-level singleton."""
 
     project: ProjectSession = field(default_factory=ProjectSession)
     project_tasks: ProjectTaskManager = field(init=False)
-    jobs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    jobs_lock: threading.Lock = field(default_factory=threading.Lock)
 
     def __post_init__(self) -> None:
         self.project_tasks = ProjectTaskManager(self.project)
-
-    @property
-    def topology_manager(self) -> Optional[TopologyManager]:
-        """Return the currently loaded topology manager, if any."""
-        return self.project.topology_manager
-
-    @property
-    def project_name(self) -> Optional[str]:
-        """Return the user-facing name of the loaded project."""
-        return self.project.project_name
-
-    @property
-    def creating(self) -> bool:
-        """Return True while a project operation is running."""
-        return self.project.creating
-
-    def reset(self) -> None:
-        """Reset project and job state. Used by tests and startup."""
-        self.project.reset()
-        with self.jobs_lock:
-            self.jobs.clear()
-
-    def get_status_dict(self) -> Dict[str, Any]:
-        """Return a serializable status snapshot for the dashboard.
-
-        Returns:
-            Dictionary with keys: constellation_loaded, satellites,
-            ground_stations, links, gonetem_is_on, simulation_updating,
-            current_step, current_time.
-        """
-        if self.topology_manager is None:
-            return {
-                "constellation_loaded": False,
-                "satellites": 0,
-                "ground_stations": 0,
-                "links": 0,
-                "gonetem_is_on": False,
-                "simulation_updating": False,
-                "current_step": None,
-                "current_time": None,
-            }
-
-        tm = self.topology_manager
-        try:
-            summary = tm.get_topology_summary()
-        except Exception:
-            summary = {"satellites": 0, "ground_stations": 0, "links": 0}
-
-        try:
-            current_time = tm.get_current_time()
-            current_time_str = current_time.isoformat() if current_time else None
-        except Exception:
-            current_time_str = None
-
-        try:
-            current_step = tm.get_current_time_step()
-        except Exception:
-            current_step = None
-
-        return {
-            "constellation_loaded": tm.get_status(),
-            "satellites": summary.get("satellites", 0),
-            "ground_stations": summary.get("ground_stations", 0),
-            "links": summary.get("links", 0),
-            "gonetem_is_on": tm.get_gonetem_status(),
-            "simulation_updating": tm.get_running(),
-            "current_step": current_step,
-            "current_time": current_time_str,
-        }
-
-
-app_state = AppState()

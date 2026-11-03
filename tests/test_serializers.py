@@ -98,7 +98,7 @@ def test_serialize_iperf3_results_includes_intervals_and_tcp_metrics() -> None:
         },
     )
 
-    data = serialize_iperf3_results(result)
+    data = serialize_iperf3_results(result, result._data["intervals"])
 
     assert data["protocol"] == "TCP"
     assert data["total_retransmits"] == 1
@@ -126,7 +126,7 @@ def test_serialize_iperf3_results_includes_udp_metrics() -> None:
         _data={"intervals": []},
     )
 
-    data = serialize_iperf3_results(result)
+    data = serialize_iperf3_results(result, [])
 
     assert data["total_packets"] == 10
     assert data["avg_jitter_ms"] == 1.2
