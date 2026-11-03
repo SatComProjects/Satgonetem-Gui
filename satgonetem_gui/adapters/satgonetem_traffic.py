@@ -29,6 +29,13 @@ from ..services.ports import TrafficPoll
 class SatGoNetemTrafficAdapter:
     """Concrete adapter for iperf3, ping, and hping3 flows."""
 
+    def __init__(self) -> None:
+        self._pollers = {
+            "iperf3": self._poll_iperf3,
+            "ping": self._poll_ping,
+            "hping3": self._poll_hping3,
+        }
+
     def start_iperf3(
         self,
         source: Any,
@@ -88,15 +95,12 @@ class SatGoNetemTrafficAdapter:
         flow.start()
         return flow
 
-    def poll(self, flow: Any) -> TrafficPoll:
+    def poll(self, kind: str, flow: Any) -> TrafficPoll:
         """Return normalized flow state and serialized results."""
-        if isinstance(flow, Iperf3Flow):
-            return self._poll_iperf3(flow)
-        if isinstance(flow, PingFlow):
-            return self._poll_ping(flow)
-        if isinstance(flow, Hping3Flow):
-            return self._poll_hping3(flow)
-        raise TypeError(f"Unsupported flow type: {type(flow)!r}")
+        poller = self._pollers.get(kind)
+        if poller is None:
+            raise ValueError(f"Unsupported traffic kind: {kind!r}")
+        return poller(flow)
 
     def stop(self, flow: Any) -> None:
         """Stop a running flow if it supports termination."""
