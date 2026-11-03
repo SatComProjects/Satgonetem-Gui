@@ -209,6 +209,10 @@ Branch coverage is enabled with an 85% minimum; the current suite is at 90%.
 - `uv.lock` is the source of truth and is committed.
 - Runtime data is packaged under `satgonetem_gui/data/` and loaded through
   `importlib.resources`; the wheel test verifies it is present.
+- SatGoNetEm is pinned to the `v0.2.0` Git tag (commit `1f1a229`). The 0.2.0
+  diff only removes unused P4/shared-memory modules and MAC-address caching;
+  the GUI adapter surface is unchanged, and the 10x10 adapter contract tests
+  pass against the tag.
 - Ruff checks `E9`, `F`, and `I` across the repository. Formatting is checked
   for the test suite; production files are formatted as they are touched.
 - CI runs on pushes and pull requests to `main` and `develop`, installs Python

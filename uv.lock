@@ -3501,7 +3501,7 @@ dependencies = [
 [[package]]
 name = "satgonetem"
 version = "0.2.0"
-source = { git = "https://github.com/satcomprojects/satgonetem#8b6292f553ff1badfb0b0ae61ee2c2ff60bdaa81" }
+source = { git = "https://github.com/satcomprojects/satgonetem?tag=v0.2.0#1f1a22982dc04d5ef896b3b7f9dd0a194dacdd1b" }
 dependencies = [
     { name = "astropy", version = "6.1.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "astropy", version = "8.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -3568,7 +3568,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
-    { name = "satgonetem", git = "https://github.com/satcomprojects/satgonetem" },
+    { name = "satgonetem", git = "https://github.com/satcomprojects/satgonetem?tag=v0.2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29.0" },
 ]
 provides-extras = ["dev"]
