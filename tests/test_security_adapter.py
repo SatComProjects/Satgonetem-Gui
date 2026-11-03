@@ -58,9 +58,7 @@ def test_fail_link_finds_the_stable_key() -> None:
     topology = _topology(node)
     topology.links = {frozenset(("Sat0", "Sat1")): link}
 
-    result = adapter.fail_link(
-        topology, "Sat0|Sat1|InterSatelliteLink|bidirectional"
-    )
+    result = adapter.fail_link(topology, "Sat0|Sat1|InterSatelliteLink|bidirectional")
 
     assert result["src"] == "Sat0"
     assert topology.failed == [link]

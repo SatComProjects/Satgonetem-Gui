@@ -39,9 +39,7 @@ def test_real_security_capture_failure_and_reset(settings) -> None:
         isl_capacity=data.get("isl_capacity", 5000),
         gs_capacity=data.get("gs_capacity", 5000),
         walker_shells_json=json.dumps(data["walker_shells"]),
-        ground_objects_properties_json=json.dumps(
-            data["ground_objects_properties"]
-        ),
+        ground_objects_properties_json=json.dumps(data["ground_objects_properties"]),
     )
 
     adapter = SatGoNetemTopologyAdapter(settings)
@@ -64,11 +62,7 @@ def test_real_security_capture_failure_and_reset(settings) -> None:
         assert len(links) > 0
         assert all(link["capacity_kbps"] == 5000 for link in links)
 
-        key = next(
-            link["key"]
-            for link in links
-            if link["type"] == "InterSatelliteLink"
-        )
+        key = next(link["key"] for link in links if link["type"] == "InterSatelliteLink")
         security.fail_link(key)
         assert key in security.range()["failed_links"]
 
