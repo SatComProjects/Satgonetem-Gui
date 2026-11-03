@@ -32,6 +32,7 @@
     <button type="button" class="sec-unit-button" data-unit="confidentiality">3. Confidentiality</button>
     <button type="button" class="sec-unit-button" data-unit="trust">4. Trust / spoofing</button>
     <button type="button" class="sec-unit-button" data-unit="policy">5. Policy &amp; QoS</button>
+    <button type="button" class="sec-unit-button" data-unit="telemetry">6. Telemetry &amp; alerts</button>
     <button type="button" class="sec-unit-button" id="sec-refresh" data-action="refresh">Refresh range</button>
   </nav>
 
@@ -554,6 +555,89 @@
           </tbody>
         </table>
       </div>
+    </section>
+
+    <section class="card sec-panel" data-panel="telemetry">
+      <h3 class="card-title">6. Telemetry &amp; alerts</h3>
+      <p class="muted">
+        Sample node and link counters, route state, link-budget capacity, and
+        baselines. Alerts are generated when routes, link state, drops, errors,
+        utilization, or throughput deviate from the observed baseline.
+      </p>
+      <div class="sec-actions">
+        <button type="button" id="telemetry-refresh">Sample now</button>
+        <button type="button" class="secondary" id="telemetry-clear-alerts">Clear alerts</button>
+      </div>
+      <p class="muted" id="telemetry-status">Idle.</p>
+      <div class="sec-stats" id="telemetry-stats"></div>
+
+      <h4>Nodes</h4>
+      <div class="sec-table-wrap">
+        <table class="sec-table">
+          <thead>
+            <tr>
+              <th>Node</th>
+              <th>Type</th>
+              <th>Routes</th>
+              <th>Protocols</th>
+              <th>RX</th>
+              <th>TX</th>
+              <th>Drops</th>
+              <th>Errors</th>
+            </tr>
+          </thead>
+          <tbody id="telemetry-nodes-body">
+            <tr><td colspan="8" class="muted">No sample yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Links</h4>
+      <div class="sec-table-wrap">
+        <table class="sec-table">
+          <thead>
+            <tr>
+              <th>Endpoints</th>
+              <th>Capacity</th>
+              <th>RX</th>
+              <th>TX</th>
+              <th>Drops</th>
+              <th>Errors</th>
+              <th>State</th>
+              <th>Budget</th>
+            </tr>
+          </thead>
+          <tbody id="telemetry-links-body">
+            <tr><td colspan="8" class="muted">No sample yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Detection alerts</h4>
+      <div id="telemetry-alerts" class="sec-alerts">
+        <span class="muted">No alerts yet.</span>
+      </div>
+
+      <h4>Decoy honeypot</h4>
+      <p class="muted">
+        Start a small decoy TCP listener on a ground station and inspect
+        connection attempts. The listener responds with a fake SSH banner.
+      </p>
+      <div class="sec-grid">
+        <label>Node
+          <select id="honeypot-node"></select>
+        </label>
+        <label>Port
+          <input type="number" id="honeypot-port" min="1" max="65535" value="2222">
+        </label>
+      </div>
+      <div class="sec-actions">
+        <button type="button" id="honeypot-start">Start honeypot</button>
+        <button type="button" class="secondary" id="honeypot-stop" disabled>Stop honeypot</button>
+        <button type="button" class="secondary" id="honeypot-refresh">Refresh connections</button>
+      </div>
+      <p class="muted" id="honeypot-status">Idle.</p>
+      <div id="honeypot-events" class="sec-captures"></div>
     </section>
   </div>
 </div>

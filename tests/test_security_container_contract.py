@@ -7,12 +7,15 @@ The default suite never starts Docker.
 import asyncio
 import json
 import os
+import shlex
 import time
 
 import pytest
 
+from satgonetem_gui.adapters.satgonetem_honeypot import SatGoNetemHoneypotAdapter
 from satgonetem_gui.adapters.satgonetem_policy import SatGoNetemPolicyAdapter
 from satgonetem_gui.adapters.satgonetem_security import SatGoNetemSecurityAdapter
+from satgonetem_gui.adapters.satgonetem_telemetry import SatGoNetemTelemetryAdapter
 from satgonetem_gui.adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from satgonetem_gui.resources import GROUND_STATIONS_DIR, SECURITY_DIR
 from satgonetem_gui.schemas import (
@@ -50,6 +53,7 @@ def test_real_security_capture_failure_and_reset(settings) -> None:
     adapter = SatGoNetemTopologyAdapter(settings)
     security_adapter = SatGoNetemSecurityAdapter()
     policy_adapter = SatGoNetemPolicyAdapter()
+    honeypot_adapter = SatGoNetemHoneypotAdapter()
     result = adapter.build(payload)
     topology_manager = result.topology_manager
 
@@ -67,6 +71,11 @@ def test_real_security_capture_failure_and_reset(settings) -> None:
         links = adapter.links(topology_manager)
         assert len(links) > 0
         assert all(link["capacity_kbps"] == 5000 for link in links)
+
+        telemetry = SatGoNetemTelemetryAdapter().sample(topology_manager)
+        assert telemetry["nodes"]
+        assert all(node["route_count"] >= 0 for node in telemetry["nodes"])
+        assert telemetry["links"][0]["capacity_kbps"] == 5000
 
         policy = NodePolicyRequest(
             node="Gnd24",
@@ -90,6 +99,19 @@ def test_real_security_capture_failure_and_reset(settings) -> None:
         assert applied["rules"]
         policy_adapter.clear(topology_manager, "Gnd24", applied["qos"])
         assert policy_adapter.status(topology_manager, "Gnd24")["applied"] is False
+
+        gnd = topology_manager.get_node_by_name("Gnd24")
+        honeypot_adapter.start(topology_manager, "Gnd24", 2222)
+        time.sleep(1)
+        connect_script = (
+            "import socket; s=socket.create_connection(('127.0.0.1', 2222), 2); s.close()"
+        )
+        gnd.execute_command(["sh", "-lc", f"python3 -c {shlex.quote(connect_script)}"])
+        time.sleep(0.5)
+        honeypot = honeypot_adapter.status(topology_manager, "Gnd24", 2222)
+        assert honeypot["running"] is True
+        assert honeypot["events"]
+        honeypot_adapter.stop(topology_manager, "Gnd24", 2222)
 
         key = next(link["key"] for link in links if link["type"] == "InterSatelliteLink")
         security.fail_link(key)

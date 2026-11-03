@@ -6,19 +6,33 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from .adapters.satgonetem_honeypot import SatGoNetemHoneypotAdapter
 from .adapters.satgonetem_policy import SatGoNetemPolicyAdapter
 from .adapters.satgonetem_security import SatGoNetemSecurityAdapter
+from .adapters.satgonetem_telemetry import SatGoNetemTelemetryAdapter
 from .adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
 from .config import Settings, load_settings
 from .errors import install_error_handlers
 from .resources import GROUND_STATIONS_DIR
-from .routes import pages, policies, projects, routing, security, topology, traffic
+from .routes import (
+    honeypots,
+    pages,
+    policies,
+    projects,
+    routing,
+    security,
+    telemetry,
+    topology,
+    traffic,
+)
 from .services.container import ApplicationServices
+from .services.honeypot_service import HoneypotService
 from .services.policy_service import PolicyService
 from .services.project_service import ProjectService
 from .services.routing_service import RoutingService
 from .services.security_service import SecurityService
+from .services.telemetry_service import TelemetryService
 from .services.topology_service import TopologyService
 from .services.traffic_service import TrafficService
 from .state import RuntimeState
@@ -33,6 +47,8 @@ def build_services(settings: Settings) -> ApplicationServices:
     traffic_adapter = SatGoNetemTrafficAdapter()
     security_adapter = SatGoNetemSecurityAdapter()
     policy_adapter = SatGoNetemPolicyAdapter()
+    telemetry_adapter = SatGoNetemTelemetryAdapter()
+    honeypot_adapter = SatGoNetemHoneypotAdapter()
 
     project = ProjectService(runtime, topology_adapter, settings, GROUND_STATIONS_DIR)
     topology = TopologyService(runtime.project, topology_adapter)
@@ -40,6 +56,8 @@ def build_services(settings: Settings) -> ApplicationServices:
     traffic = TrafficService(topology, traffic_adapter)
     security = SecurityService(topology, routing, project, security_adapter)
     policy = PolicyService(topology, policy_adapter)
+    telemetry = TelemetryService(topology, telemetry_adapter)
+    honeypot = HoneypotService(topology, honeypot_adapter)
     return ApplicationServices(
         runtime=runtime,
         project=project,
@@ -48,6 +66,8 @@ def build_services(settings: Settings) -> ApplicationServices:
         traffic=traffic,
         security=security,
         policy=policy,
+        telemetry=telemetry,
+        honeypot=honeypot,
     )
 
 
@@ -75,6 +95,8 @@ def create_app(
     app.include_router(traffic.router)
     app.include_router(security.router)
     app.include_router(policies.router)
+    app.include_router(telemetry.router)
+    app.include_router(honeypots.router)
     return app
 
 

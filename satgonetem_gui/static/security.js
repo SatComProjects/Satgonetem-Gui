@@ -23,6 +23,9 @@ const state = {
   reconLink: null,
   reconTargetDetail: null,
   ddosMitigation: null,
+  telemetry: null,
+  telemetryTimer: null,
+  honeypot: null,
 };
 
 function byId(id) {
@@ -372,6 +375,7 @@ function activateUnit(unit) {
   for (const panel of document.querySelectorAll(".sec-panel[data-panel]")) {
     panel.classList.toggle("active", panel.dataset.panel === unit);
   }
+  setTelemetryPolling(unit === "telemetry");
 }
 
 function exportNotes() {
@@ -777,6 +781,10 @@ async function loadAllNodes() {
     fillSelect("res-node", options);
     fillSelect("conf-node", options);
     fillSelect("policy-node", options);
+    const honeypotOptions = [...options].sort(
+      (a, b) => (a.type === "ground_station" ? 0 : 1) - (b.type === "ground_station" ? 0 : 1),
+    );
+    fillSelect("honeypot-node", honeypotOptions);
     if (state.range?.readiness?.project_loaded) {
       await refreshResRoute();
     }
@@ -1437,6 +1445,240 @@ async function clearDdosMitigation(silent = false) {
   }
 }
 
+
+function setTelemetryStatus(text, isError = false) {
+  const element = byId("telemetry-status");
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function renderTelemetryStats(data) {
+  const element = byId("telemetry-stats");
+  if (!element) return;
+  const nodes = data.nodes || [];
+  const links = data.links || [];
+  const alerts = data.alerts || [];
+  element.innerHTML =
+    `<dl class="sec-stat"><dt>Baseline samples</dt><dd>${data.baseline_samples ?? 0}</dd></dl>` +
+    `<dl class="sec-stat"><dt>Nodes</dt><dd>${nodes.length}</dd></dl>` +
+    `<dl class="sec-stat"><dt>Links</dt><dd>${links.length}</dd></dl>` +
+    `<dl class="sec-stat"><dt>Alerts</dt><dd>${alerts.length}</dd></dl>`;
+}
+
+function renderTelemetryNodes(nodes) {
+  const body = byId("telemetry-nodes-body");
+  if (!body) return;
+  body.replaceChildren();
+  if (!nodes || nodes.length === 0) {
+    body.innerHTML = '<tr><td colspan="8" class="muted">No node metrics.</td></tr>';
+    return;
+  }
+  for (const node of nodes) {
+    const interfaces = node.interfaces || [];
+    const rx = interfaces.reduce((sum, item) => sum + Number(item.rx_mbps || 0), 0);
+    const tx = interfaces.reduce((sum, item) => sum + Number(item.tx_mbps || 0), 0);
+    const drops = interfaces.reduce(
+      (sum, item) => sum + Number(item.rx_dropped || 0) + Number(item.tx_dropped || 0),
+      0,
+    );
+    const errors = interfaces.reduce(
+      (sum, item) => sum + Number(item.rx_errors || 0) + Number(item.tx_errors || 0),
+      0,
+    );
+    const row = document.createElement("tr");
+    row.innerHTML =
+      `<td>${escapeHtml(node.name)}</td>` +
+      `<td>${escapeHtml(node.type || "-")}</td>` +
+      `<td>${escapeHtml(node.route_count ?? 0)}</td>` +
+      `<td>${escapeHtml((node.protocols || []).join("; ") || "-")}</td>` +
+      `<td>${rx.toFixed(2)} Mbps</td>` +
+      `<td>${tx.toFixed(2)} Mbps</td>` +
+      `<td>${drops}</td>` +
+      `<td>${errors}${node.error ? ` · ${escapeHtml(node.error)}` : ""}</td>`;
+    body.appendChild(row);
+  }
+}
+
+function renderTelemetryLinks(links) {
+  const body = byId("telemetry-links-body");
+  if (!body) return;
+  body.replaceChildren();
+  if (!links || links.length === 0) {
+    body.innerHTML = '<tr><td colspan="8" class="muted">No link metrics.</td></tr>';
+    return;
+  }
+  for (const link of links) {
+    const row = document.createElement("tr");
+    const budget = link.budget?.enabled ? "enabled" : "-";
+    row.innerHTML =
+      `<td>${escapeHtml(link.src)} → ${escapeHtml(link.dst)}</td>` +
+      `<td>${escapeHtml(fmtCapacity(link.capacity_kbps))}</td>` +
+      `<td>${Number(link.rx_mbps || 0).toFixed(2)} Mbps</td>` +
+      `<td>${Number(link.tx_mbps || 0).toFixed(2)} Mbps</td>` +
+      `<td>${link.rx_dropped ?? 0}</td>` +
+      `<td>${link.rx_errors ?? 0}</td>` +
+      `<td>${escapeHtml(link.state || "-")}</td>` +
+      `<td>${escapeHtml(budget)}</td>`;
+    body.appendChild(row);
+  }
+}
+
+function renderTelemetryAlerts(alerts) {
+  const container = byId("telemetry-alerts");
+  if (!container) return;
+  container.replaceChildren();
+  if (!alerts || alerts.length === 0) {
+    const empty = document.createElement("span");
+    empty.className = "muted";
+    empty.textContent = "No alerts yet.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const alert of alerts) {
+    const item = document.createElement("div");
+    item.className = `sec-alert ${escapeHtml(alert.severity || "info")}`;
+    const time = new Date(Number(alert.timestamp) * 1000).toLocaleTimeString();
+    item.innerHTML =
+      `<span class="severity">${escapeHtml(alert.severity || "info")}</span>` +
+      `<span class="time">${escapeHtml(time)}</span>` +
+      `<strong>${escapeHtml(alert.node || "range")}</strong>` +
+      `<span>${escapeHtml(alert.message || "")}</span>` +
+      `<span class="metric">${escapeHtml(alert.metric || "")}</span>`;
+    container.appendChild(item);
+  }
+}
+
+async function refreshTelemetry() {
+  try {
+    const data = await api.get("/api/security/telemetry");
+    state.telemetry = data;
+    renderTelemetryStats(data);
+    renderTelemetryNodes(data.nodes);
+    renderTelemetryLinks(data.links);
+    renderTelemetryAlerts(data.alerts);
+    setTelemetryStatus(
+      `Sampled at ${new Date(data.sampled_at * 1000).toLocaleTimeString()} (${data.interval_seconds.toFixed(1)}s interval).`,
+    );
+  } catch (error) {
+    if (error.status === 404 || error.status === 409) {
+      setTelemetryStatus("Start the range containers and apply routing to sample telemetry.", true);
+    } else {
+      setTelemetryStatus(error.message || "Telemetry sample failed.", true);
+    }
+  }
+}
+
+async function clearTelemetryAlerts() {
+  try {
+    await api.post("/api/security/telemetry/clear-alerts");
+    await refreshTelemetry();
+    setTelemetryStatus("Alert history cleared.");
+  } catch (error) {
+    setTelemetryStatus(error.message || "Could not clear alerts.", true);
+  }
+}
+
+function setTelemetryPolling(active) {
+  if (state.telemetryTimer) {
+    clearInterval(state.telemetryTimer);
+    state.telemetryTimer = null;
+  }
+  if (active) {
+    refreshTelemetry();
+    state.telemetryTimer = setInterval(refreshTelemetry, 5000);
+  }
+}
+
+
+function setHoneypotStatus(text, isError = false) {
+  const element = byId("honeypot-status");
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function renderHoneypot(status) {
+  state.honeypot = status;
+  const stop = byId("honeypot-stop");
+  if (stop) stop.disabled = !status?.running;
+  const container = byId("honeypot-events");
+  if (!container) return;
+  container.replaceChildren();
+  const events = status?.events || [];
+  if (events.length === 0) {
+    const empty = document.createElement("span");
+    empty.className = "muted";
+    empty.textContent = status?.running
+      ? "No connections yet."
+      : "Start the honeypot to collect connection attempts.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const event of events.slice().reverse()) {
+    const row = document.createElement("div");
+    row.className = "sec-capture";
+    const time = new Date(Number(event.timestamp) * 1000).toLocaleTimeString();
+    row.innerHTML =
+      `<span>${escapeHtml(time)}</span>` +
+      `<span>${escapeHtml(event.peer || "unknown")}:${escapeHtml(event.source_port ?? 0)}</span>` +
+      '<span class="spacer"></span>' +
+      '<span class="muted">decoy SSH connection</span>';
+    container.appendChild(row);
+  }
+}
+
+async function startHoneypot() {
+  const node = byId("honeypot-node")?.value;
+  const port = Number(byId("honeypot-port")?.value) || 2222;
+  if (!node) {
+    setHoneypotStatus("Select a honeypot node.", true);
+    return;
+  }
+  try {
+    setHoneypotStatus("Starting decoy listener...");
+    const status = await api.post("/api/security/honeypots", { node, port });
+    renderHoneypot(status);
+    setHoneypotStatus(`Honeypot ${status.running ? "running" : "stopped"} on ${node}:${port}.`);
+  } catch (error) {
+    setHoneypotStatus(error.message || "Could not start honeypot.", true);
+  }
+}
+
+async function refreshHoneypot() {
+  const node = byId("honeypot-node")?.value;
+  const port = Number(byId("honeypot-port")?.value) || 2222;
+  if (!node) return;
+  try {
+    const status = await api.get(
+      `/api/security/honeypots/${encodeURIComponent(node)}/${port}`,
+    );
+    renderHoneypot(status);
+    setHoneypotStatus(
+      status.running
+        ? `Listening on ${node}:${port}; ${status.events.length} connections.`
+        : "No honeypot running.",
+    );
+  } catch (error) {
+    setHoneypotStatus(error.message || "Could not read honeypot status.", true);
+  }
+}
+
+async function stopHoneypot() {
+  const node = byId("honeypot-node")?.value;
+  const port = Number(byId("honeypot-port")?.value) || 2222;
+  if (!node) return;
+  try {
+    await api.post(
+      `/api/security/honeypots/${encodeURIComponent(node)}/${port}/stop`,
+    );
+    setHoneypotStatus("Honeypot stopped.");
+    await refreshHoneypot();
+  } catch (error) {
+    setHoneypotStatus(error.message || "Could not stop honeypot.", true);
+  }
+}
+
 for (const button of document.querySelectorAll(".sec-unit-button[data-unit]")) {
   button.addEventListener("click", () => activateUnit(button.dataset.unit));
 }
@@ -1481,6 +1723,11 @@ byId("policy-node")?.addEventListener("change", async () => {
   await loadPolicyInterfaces();
   await refreshPolicyStatus();
 });
+byId("telemetry-refresh")?.addEventListener("click", refreshTelemetry);
+byId("telemetry-clear-alerts")?.addEventListener("click", clearTelemetryAlerts);
+byId("honeypot-start")?.addEventListener("click", startHoneypot);
+byId("honeypot-stop")?.addEventListener("click", stopHoneypot);
+byId("honeypot-refresh")?.addEventListener("click", refreshHoneypot);
 
 toggleDdosOptions();
 loadRange().then(loadAllNodes).then(refreshTrustIp);

@@ -13,6 +13,8 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Routing Control** | Apply Static/Dijkstra, OSPF, IS-IS, or SR-MPLS routing across the emulated topology. |
 | **Security Lab** | Teach satellite cybersecurity with reconnaissance, DDoS, link-failure, packet-capture, and spoofing exercises. |
 | **Policy & QoS** | Apply per-node firewall rules, rate/connection limits, ingress policing, DSCP marking, and rollback from a saved ruleset. |
+| **Telemetry & Alerts** | Sample node/link counters, routes, protocol state, and capacity; render baselines and detection alerts. |
+| **Honeypot** | Run a decoy TCP listener on a ground station and inspect connection attempts. |
 | **GoNetem Integration** | Start and stop Dockerised network nodes directly from the web UI. |
 | **Save / Load** | Export and import projects as JSON files. |
 
@@ -123,7 +125,9 @@ The GUI has no authentication and is intended for trusted local use. It binds
 and does not expose a public API. Do not bind it to a public interface without
 placing it behind an authenticating reverse proxy.
 
-The `/security` page is a classroom training range. Its actions are confined to
+The `/security` page is a classroom training range. The full feature
+inventory and teaching workflow are in
+[`docs/security-features.md`](docs/security-features.md). Its actions are confined to
 the emulated constellation: no arbitrary shell is exposed, attack flows are
 bounded, and the page warns against pointing the tools at real networks. Packet
 captures, destructive link-failure experiments, and firewall/QoS policies

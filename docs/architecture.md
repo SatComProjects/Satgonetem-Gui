@@ -167,6 +167,8 @@ not import those dependency internals.
 - Added a typed policy plane: `routes/policies.py`, `services/policy_service.py`,
   `adapters/satgonetem_policy.py`, and `PolicyGateway` for per-node
   firewall/QoS apply, preview, status, counters, and rollback.
+- Added telemetry/detection and honeypot services: node/link counters, route and
+  protocol state, link-budget inputs, baselines, alerts, and a decoy listener.
 - The security page now exposes six units: reconnaissance, availability
   (DDoS), resilience, confidentiality, trust/spoofing, and policy/QoS. The
   tabletop and capstone units remain out of scope.
@@ -205,9 +207,9 @@ Measured on 2026-11-03 with Python 3.15.0, pytest 9.2.0, and coverage 7.17.1:
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **216 passed, 2 skipped** in about 2.6 s (one existing and one security
+Result: **244 passed, 2 skipped** in about 3.0 s (one existing and one security
 real-container test are opt-in). Frontend: **27 Vitest tests**, **12 Playwright
-smoke tests**. Total line coverage is **88%**, branch coverage **87.55%**.
+smoke tests**. Total line coverage is **88%**, branch coverage **87.80%**.
 
 | Module | Statements | Coverage |
 |---|---:|---:|
@@ -221,9 +223,10 @@ smoke tests**. Total line coverage is **88%**, branch coverage **87.55%**.
 | `services/topology_service.py` | 37 | 98% |
 | `services/traffic_service.py` | 155 | 88% |
 | `state.py` | 123 | 95% |
-| `schemas.py` | 282 | 97% |
+| `schemas.py` | 300 | 97% |
+| `services/telemetry_service.py` | 144 | 87% |
 | `storage.py` | 29 | 95% |
-| **Total** | **2102** | **88%** |
+| **Total** | **2585** | **88%** |
 
 Branch coverage is enabled with an 85% minimum; the current suite is at 90%.
 

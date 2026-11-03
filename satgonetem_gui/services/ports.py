@@ -145,3 +145,19 @@ class PolicyGateway(Protocol):
     ) -> None: ...
 
     def status(self, topology: Any, node: str) -> dict[str, Any]: ...
+
+
+class TelemetryGateway(Protocol):
+    """Raw node/link telemetry sampling."""
+
+    def sample(self, topology: Any) -> dict[str, Any]: ...
+
+
+class HoneypotGateway(Protocol):
+    """Decoy listener lifecycle."""
+
+    def start(self, topology: Any, node: str, port: int) -> dict[str, Any]: ...
+
+    def status(self, topology: Any, node: str, port: int) -> dict[str, Any]: ...
+
+    def stop(self, topology: Any, node: str, port: int) -> None: ...

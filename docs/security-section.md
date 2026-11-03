@@ -15,6 +15,8 @@ through [#20](https://github.com/SatComProjects/Satgonetem-Gui/issues/20).
 | Confidentiality | `SecurityService` capture lifecycle, `SatGoNetemSecurityAdapter` tcpdump/base64 path, capture download route |
 | Trust / spoofing | `Hping3Request` spoof fields, traffic adapter pass-through, trust panel capture evidence |
 | Policy & QoS | `PolicyService`, `SatGoNetemPolicyAdapter`, `/api/security/policies`, policy panel in `security.html` |
+| Telemetry / detection | `TelemetryService`, `SatGoNetemTelemetryAdapter`, `/api/security/telemetry`, telemetry panel |
+| Honeypot | `HoneypotService`, `SatGoNetemHoneypotAdapter`, `/api/security/honeypots`, decoy listener controls |
 
 The five labs require a running GoNetEm network for capture, link failure, and
 traffic actions. The policy workstream adds typed firewall/QoS apply, preview,

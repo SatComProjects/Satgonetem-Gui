@@ -395,3 +395,56 @@ button:disabled {
 #policy-plan {
   min-height: 80px;
 }
+
+/* Telemetry and alerts */
+.sec-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sec-alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 0.82rem;
+}
+
+.sec-alert .severity {
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sec-alert.info .severity {
+  color: var(--accent);
+  border: 1px solid #1e4d75;
+}
+
+.sec-alert.warning .severity {
+  color: #fbbf24;
+  border: 1px solid #5a4618;
+}
+
+.sec-alert.critical .severity {
+  color: var(--bad);
+  border: 1px solid var(--bad-border);
+}
+
+.sec-alert .time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sec-alert .metric {
+  color: var(--muted);
+  font-size: 0.75rem;
+}

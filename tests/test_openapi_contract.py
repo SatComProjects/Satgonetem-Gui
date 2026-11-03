@@ -48,3 +48,11 @@ def test_post_routes_declare_request_schemas(client, path: str) -> None:
     assert "requestBody" in operation
     schema = operation["requestBody"]["content"]["application/json"]["schema"]
     assert schema
+
+
+def test_telemetry_routes_are_documented(client) -> None:
+    """Telemetry endpoints are part of the public OpenAPI contract."""
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert "/api/security/telemetry" in paths
+    assert "/api/security/telemetry/clear-alerts" in paths

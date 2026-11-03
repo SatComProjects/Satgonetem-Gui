@@ -73,5 +73,10 @@ def test_openapi_schema_contains_all_public_routes(client) -> None:
         "/api/security/policies/preview",
         "/api/security/policies/{node}",
         "/api/security/policies/{node}/clear",
+        "/api/security/telemetry",
+        "/api/security/telemetry/clear-alerts",
+        "/api/security/honeypots",
+        "/api/security/honeypots/{node}/{port}",
+        "/api/security/honeypots/{node}/{port}/stop",
     }
     assert expected.issubset(paths)

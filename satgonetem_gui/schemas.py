@@ -608,3 +608,107 @@ class PolicyListResponse(BaseModel):
 
     ok: bool = True
     nodes: list[str] = Field(default_factory=list)
+
+
+class TelemetryInterfaceMetrics(BaseModel):
+    """Cumulative and derived counters for one node interface."""
+
+    name: str
+    iname: str
+    rx_bytes: int = 0
+    tx_bytes: int = 0
+    rx_packets: int = 0
+    tx_packets: int = 0
+    rx_dropped: int = 0
+    tx_dropped: int = 0
+    rx_errors: int = 0
+    tx_errors: int = 0
+    rx_mbps: float = 0.0
+    tx_mbps: float = 0.0
+
+
+class TelemetryNodeMetrics(BaseModel):
+    """Telemetry for one satellite or ground station."""
+
+    name: str
+    type: str
+    interfaces: list[TelemetryInterfaceMetrics] = Field(default_factory=list)
+    route_count: int = 0
+    route_hash: str = ""
+    protocols: list[str] = Field(default_factory=list)
+    tcp_in_segs: int = 0
+    tcp_out_rsts: int = 0
+    tcp_retrans_segs: int = 0
+    udp_in_datagrams: int = 0
+    icmp_in_msgs: int = 0
+    error: str | None = None
+
+
+class TelemetryLinkMetrics(BaseModel):
+    """Telemetry for one topology link."""
+
+    key: str
+    src: str
+    dst: str
+    type: str
+    capacity_kbps: int = 0
+    delay_ms: int = 0
+    state: str = "unknown"
+    rx_bytes: int = 0
+    tx_bytes: int = 0
+    rx_mbps: float = 0.0
+    tx_mbps: float = 0.0
+    rx_dropped: int = 0
+    tx_dropped: int = 0
+    rx_errors: int = 0
+    tx_errors: int = 0
+    budget: dict[str, Any] | None = None
+
+
+class TelemetryAlert(BaseModel):
+    """One detection/telemetry alert."""
+
+    id: str
+    timestamp: float
+    severity: Literal["info", "warning", "critical"]
+    node: str = ""
+    metric: str = ""
+    message: str
+    value: float | None = None
+
+
+class TelemetrySnapshotResponse(BaseModel):
+    """One sampled telemetry snapshot with alerts and baselines."""
+
+    ok: bool = True
+    sampled_at: float
+    interval_seconds: float = 0.0
+    nodes: list[TelemetryNodeMetrics] = Field(default_factory=list)
+    links: list[TelemetryLinkMetrics] = Field(default_factory=list)
+    alerts: list[TelemetryAlert] = Field(default_factory=list)
+    baseline_samples: int = 0
+
+
+class HoneypotRequest(BaseModel):
+    """Start a decoy listener on one node."""
+
+    node: str = Field(min_length=1)
+    port: int = Field(default=2222, ge=1, le=65535)
+
+
+class HoneypotEvent(BaseModel):
+    """One connection observed by a honeypot."""
+
+    timestamp: float
+    peer: str = ""
+    source_port: int = 0
+
+
+class HoneypotStatus(BaseModel):
+    """Current honeypot state and recent events."""
+
+    ok: bool = True
+    node: str
+    port: int
+    running: bool = False
+    events: list[HoneypotEvent] = Field(default_factory=list)
