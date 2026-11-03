@@ -9,6 +9,12 @@ wheels/
 # Virtual environments
 .venv
 
+# Test and lint caches
+.coverage
+.coverage.*
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+
 # uv generated files
-uv.lock
 .python-version
