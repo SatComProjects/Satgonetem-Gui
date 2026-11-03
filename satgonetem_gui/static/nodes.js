@@ -1,256 +1,177 @@
-/**
- * Nodes page controller.
- *
- * Loads all nodes via /api/nodes and renders expandable lists for satellites
- * and ground stations. Clicking a node fetches detailed info via
- * /api/nodes/{name} and reveals it in place.
- */
+/** Node Explorer page controller. */
+import { api } from "./api.js";
+import { escapeHtml } from "./escape.js";
 
 const POLL_INTERVAL_MS = 5000;
+const detailCache = {};
 
-/**
- * @param {string} id
- * @returns {HTMLElement}
- */
 function el(id) {
   return document.getElementById(id);
 }
 
-/** @type {Object.<string, Object>} */
-const detailCache = {};
-
-/**
- * Show a transient message in the page header area.
- *
- * @param {string} text
- * @param {boolean} [isError]
- */
-function showMsg(text, isError) {
-  var msg = el("nodes-msg");
-  msg.textContent = text;
-  msg.style.color = isError ? "var(--bad)" : "var(--muted)";
+function showMsg(text, isError = false) {
+  const message = el("nodes-msg");
+  if (!message) return;
+  message.textContent = text;
+  message.style.color = isError ? "var(--bad)" : "var(--muted)";
 }
 
-/**
- * Build HTML for a single interface row.
- *
- * @param {Object} iface
- * @returns {string}
- */
 function buildInterfaceRow(iface) {
   return (
     "<tr>" +
-    "<td>" + escapeHtml(iface.name) + "</td>" +
-    "<td>" + escapeHtml(iface.iname) + "</td>" +
-    "<td>" + escapeHtml(iface.ipv4 || "-") + "</td>" +
-    "<td>" + escapeHtml(iface.ipv6 || "-") + "</td>" +
-    "<td>" + escapeHtml(iface.type || "-") + "</td>" +
-    "<td>" + (iface.is_active ? "Active" : "Inactive") + "</td>" +
-    "<td>" + escapeHtml(iface.peer_name || "-") + "</td>" +
+    `<td>${escapeHtml(iface.name)}</td>` +
+    `<td>${escapeHtml(iface.iname)}</td>` +
+    `<td>${escapeHtml(iface.ipv4 || "-")}</td>` +
+    `<td>${escapeHtml(iface.ipv6 || "-")}</td>` +
+    `<td>${escapeHtml(iface.type || "-")}</td>` +
+    `<td>${iface.is_active ? "Active" : "Inactive"}</td>` +
+    `<td>${escapeHtml(iface.peer_name || "-")}</td>` +
     "</tr>"
   );
 }
 
-/**
- * Escape HTML special characters.
- *
- * @param {string} text
- * @returns {string}
- */
-function escapeHtml(text) {
-  if (text == null) return "";
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/**
- * Build the detail panel HTML for a node.
- *
- * @param {Object} data
- * @returns {string}
- */
 function buildDetailPanel(data) {
-  var pos = data.position || {};
-  var html = '<div class="node-detail">';
+  const position = data.position || {};
+  const loopback = data.loopback || {};
+  let html = '<div class="node-detail">';
 
-  html += '<div class="detail-section">';
-  html += '<h4>Position</h4>';
-  html += '<dl class="detail-dl">';
-  html += '<div class="detail-row"><dt>Latitude</dt><dd>' + escapeHtml(pos.latitude) + "</dd></div>";
-  html += '<div class="detail-row"><dt>Longitude</dt><dd>' + escapeHtml(pos.longitude) + "</dd></div>";
-  html += '<div class="detail-row"><dt>Altitude</dt><dd>' + escapeHtml(pos.altitude) + "</dd></div>";
-  html += "</dl>";
-  html += "</div>";
+  html += '<div class="detail-section"><h4>Position</h4><dl class="detail-dl">';
+  for (const [label, value] of [
+    ["Latitude", position.latitude],
+    ["Longitude", position.longitude],
+    ["Altitude", position.altitude],
+  ]) {
+    html += `<div class="detail-row"><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
+  }
+  html += "</dl></div>";
 
-  html += '<div class="detail-section">';
-  html += '<h4>Loopback</h4>';
-  html += '<dl class="detail-dl">';
-  html += '<div class="detail-row"><dt>IPv4</dt><dd>' + escapeHtml(data.loopback.ipv4 || "-") + "</dd></div>";
-  html += '<div class="detail-row"><dt>IPv6</dt><dd>' + escapeHtml(data.loopback.ipv6 || "-") + "</dd></div>";
-  html += "</dl>";
-  html += "</div>";
+  html += '<div class="detail-section"><h4>Loopback</h4><dl class="detail-dl">';
+  for (const [label, value] of [
+    ["IPv4", loopback.ipv4],
+    ["IPv6", loopback.ipv6],
+  ]) {
+    html += `<div class="detail-row"><dt>${label}</dt><dd>${escapeHtml(value || "-")}</dd></div>`;
+  }
+  html += "</dl></div>";
 
   if (data.type === "satellite") {
-    html += '<div class="detail-section">';
-    html += '<h4>QoS</h4>';
-    html += '<dl class="detail-dl">';
-    html += '<div class="detail-row"><dt>Default QoS</dt><dd>' + (data.default_qos_is_on ? "On" : "Off") + "</dd></div>";
-    html += '<div class="detail-row"><dt>Program QoS</dt><dd>' + (data.program_specific_qos_is_on ? "On" : "Off") + "</dd></div>";
-    html += "</dl>";
-    html += "</div>";
+    html += '<div class="detail-section"><h4>QoS</h4><dl class="detail-dl">';
+    html += `<div class="detail-row"><dt>Default QoS</dt><dd>${data.default_qos_is_on ? "On" : "Off"}</dd></div>`;
+    html += `<div class="detail-row"><dt>Program QoS</dt><dd>${data.program_specific_qos_is_on ? "On" : "Off"}</dd></div>`;
+    html += "</dl></div>";
   }
 
   if (data.type === "ground_station" && data.city) {
-    html += '<div class="detail-section">';
-    html += '<h4>City</h4>';
-    html += '<p class="muted">' + escapeHtml(data.city) + "</p>";
-    html += "</div>";
+    html += `<div class="detail-section"><h4>City</h4><p class="muted">${escapeHtml(data.city)}</p></div>`;
   }
 
-  html += '<div class="detail-section">';
-  html += '<h4>Interfaces</h4>';
+  html += '<div class="detail-section"><h4>Interfaces</h4>';
   if (data.interfaces && data.interfaces.length) {
-    html += '<table class="iface-table"><thead><tr>';
-    html += "<th>Name</th><th>Dev</th><th>IPv4</th><th>IPv6</th><th>Type</th><th>State</th><th>Peer</th>";
-    html += "</tr></thead><tbody>";
-    for (var i = 0; i < data.interfaces.length; i++) {
-      html += buildInterfaceRow(data.interfaces[i]);
-    }
+    html +=
+      '<table class="iface-table"><thead><tr><th>Name</th><th>Dev</th><th>IPv4</th><th>IPv6</th><th>Type</th><th>State</th><th>Peer</th></tr></thead><tbody>';
+    for (const iface of data.interfaces) html += buildInterfaceRow(iface);
     html += "</tbody></table>";
   } else {
     html += '<p class="muted">No interfaces.</p>';
   }
   html += "</div>";
 
-  html += '<div class="detail-section">';
-  html += '<h4>Routing Table</h4>';
+  html += '<div class="detail-section"><h4>Routing Table</h4>';
   if (data.routing_table && data.routing_table.length) {
-    html += '<pre class="routing-pre">' + escapeHtml(data.routing_table.join("\n")) + "</pre>";
+    html += `<pre class="routing-pre">${escapeHtml(data.routing_table.join("\n"))}</pre>`;
   } else {
-    html += '<p class="muted">No routing table available (containers may not be running).</p>';
+    html +=
+      '<p class="muted">No routing table available (containers may not be running).</p>';
   }
-  html += "</div>";
-
-  html += "</div>";
+  html += "</div></div>";
   return html;
 }
 
-/**
- * Toggle the expanded state of a node row.
- *
- * @param {string} name
- */
 async function toggleNode(name) {
-  var row = el("row-" + name);
-  var detail = el("detail-" + name);
+  const row = el(`row-${name}`);
+  const detail = el(`detail-${name}`);
   if (!row || !detail) return;
 
-  var isExpanded = detail.style.display === "block";
-
-  if (!isExpanded && !detailCache[name]) {
+  const expanded = detail.style.display === "block";
+  if (!expanded && !detailCache[name]) {
     detail.innerHTML = '<div class="muted">Loading...</div>';
     detail.style.display = "block";
     row.classList.add("expanded");
     try {
-      var r = await fetch("/api/nodes/" + encodeURIComponent(name));
-      var j = await r.json().catch(function () { return {}; });
-      if (!r.ok || !j.ok) {
-        detail.innerHTML = '<div class="muted" style="color:var(--bad)">Error: ' + escapeHtml(j.error || "Unknown error") + "</div>";
-        return;
-      }
-      detailCache[name] = j.node;
-      detail.innerHTML = buildDetailPanel(j.node);
-    } catch (err) {
-      detail.innerHTML = '<div class="muted" style="color:var(--bad)">Error: ' + escapeHtml(String(err.message || err)) + "</div>";
+      const data = await api.get(`/api/nodes/${encodeURIComponent(name)}`);
+      detailCache[name] = data.node;
+      detail.innerHTML = buildDetailPanel(data.node);
+    } catch (error) {
+      detail.innerHTML = `<div class="muted" style="color:var(--bad)">Error: ${escapeHtml(error.message || error)}</div>`;
     }
     return;
   }
 
-  if (!isExpanded && detailCache[name]) {
+  if (!expanded && detailCache[name]) {
     detail.innerHTML = buildDetailPanel(detailCache[name]);
   }
-
-  detail.style.display = isExpanded ? "none" : "block";
-  row.classList.toggle("expanded", !isExpanded);
+  detail.style.display = expanded ? "none" : "block";
+  row.classList.toggle("expanded", !expanded);
 }
 
-/**
- * Build the HTML for a single node row.
- *
- * @param {Object} node
- * @returns {string}
- */
 function buildNodeRow(node) {
-  var label = node.name;
+  const name = escapeHtml(node.name);
+  let label = name;
   if (node.type === "ground_station" && node.city) {
-    label += " (" + escapeHtml(node.city) + ")";
+    label += ` (${escapeHtml(node.city)})`;
   }
   return (
-    '<div class="node-row" id="row-' + escapeHtml(node.name) + '" onclick="toggleNode(\'' + escapeHtml(node.name) + '\')">' +
+    `<div class="node-row" id="row-${name}" data-node-name="${name}">` +
     '<span class="node-chevron">&#9654;</span>' +
-    '<span class="node-label">' + label + "</span>" +
+    `<span class="node-label">${label}</span>` +
     "</div>" +
-    '<div class="node-detail-wrapper" id="detail-' + escapeHtml(node.name) + '" style="display:none;"></div>'
+    `<div class="node-detail-wrapper" id="detail-${name}" style="display:none;"></div>`
   );
 }
 
-/**
- * Sync a container's children with a list of nodes.
- * Existing rows are preserved so expanded state is not lost.
- *
- * @param {HTMLElement} container
- * @param {Array} nodes
- * @param {string} emptyMsg
- */
-function syncNodeList(container, nodes, emptyMsg) {
-  var existing = {};
-  var child = container.firstChild;
+function initNodeList(container) {
+  container.addEventListener("click", (event) => {
+    const row = event.target.closest(".node-row");
+    if (!row || !container.contains(row)) return;
+    toggleNode(row.dataset.nodeName);
+  });
+}
+
+function syncNodeList(container, nodes, emptyMessage) {
+  const existing = {};
+  let child = container.firstChild;
   while (child) {
     if (child.id && child.id.startsWith("row-")) {
       existing[child.id] = child;
-      var detail = el(child.id.replace("row-", "detail-"));
-      if (detail) {
-        existing[detail.id] = detail;
-      }
+      const detail = el(child.id.replace("row-", "detail-"));
+      if (detail) existing[detail.id] = detail;
     }
     child = child.nextSibling;
   }
 
-  var seen = {};
-  var fragment = document.createDocumentFragment();
-  for (var i = 0; i < nodes.length; i++) {
-    var name = nodes[i].name;
-    var rowId = "row-" + name;
-    var detailId = "detail-" + name;
+  const seen = {};
+  const fragment = document.createDocumentFragment();
+  for (const node of nodes) {
+    const rowId = `row-${node.name}`;
+    const detailId = `detail-${node.name}`;
     seen[rowId] = true;
     seen[detailId] = true;
     if (!existing[rowId]) {
-      var wrapper = document.createElement("div");
-      wrapper.innerHTML = buildNodeRow(nodes[i]);
-      while (wrapper.firstChild) {
-        fragment.appendChild(wrapper.firstChild);
-      }
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = buildNodeRow(node);
+      while (wrapper.firstChild) fragment.appendChild(wrapper.firstChild);
     }
   }
-  if (fragment.childNodes.length) {
-    container.appendChild(fragment);
-  }
+  if (fragment.childNodes.length) container.appendChild(fragment);
 
-  // Remove nodes that are no longer present, and any placeholder text.
   child = container.firstChild;
   while (child) {
-    var next = child.nextSibling;
-    if (!child.id || !seen[child.id]) {
-      container.removeChild(child);
-    }
+    const next = child.nextSibling;
+    if (!child.id || !seen[child.id]) container.removeChild(child);
     child = next;
   }
 
-  // Show placeholder only when truly empty.
-  var hasRows = false;
+  let hasRows = false;
   child = container.firstChild;
   while (child) {
     if (child.id && child.id.startsWith("row-")) {
@@ -261,53 +182,40 @@ function syncNodeList(container, nodes, emptyMsg) {
   }
   if (!hasRows && nodes.length === 0) {
     if (!container.querySelector(":scope > .muted")) {
-      container.innerHTML = '<div class="muted">' + emptyMsg + "</div>";
+      const empty = document.createElement("div");
+      empty.className = "muted";
+      empty.textContent = emptyMessage;
+      container.appendChild(empty);
     }
   } else {
-    var placeholder = container.querySelector(":scope > .muted");
-    if (placeholder) {
-      container.removeChild(placeholder);
-    }
+    container.querySelector(":scope > .muted")?.remove();
   }
 }
 
-/**
- * Render the full node list into the DOM.
- *
- * @param {Array} nodes
- */
 function renderNodes(nodes) {
-  var sats = [];
-  var gnds = [];
-  for (var i = 0; i < nodes.length; i++) {
-    if (nodes[i].type === "satellite") {
-      sats.push(nodes[i]);
-    } else {
-      gnds.push(nodes[i]);
-    }
+  const satellites = [];
+  const stations = [];
+  for (const node of nodes) {
+    if (node.type === "satellite") satellites.push(node);
+    else stations.push(node);
   }
-
-  syncNodeList(el("satellites-list"), sats, "No satellites.");
-  syncNodeList(el("ground-stations-list"), gnds, "No ground stations.");
+  syncNodeList(el("satellites-list"), satellites, "No satellites.");
+  syncNodeList(el("ground-stations-list"), stations, "No ground stations.");
 }
 
 async function loadNodes() {
   try {
-    var r = await fetch("/api/nodes");
-    if (!r.ok) {
-      var j = await r.json().catch(function () { return {}; });
-      showMsg(j.error || ("HTTP " + r.status), true);
-      el("satellites-list").innerHTML = "";
-      el("ground-stations-list").innerHTML = "";
-      return;
-    }
-    var nodes = await r.json();
+    const nodes = await api.get("/api/nodes");
     showMsg("");
-    renderNodes(nodes);
-  } catch (err) {
-    showMsg("Error: " + String(err.message || err), true);
+    renderNodes(Array.isArray(nodes) ? nodes : []);
+  } catch (error) {
+    showMsg(`Error: ${error.message || error}`, true);
+    el("satellites-list").replaceChildren();
+    el("ground-stations-list").replaceChildren();
   }
 }
 
+initNodeList(el("satellites-list"));
+initNodeList(el("ground-stations-list"));
 loadNodes();
 setInterval(loadNodes, POLL_INTERVAL_MS);

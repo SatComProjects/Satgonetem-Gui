@@ -18,3 +18,9 @@ htmlcov/
 
 # uv generated files
 .python-version
+# JavaScript tooling
+node_modules/
+.npm-cache/
+.playwright-browsers/
+playwright-report/
+test-results/

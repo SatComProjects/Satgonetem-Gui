@@ -19,6 +19,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Run JavaScript tests
+        run: npm run test:js
+
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.3
         with:
@@ -37,6 +49,12 @@ jobs:
 
       - name: Run tests with coverage
         run: uv run pytest --cov=satgonetem_gui --cov-report=term-missing
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser smoke tests
+        run: npm run test:e2e
 
       - name: Build wheel
         run: uv build --wheel
@@ -57,6 +75,8 @@ jobs:
               "satgonetem_gui/services/project_service.py",
               "satgonetem_gui/config.py",
               "satgonetem_gui/schemas.py",
+              "satgonetem_gui/static/api.js",
+              "satgonetem_gui/static/queue_model.js",
               "satgonetem_gui/static/base.css",
               "satgonetem_gui/templates/base.html",
           }

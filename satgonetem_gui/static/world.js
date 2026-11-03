@@ -1,4 +1,4 @@
-"use strict";
+import { api } from "./api.js";
 
 const SAT_COLOR = Cesium.Color.fromCssColorString("#3b82f6");
 const GS_CONN_COLOR = Cesium.Color.fromCssColorString("#22c55e");
@@ -370,15 +370,11 @@ function updateLinks(links) {
  */
 async function updateWorld() {
     try {
-        const [satsRes, gsRes, linksRes] = await Promise.all([
-            fetch("/api/satellites"),
-            fetch("/api/ground_stations"),
-            fetch("/api/links"),
+        const [satellites, groundStations, links] = await Promise.all([
+            api.get("/api/satellites"),
+            api.get("/api/ground_stations"),
+            api.get("/api/links"),
         ]);
-
-        const satellites = satsRes.ok ? await satsRes.json() : [];
-        const groundStations = gsRes.ok ? await gsRes.json() : [];
-        const links = linksRes.ok ? await linksRes.json() : [];
 
         if (!Array.isArray(satellites) || !Array.isArray(groundStations)) return;
         const linkArr = Array.isArray(links) ? links : [];

@@ -1,175 +1,190 @@
-(function () {
-  "use strict";
+/** Ground-station preset selection page. */
+import { api } from "./api.js";
+import {
+  buildStationMap,
+  selectedStations,
+  setPresetSelection,
+  stationKey,
+} from "./ground_stations_model.js";
 
-  var presets = [];
-  var currentStations = [];
-  var selectedKeys = new Set();
-  var customStations = [];
-  var customNextIdx = 100000;
+const presetSelect = document.getElementById("preset_select");
+const tbody = document.getElementById("station_tbody");
+const tableEmpty = document.getElementById("table_empty");
+const selectedCount = document.getElementById("selected_count");
+const checkAllBox = document.getElementById("check_all");
+const customList = document.getElementById("custom_list");
 
-  var presetSelect = document.getElementById("preset_select");
-  var tbody = document.getElementById("station_tbody");
-  var tableEmpty = document.getElementById("table_empty");
-  var selectedCount = document.getElementById("selected_count");
-  var checkAllBox = document.getElementById("check_all");
-  var customList = document.getElementById("custom_list");
+let presets = [];
+let currentStations = [];
+let currentPresetName = "";
+let selectedKeys = new Set();
+let customStations = [];
+let customNextIdx = 100000;
 
-  function updateCount() {
-    var n = selectedKeys.size + customStations.length;
-    selectedCount.textContent = n + " selected";
+tableEmpty.style.display = "";
+tableEmpty.textContent = "Loading ground-station presets...";
+
+function updateCount() {
+  selectedCount.textContent = `${selectedKeys.size + customStations.length} selected`;
+}
+
+function renderTable() {
+  tbody.replaceChildren();
+  if (currentStations.length === 0) {
+    tableEmpty.style.display = "";
+    return;
   }
+  tableEmpty.style.display = "none";
 
-  function stationKey(s) {
-    return "p_" + s.index;
-  }
+  for (const station of currentStations) {
+    const key = stationKey(currentPresetName, station.index);
+    const checked = selectedKeys.has(key);
+    const row = document.createElement("tr");
+    if (checked) row.classList.add("row-selected");
 
-  function renderTable() {
-    tbody.innerHTML = "";
-    if (currentStations.length === 0) {
-      tableEmpty.style.display = "";
-      return;
-    }
-    tableEmpty.style.display = "none";
-    currentStations.forEach(function (s) {
-      var key = stationKey(s);
-      var checked = selectedKeys.has(key);
-      var tr = document.createElement("tr");
-      if (checked) tr.classList.add("row-selected");
-
-      var tdCheck = document.createElement("td");
-      var cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.dataset.key = key;
-      cb.checked = checked;
-      cb.addEventListener("change", function () {
-        if (cb.checked) {
-          selectedKeys.add(key);
-          tr.classList.add("row-selected");
-        } else {
-          selectedKeys.delete(key);
-          tr.classList.remove("row-selected");
-        }
-        updateCount();
-      });
-      tdCheck.appendChild(cb);
-
-      tr.appendChild(tdCheck);
-      [s.index, s.name, s.latitude, s.longitude, s.elevation_km].forEach(function (val) {
-        var td = document.createElement("td");
-        td.textContent = val;
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-    updateCount();
-  }
-
-  function loadPreset(idx) {
-    currentStations = (presets[idx] && presets[idx].stations) ? presets[idx].stations : [];
-    renderTable();
-  }
-
-  presetSelect.addEventListener("change", function () {
-    loadPreset(parseInt(this.value, 10));
-  });
-
-  checkAllBox.addEventListener("change", function () {
-    currentStations.forEach(function (s) {
-      if (checkAllBox.checked) {
-        selectedKeys.add(stationKey(s));
+    const checkCell = document.createElement("td");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.key = key;
+    checkbox.checked = checked;
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        selectedKeys.add(key);
+        row.classList.add("row-selected");
       } else {
-        selectedKeys.delete(stationKey(s));
+        selectedKeys.delete(key);
+        row.classList.remove("row-selected");
       }
+      updateCount();
     });
-    renderTable();
-  });
+    checkCell.appendChild(checkbox);
+    row.appendChild(checkCell);
 
-  document.getElementById("select_all_btn").addEventListener("click", function () {
-    currentStations.forEach(function (s) { selectedKeys.add(stationKey(s)); });
-    renderTable();
-  });
-
-  document.getElementById("deselect_all_btn").addEventListener("click", function () {
-    currentStations.forEach(function (s) { selectedKeys.delete(stationKey(s)); });
-    renderTable();
-  });
-
-  function renderCustomList() {
-    customList.innerHTML = "";
-    customStations.forEach(function (s, i) {
-      var li = document.createElement("li");
-      var label = document.createElement("span");
-      label.textContent = s.name + " (" + s.latitude + ", " + s.longitude + ", " + s.elevation_km + " km)";
-      var del = document.createElement("button");
-      del.textContent = "Remove";
-      del.type = "button";
-      del.className = "button";
-      del.onclick = function () {
-        customStations.splice(i, 1);
-        renderCustomList();
-        updateCount();
-      };
-      li.appendChild(label);
-      li.appendChild(del);
-      customList.appendChild(li);
-    });
-    updateCount();
-  }
-
-  document.getElementById("add_custom_btn").addEventListener("click", function () {
-    var name = document.getElementById("c_name").value.trim();
-    var lat = parseFloat(document.getElementById("c_lat").value);
-    var lon = parseFloat(document.getElementById("c_lon").value);
-    var elev = parseFloat(document.getElementById("c_elev").value || "0");
-    if (!name || isNaN(lat) || isNaN(lon)) {
-      alert("Name, latitude, and longitude are required.");
-      return;
+    for (const value of [
+      station.index,
+      station.name,
+      station.latitude,
+      station.longitude,
+      station.elevation_km,
+    ]) {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.appendChild(cell);
     }
-    customStations.push({
-      index: customNextIdx++,
-      name: name,
-      latitude: lat,
-      longitude: lon,
-      elevation_km: isNaN(elev) ? 0 : elev,
+    tbody.appendChild(row);
+  }
+  updateCount();
+}
+
+function loadPreset(index) {
+  const preset = presets[index];
+  currentStations = preset && Array.isArray(preset.stations) ? preset.stations : [];
+  currentPresetName = preset ? preset.name : "";
+  renderTable();
+}
+
+presetSelect.addEventListener("change", () => {
+  loadPreset(parseInt(presetSelect.value, 10));
+});
+
+checkAllBox.addEventListener("change", () => {
+  selectedKeys = setPresetSelection(
+    selectedKeys,
+    currentPresetName,
+    currentStations,
+    checkAllBox.checked,
+  );
+  renderTable();
+});
+
+document.getElementById("select_all_btn").addEventListener("click", () => {
+  selectedKeys = setPresetSelection(
+    selectedKeys,
+    currentPresetName,
+    currentStations,
+    true,
+  );
+  renderTable();
+});
+
+document.getElementById("deselect_all_btn").addEventListener("click", () => {
+  selectedKeys = setPresetSelection(
+    selectedKeys,
+    currentPresetName,
+    currentStations,
+    false,
+  );
+  renderTable();
+});
+
+function renderCustomList() {
+  customList.replaceChildren();
+  for (const [index, station] of customStations.entries()) {
+    const item = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = `${station.name} (${station.latitude}, ${station.longitude}, ${station.elevation_km} km)`;
+    const remove = document.createElement("button");
+    remove.textContent = "Remove";
+    remove.type = "button";
+    remove.className = "button";
+    remove.addEventListener("click", () => {
+      customStations.splice(index, 1);
+      renderCustomList();
+      updateCount();
     });
-    document.getElementById("c_name").value = "";
-    document.getElementById("c_lat").value = "";
-    document.getElementById("c_lon").value = "";
-    document.getElementById("c_elev").value = "0.0";
-    renderCustomList();
+    item.appendChild(label);
+    item.appendChild(remove);
+    customList.appendChild(item);
+  }
+  updateCount();
+}
+
+document.getElementById("add_custom_btn").addEventListener("click", () => {
+  const name = document.getElementById("c_name").value.trim();
+  const latitude = parseFloat(document.getElementById("c_lat").value);
+  const longitude = parseFloat(document.getElementById("c_lon").value);
+  const elevation = parseFloat(document.getElementById("c_elev").value || "0");
+  if (!name || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+    alert("Name, latitude, and longitude are required.");
+    return;
+  }
+  customStations.push({
+    index: customNextIdx,
+    name,
+    latitude,
+    longitude,
+    elevation_km: Number.isNaN(elevation) ? 0 : elevation,
   });
+  customNextIdx += 1;
+  document.getElementById("c_name").value = "";
+  document.getElementById("c_lat").value = "";
+  document.getElementById("c_lon").value = "";
+  document.getElementById("c_elev").value = "0.0";
+  renderCustomList();
+});
 
-  document.getElementById("apply_btn").addEventListener("click", function () {
-    var stationMap = {};
-    presets.forEach(function (preset) {
-      preset.stations.forEach(function (s) {
-        stationMap[stationKey(s)] = s;
-      });
-    });
+document.getElementById("apply_btn").addEventListener("click", () => {
+  const stationMap = buildStationMap(presets);
+  const result = selectedStations(selectedKeys, stationMap).concat(customStations);
+  sessionStorage.setItem("satgonetem_gs_pending", JSON.stringify(result));
+  window.location.href = "/new_project";
+});
 
-    var result = [];
-    selectedKeys.forEach(function (key) {
-      if (stationMap[key]) result.push(stationMap[key]);
-    });
-    customStations.forEach(function (s) { result.push(s); });
+async function loadPresets() {
+  try {
+    presets = await api.get("/api/ground_stations/presets");
+    if (!Array.isArray(presets)) presets = [];
+    for (const [index, preset] of presets.entries()) {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = preset.name;
+      presetSelect.appendChild(option);
+    }
+    if (presets.length > 0) loadPreset(0);
+  } catch (error) {
+    tableEmpty.style.display = "";
+    tableEmpty.textContent = error.message || "Failed to load presets.";
+  }
+}
 
-    sessionStorage.setItem("satgonetem_gs_pending", JSON.stringify(result));
-    window.location.href = "/new_project";
-  });
-
-  fetch("/api/ground_stations/presets")
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      presets = data;
-      data.forEach(function (p, i) {
-        var opt = document.createElement("option");
-        opt.value = i;
-        opt.textContent = p.name;
-        presetSelect.appendChild(opt);
-      });
-      if (data.length > 0) loadPreset(0);
-    })
-    .catch(function (err) {
-      console.error("Failed to load ground station presets:", err);
-    });
-})();
+loadPresets();
