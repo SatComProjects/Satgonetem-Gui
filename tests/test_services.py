@@ -6,7 +6,7 @@ import pytest
 
 from satgonetem_gui.errors import APIError
 from satgonetem_gui.schemas import Iperf3Request, PingRequest
-from satgonetem_gui.services.ports import TrafficPoll
+from satgonetem_gui.services.ports import NetworkOperationError, TrafficPoll
 from satgonetem_gui.services.routing_service import RoutingService
 from satgonetem_gui.services.topology_service import TopologyService
 from satgonetem_gui.services.traffic_service import (
@@ -52,17 +52,34 @@ class FakeReader:
 class FakeController:
     """Minimal routing controller for service tests."""
 
+    def __init__(self, fail_init: bool = False) -> None:
+        self.calls = []
+        self.fail_init = fail_init
+
     def routing_status(self, topology):
         return {
             "ok": True,
-            "gonetem_is_on": False,
-            "addressing_applied": False,
-            "routing_initiated": False,
+            "gonetem_is_on": True,
+            "routing_initiated": "init_routing" in self.calls,
             "routing_method": "static",
         }
 
-    def apply_routing(self, topology, method):
-        raise AssertionError("should not run while GoNetEm is stopped")
+    def apply_addressing(self, topology):
+        self.calls.append("apply_addressing")
+
+    def init_routing(self, topology, method):
+        self.calls.append("init_routing")
+        if self.fail_init:
+            raise NetworkOperationError("routing failed")
+
+    def delete_routing(self, topology):
+        self.calls.append("delete_routing")
+
+    def start_gonetem(self, topology):
+        self.calls.append("start_gonetem")
+
+    def stop_gonetem(self, topology):
+        self.calls.append("stop_gonetem")
 
 
 class FakeTraffic:
@@ -293,3 +310,136 @@ def test_strategy_registry_covers_all_tools() -> None:
     assert service.strategies["iperf3"].request_type is Iperf3Request
     assert service.strategies["ping"].request_type is PingRequest
     assert service.strategies["hping3"].request_type is Hping3Request
+
+
+def test_routing_apply_delete_and_stop_track_addressing() -> None:
+    """Addressing is set only after apply and cleared by delete/stop."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    controller = FakeController()
+    service = RoutingService(topology, controller)
+
+    asyncio.run(service.apply("static"))
+    assert topology.addressing_applied is True
+    assert service.status()["addressing_applied"] is True
+    assert controller.calls == ["apply_addressing", "init_routing"]
+
+    asyncio.run(service.delete())
+    assert topology.addressing_applied is False
+    assert service.status()["addressing_applied"] is False
+
+    topology.set_addressing_applied(True)
+    asyncio.run(service.stop_gonetem())
+    assert topology.addressing_applied is False
+
+
+def test_routing_status_does_not_use_gonetem_as_addressing() -> None:
+    """A running container network does not imply addressing was applied."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    service = RoutingService(topology, FakeController())
+
+    assert service.status()["gonetem_is_on"] is True
+    assert service.status()["addressing_applied"] is False
+
+
+def test_routing_init_failure_keeps_addressing_state_truthful() -> None:
+    """Addressing can succeed before routing initialization fails."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    service = RoutingService(topology, FakeController(fail_init=True))
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.apply("static"))
+
+    assert error.value.status_code == 500
+    assert topology.addressing_applied is True
+
+
+def test_status_stays_loaded_after_containers_stop() -> None:
+    """Project availability is independent of container status."""
+    session = _loaded_session()
+
+    class StoppedReader(FakeReader):
+        def status(self, topology):
+            data = super().status(topology)
+            data["constellation_loaded"] = False
+            return data
+
+    service = TopologyService(session, StoppedReader())
+
+    assert service.status()["constellation_loaded"] is True
+
+
+class FailingController(FakeController):
+    """Controller with configurable operation failures."""
+
+    def __init__(self, failure: str) -> None:
+        super().__init__()
+        self.failure = failure
+
+    def apply_addressing(self, topology):
+        if self.failure == "addressing":
+            raise NetworkOperationError("addressing failed")
+        super().apply_addressing(topology)
+
+    def delete_routing(self, topology):
+        if self.failure == "delete":
+            raise NetworkOperationError("delete failed")
+        super().delete_routing(topology)
+
+    def start_gonetem(self, topology):
+        if self.failure == "start":
+            raise NetworkOperationError("start failed")
+        super().start_gonetem(topology)
+
+    def stop_gonetem(self, topology):
+        if self.failure == "stop":
+            raise NetworkOperationError("stop failed")
+        super().stop_gonetem(topology)
+
+
+def test_routing_addressing_failure_maps_500() -> None:
+    """A failed addressing step is reported without marking addressing applied."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    service = RoutingService(topology, FailingController("addressing"))
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.apply("static"))
+
+    assert error.value.status_code == 500
+    assert topology.addressing_applied is False
+
+
+def test_routing_delete_failure_maps_500() -> None:
+    """A failed delete is reported and leaves address state unchanged."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology.set_addressing_applied(True)
+    service = RoutingService(topology, FailingController("delete"))
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.delete())
+
+    assert error.value.status_code == 500
+    assert topology.addressing_applied is True
+
+
+def test_routing_start_failure_maps_500() -> None:
+    """A failed container start is reported."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    service = RoutingService(topology, FailingController("start"))
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.start_gonetem())
+
+    assert error.value.status_code == 500
+
+
+def test_routing_stop_failure_keeps_addressing() -> None:
+    """A failed stop is reported and does not clear address state."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology.set_addressing_applied(True)
+    service = RoutingService(topology, FailingController("stop"))
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.stop_gonetem())
+
+    assert error.value.status_code == 500
+    assert topology.addressing_applied is True

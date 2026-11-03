@@ -1,13 +1,14 @@
 # Architecture and test baseline
 
-Status: Phase 4 complete. The refactor is tracked in
+Status: Phase 5 complete. The refactor is tracked in
 [issue #1](https://github.com/SatComProjects/Satgonetem-Gui/issues/1);
 completed phases are
 [#2](https://github.com/SatComProjects/Satgonetem-Gui/issues/2),
 [#3](https://github.com/SatComProjects/Satgonetem-Gui/issues/3),
 [#4](https://github.com/SatComProjects/Satgonetem-Gui/issues/4),
-[#5](https://github.com/SatComProjects/Satgonetem-Gui/issues/5), and
-[#6](https://github.com/SatComProjects/Satgonetem-Gui/issues/6).
+[#5](https://github.com/SatComProjects/Satgonetem-Gui/issues/5),
+[#6](https://github.com/SatComProjects/Satgonetem-Gui/issues/6), and
+[#7](https://github.com/SatComProjects/Satgonetem-Gui/issues/7).
 
 ## Current shape
 
@@ -103,6 +104,22 @@ not import those dependency internals.
 - Added tests for strategy registration, terminal transitions, TTL cleanup,
   capacity eviction, cancel success/failure, and API cancel behavior.
 
+## Phase 5 changes
+
+- Added explicit `addressing_applied` state to the project session. It resets
+  when a new project is installed and is cleared by routing delete and
+  container stop.
+- Split the network controller into addressing, routing-init, delete, start,
+  stop, and status operations.
+- Negative dependency return codes now raise `NetworkOperationError` in the
+  topology adapter; routing service maps them to API 500 responses.
+- Routing status no longer equates `addressing_applied` with container state.
+- Removed the `set_status(True)` workaround after container stop. The dashboard
+  reports `constellation_loaded` from the project session, not the container
+  status.
+- Added fake-controller failure tests and an opt-in real-container contract test
+  (`SATGONETEM_RUN_CONTAINER_TESTS=1`).
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -118,6 +135,8 @@ not import those dependency internals.
 - Docker-backed routing and traffic happy paths are not part of the default
   suite. The fake traffic gateway exercises start/status/cancel without
   containers.
+- The real-container routing contract test is marked `slow` and skipped unless
+  `SATGONETEM_RUN_CONTAINER_TESTS=1`.
 
 ## Current measurements
 
@@ -127,23 +146,23 @@ Measured on 2026-11-03 with Python 3.15.0, pytest 9.2.0, and coverage 7.17.1:
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **131 passed** in about 1.7 s.
+Result: **146 passed, 1 skipped** in about 1.8 s.
 
 | Module | Statements | Coverage |
 |---|---:|---:|
-| `adapters/satgonetem_topology.py` | 154 | 86% |
+| `adapters/satgonetem_topology.py` | 166 | 88% |
 | `adapters/satgonetem_traffic.py` | 76 | 76% |
 | `services/project_service.py` | 73 | 86% |
-| `services/routing_service.py` | 45 | 68% |
+| `services/routing_service.py` | 63 | 82% |
 | `services/topology_service.py` | 37 | 98% |
 | `services/traffic_service.py` | 155 | 88% |
-| `state.py` | 117 | 95% |
+| `state.py` | 123 | 95% |
 | `schemas.py` | 120 | 98% |
 | `storage.py` | 29 | 95% |
-| **Total** | **1149** | **89%** |
+| **Total** | **1193** | **90%** |
 
-Branch coverage is enabled. No coverage threshold is enforced yet. Phase 5
-will cover routing/GoNetEm failure mapping and container lifecycle semantics.
+Branch coverage is enabled. No coverage threshold is enforced yet. Phase 6
+will cover the frontend queue, escaping, and browser smoke tests.
 
 ## Tooling decisions
 
@@ -164,5 +183,6 @@ will cover routing/GoNetEm failure mapping and container lifecycle semantics.
 
 ## Next phase
 
-Phase 5 maps routing/GoNetEm return codes to API errors and separates
-"project loaded" from "containers running". See issue #1 for the full plan.
+Phase 6 converts the frontend JavaScript to testable modules, fixes queue and
+escaping bugs, and adds browser-level smoke coverage. See issue #1 for the full
+plan.
