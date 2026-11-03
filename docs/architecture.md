@@ -1,15 +1,16 @@
 # Architecture and test baseline
 
-Status: Phase 6 complete. The refactor is tracked in
-[issue #1](https://github.com/SatComProjects/Satgonetem-Gui/issues/1);
-completed phases are
+Status: Phase 7 complete; the refactor is done. The tracking issue is
+[#1](https://github.com/SatComProjects/Satgonetem-Gui/issues/1) and the
+completed phase issues are
 [#2](https://github.com/SatComProjects/Satgonetem-Gui/issues/2),
 [#3](https://github.com/SatComProjects/Satgonetem-Gui/issues/3),
 [#4](https://github.com/SatComProjects/Satgonetem-Gui/issues/4),
 [#5](https://github.com/SatComProjects/Satgonetem-Gui/issues/5),
 [#6](https://github.com/SatComProjects/Satgonetem-Gui/issues/6),
-[#7](https://github.com/SatComProjects/Satgonetem-Gui/issues/7), and
-[#8](https://github.com/SatComProjects/Satgonetem-Gui/issues/8).
+[#7](https://github.com/SatComProjects/Satgonetem-Gui/issues/7),
+[#8](https://github.com/SatComProjects/Satgonetem-Gui/issues/8), and
+[#9](https://github.com/SatComProjects/Satgonetem-Gui/issues/9).
 
 ## Current shape
 
@@ -42,6 +43,8 @@ and adapter graph for each app.
 - `storage.py` - path resolution and save-root containment.
 - `ground_stations.py` - CSV parsing and safe temporary output.
 - `serializers.py` - traffic result shaping.
+- `resources.py` - `importlib.resources` access to bundled presets/config.
+- `data/` - packaged ground-station presets and sample GoNetem config.
 
 ## Dependency rules
 
@@ -138,6 +141,17 @@ not import those dependency internals.
 - World View remains a manual WebGL check; the smoke test only verifies the
   page shell.
 
+## Phase 7 changes
+
+- Moved ground-station presets and the sample GoNetEm config into
+  `satgonetem_gui/data/`, included through package data, and loaded presets
+  through `importlib.resources`.
+- Removed the generated `requirements.txt`; `pyproject.toml` plus `uv.lock`
+  are the only dependency manifests.
+- Removed committed `.idea/` files and ignored the directory.
+- Added an installed-wheel smoke test in CI and a package-data unit test.
+- Added an 85% coverage gate and completed the documentation/security notes.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -155,6 +169,8 @@ not import those dependency internals.
   containers.
 - The real-container routing contract test is marked `slow` and skipped unless
   `SATGONETEM_RUN_CONTAINER_TESTS=1`.
+- Package-data tests verify bundled presets/config, and CI installs the built
+  wheel into a clean target before importing the app.
 - Vitest covers the pure queue, ground-station selection, traffic payload, API
   wrapper, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
@@ -169,7 +185,7 @@ Measured on 2026-11-03 with Python 3.15.0, pytest 9.2.0, and coverage 7.17.1:
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **146 passed, 1 skipped** in about 1.8 s. Frontend: **14 Vitest tests**, **9 Playwright smoke tests**.
+Result: **148 passed, 1 skipped** in about 1.8 s. Frontend: **14 Vitest tests**, **9 Playwright smoke tests**.
 
 | Module | Statements | Coverage |
 |---|---:|---:|
@@ -182,31 +198,23 @@ Result: **146 passed, 1 skipped** in about 1.8 s. Frontend: **14 Vitest tests**,
 | `state.py` | 123 | 95% |
 | `schemas.py` | 120 | 98% |
 | `storage.py` | 29 | 95% |
-| **Total** | **1193** | **90%** |
+| **Total** | **1201** | **90%** |
 
-Branch coverage is enabled. No coverage threshold is enforced yet. Phase 7
-covers packaging, resources, and documentation cleanup.
+Branch coverage is enabled with an 85% minimum; the current suite is at 90%.
 
 ## Tooling decisions
 
 - `uv.lock` is the source of truth and is committed.
-- `requirements.txt` is generated from the lock for pip users. Regenerate it
-  with:
-
-  ```bash
-  uv export --no-hashes --no-emit-project --format requirements-txt
-  ```
-
-  Keep the two-line warning header at the top of the file.
+- Runtime data is packaged under `satgonetem_gui/data/` and loaded through
+  `importlib.resources`; the wheel test verifies it is present.
 - Ruff checks `E9`, `F`, and `I` across the repository. Formatting is checked
   for the test suite; production files are formatted as they are touched.
 - CI runs on pushes and pull requests to `main` and `develop`, installs Python
-  and npm dependencies, runs Python/Vitest/Playwright tests, and verifies that
-  the wheel contains the application modules, templates, and static assets.
+  and npm dependencies, runs Python/Vitest/Playwright tests, and verifies the
+  wheel contains application modules, data, templates, and static assets.
 - `node_modules/`, `.npm-cache/`, and Playwright browser/artifacts are ignored.
 
-## Next phase
+## Status
 
-Phase 7 moves bundled resources into the package, fixes installed-package
-resource discovery, and cleans up documentation and repository debt. See
-issue #1 for the full plan.
+The refactor is complete. Tracking issue #1 is closed after the Phase 7 merge;
+future work should use new scoped issues.

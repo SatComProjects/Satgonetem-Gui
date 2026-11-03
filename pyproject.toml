@@ -30,7 +30,7 @@ dev = [
 include = ["satgonetem_gui*"]
 
 [tool.setuptools.package-data]
-satgonetem_gui = ["static/**/*", "templates/**/*"]
+satgonetem_gui = ["static/**/*", "templates/**/*", "data/**/*"]
 
 [tool.uv.sources]
 satgonetem = { git = "https://github.com/satcomprojects/satgonetem" }
@@ -50,6 +50,7 @@ source = ["satgonetem_gui"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+fail_under = 85
 
 [tool.ruff]
 target-version = "py310"

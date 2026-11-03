@@ -22,6 +22,7 @@ from satgonetem.utils.satcom_fix import apply_satcom_fix
 
 from ..config import Settings
 from ..ground_stations import parse_ground_station_file, write_stations_to_temp
+from ..resources import GROUND_STATIONS_DIR
 from ..schemas import ProjectCreateRequest
 from ..services.ports import NetworkOperationError
 from ..state import ProjectResult
@@ -31,8 +32,7 @@ apply_satcom_fix()
 
 logger = logging.getLogger(__name__)
 
-PACKAGE_DIR = Path(__file__).resolve().parent.parent
-DATA_SEARCH_DIR = PACKAGE_DIR.parent / "satgonetem"
+DATA_SEARCH_DIR = GROUND_STATIONS_DIR
 
 
 class SatGoNetemTopologyAdapter:

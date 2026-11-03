@@ -75,6 +75,8 @@ jobs:
               "satgonetem_gui/services/project_service.py",
               "satgonetem_gui/config.py",
               "satgonetem_gui/schemas.py",
+              "satgonetem_gui/data/ground_stations/representative.txt",
+              "satgonetem_gui/data/gonetem_config/config.yaml",
               "satgonetem_gui/static/api.js",
               "satgonetem_gui/static/queue_model.js",
               "satgonetem_gui/static/base.css",
@@ -84,4 +86,23 @@ jobs:
           if missing:
               raise SystemExit(f"wheel is missing: {sorted(missing)}")
           print(f"wheel OK: {wheel}")
+          PY
+
+      - name: Smoke-test installed wheel
+        run: |
+          rm -rf /tmp/sgnt-wheel /tmp/sgnt-wheel-mpl
+          uv pip install --no-deps --target /tmp/sgnt-wheel dist/*.whl
+          cd /tmp
+          MPLCONFIGDIR=/tmp/sgnt-wheel-mpl PYTHONPATH=/tmp/sgnt-wheel "$GITHUB_WORKSPACE/.venv/bin/python" - <<'PY'
+          from pathlib import Path
+
+          from satgonetem_gui.app import create_app
+          from satgonetem_gui.config import Settings
+          from satgonetem_gui.resources import GROUND_STATIONS_DIR
+
+          assert str(GROUND_STATIONS_DIR).startswith("/tmp/sgnt-wheel/")
+          assert (GROUND_STATIONS_DIR / "representative.txt").is_file()
+          app = create_app(settings=Settings("127.0.0.1", 8000, Path("/tmp")))
+          assert app is not None
+          print("installed wheel OK")
           PY
