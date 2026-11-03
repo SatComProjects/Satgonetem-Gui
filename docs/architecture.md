@@ -150,6 +150,7 @@ not import those dependency internals.
   are the only dependency manifests.
 - Removed committed `.idea/` files and ignored the directory.
 - Added an installed-wheel smoke test in CI and a package-data unit test.
+- Added a WebGL-unavailable fallback for World View, covered by Playwright.
 - Added an 85% coverage gate and completed the documentation/security notes.
 
 ## Test strategy
@@ -175,7 +176,8 @@ not import those dependency internals.
   wrapper, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
-  node expansion, and dashboard counts. World View WebGL rendering is excluded.
+  node expansion, dashboard counts, and the WebGL fallback. World View WebGL
+  rendering itself remains a manual desktop check.
 
 ## Current measurements
 
@@ -185,7 +187,7 @@ Measured on 2026-11-03 with Python 3.15.0, pytest 9.2.0, and coverage 7.17.1:
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **148 passed, 1 skipped** in about 1.8 s. Frontend: **14 Vitest tests**, **9 Playwright smoke tests**.
+Result: **148 passed, 1 skipped** in about 1.8 s. Frontend: **14 Vitest tests**, **10 Playwright smoke tests**.
 
 | Module | Statements | Coverage |
 |---|---:|---:|
