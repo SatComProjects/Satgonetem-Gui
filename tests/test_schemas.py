@@ -56,6 +56,16 @@ def test_documented_traffic_defaults_validate() -> None:
     assert hping.flags == []
 
 
+def test_hping_interval_requires_a_value_after_the_unit() -> None:
+    """A bare microsecond marker is rejected; empty, digits, and u<digits> pass."""
+    assert Hping3Request(src="a", dst="b", interval="").interval == ""
+    assert Hping3Request(src="a", dst="b", interval="1000").interval == "1000"
+    assert Hping3Request(src="a", dst="b", interval="u1000").interval == "u1000"
+
+    with pytest.raises(ValidationError):
+        Hping3Request(src="a", dst="b", interval="u")
+
+
 def test_project_load_content_is_bounded() -> None:
     """Uploaded project JSON cannot allocate an unbounded request body."""
     from satgonetem_gui.schemas import ProjectLoadRequest

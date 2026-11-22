@@ -325,5 +325,5 @@ class Hping3Request(BaseModel):
     count: int = Field(default=100, ge=1)
     size: int = Field(default=0, ge=0, le=65500)
     rate_type: Literal["interval", "fast", "faster"] = "interval"
-    interval: str = Field(default="", pattern=r"^u?\d*$")
+    interval: str = Field(default="", pattern=r"^(?:u?\d+)?$")
     flags: list[str] = Field(default_factory=list, max_length=6)
