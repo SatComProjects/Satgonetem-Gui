@@ -209,15 +209,16 @@ Branch coverage is enabled with an 85% minimum; the current suite is at 90%.
 - `uv.lock` is the source of truth and is committed.
 - Runtime data is packaged under `satgonetem_gui/data/` and loaded through
   `importlib.resources`; the wheel test verifies it is present.
-- SatGoNetEm is pinned to the `v0.2.0` Git tag (commit `1f1a229`). The 0.2.0
-  diff only removes unused P4/shared-memory modules and MAC-address caching;
-  the GUI adapter surface is unchanged, and the 10x10 adapter contract tests
-  pass against the tag.
+- SatGoNetEm is pinned to the `v0.3.1` Git tag (commit `55d4da5`). The runtime
+  dependency is a PEP 508 direct URL, so built wheel metadata carries the pin
+  instead of a floating version range; `[tool.uv.sources]` pins the same tag
+  for `uv` resolution. The 10x10 adapter contract tests pass against the tag.
 - Ruff checks `E9`, `F`, and `I` across the repository. Formatting is checked
   for the test suite; production files are formatted as they are touched.
 - CI runs on pushes and pull requests to `main` and `develop`, installs Python
   and npm dependencies, runs Python/Vitest/Playwright tests, and verifies the
-  wheel contains application modules, data, templates, and static assets.
+  wheel contains application modules, data, templates, and static assets and
+  that its metadata pins the SatGoNetEm `v0.3.1` direct URL.
 - `node_modules/`, `.npm-cache/`, and Playwright browser/artifacts are ignored.
 
 ## Status

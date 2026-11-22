@@ -59,6 +59,35 @@ jobs:
       - name: Build wheel
         run: uv build --wheel
 
+      - name: Verify wheel dependency pin
+        run: |
+          python - <<'PY'
+          import email.parser
+          import glob
+          import zipfile
+
+          wheel = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(wheel) as archive:
+              metadata_path = next(
+                  name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+              )
+              metadata = email.parser.Parser().parsestr(
+                  archive.read(metadata_path).decode("utf-8")
+              )
+
+          requirements = metadata.get_all("Requires-Dist", [])
+          expected_url = "git+https://github.com/satcomprojects/satgonetem@v0.3.1"
+          pins = [req for req in requirements if req.startswith("satgonetem @ ")]
+          if len(pins) != 1 or expected_url not in pins[0]:
+              raise SystemExit(
+                  "wheel METADATA is missing the SatGoNetEm direct URL pin "
+                  f"{expected_url}: {requirements}"
+              )
+          if any(req.startswith(("satgonetem>=", "satgonetem==", "satgonetem~=")) for req in requirements):
+              raise SystemExit(f"wheel METADATA has a floating SatGoNetEm range: {requirements}")
+          print(f"wheel dependency pin OK: {pins[0]}")
+          PY
+
       - name: Verify wheel contents
         run: |
           python - <<'PY'
