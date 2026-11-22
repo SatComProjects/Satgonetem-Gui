@@ -46,6 +46,9 @@ class TrafficJob:
     updated_at: float = field(default_factory=time.time)
     clock: Callable[[], float] = field(default=time.time, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    _terminal: threading.Event = field(
+        default_factory=threading.Event, repr=False, compare=False
+    )
 
     @property
     def lock(self) -> threading.RLock:
@@ -54,9 +57,8 @@ class TrafficJob:
 
     @property
     def terminal(self) -> bool:
-        """Return True once the job reached a terminal state."""
-        with self._lock:
-            return self.status in TERMINAL_STATUSES
+        """Return True once the job reached a terminal state without blocking."""
+        return self._terminal.is_set()
 
     def transition(
         self,
@@ -67,7 +69,7 @@ class TrafficJob:
     ) -> bool:
         """Move a running job to a terminal state; terminal jobs are immutable."""
         with self._lock:
-            if self.status in TERMINAL_STATUSES:
+            if self._terminal.is_set():
                 return False
             self.status = status
             if results is not None:
@@ -75,6 +77,7 @@ class TrafficJob:
             if error is not None:
                 self.error = error
             self.updated_at = self.clock()
+            self._terminal.set()
             return True
 
     def snapshot(self) -> dict[str, Any]:

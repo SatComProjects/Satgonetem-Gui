@@ -317,6 +317,26 @@ def test_job_terminal_transitions_are_immutable() -> None:
     assert job.snapshot() == {"status": "done", "results": {"ok": True}}
 
 
+def test_registry_prune_does_not_wait_for_a_job_lock() -> None:
+    """A slow status/cancel call must not stall unrelated registry work."""
+    registry = JobRegistry()
+    job = registry.create("ping", object(), "a", "b")
+    job.lock.acquire()
+    completed = threading.Event()
+
+    def prune() -> None:
+        registry.prune()
+        completed.set()
+
+    thread = threading.Thread(target=prune)
+    try:
+        thread.start()
+        assert completed.wait(1.0)
+    finally:
+        job.lock.release()
+        thread.join(timeout=2)
+
+
 def test_registry_enforces_max_jobs() -> None:
     """The registry rejects a new job when all slots belong to running jobs."""
     registry = JobRegistry(max_jobs=1)
