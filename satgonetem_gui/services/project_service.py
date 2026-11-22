@@ -12,7 +12,7 @@ from ..ground_stations import parse_ground_station_file
 from ..project_documents import validate_project_create_payload
 from ..schemas import ProjectCreateRequest
 from ..state import RuntimeState
-from ..storage import SavePathError, resolve_save_path
+from ..storage import SavePathError, resolve_save_path, safe_project_filename
 from .ports import ProjectGateway
 
 logger = logging.getLogger(__name__)
@@ -158,5 +158,7 @@ class ProjectService:
             logger.exception("Project save failed.")
             raise APIError(500, "Project save failed.") from exc
 
-        name = (project_name or "project").replace(" ", "_")
-        return {"content": content, "filename": f"{name}.json"}
+        return {
+            "content": content,
+            "filename": f"{safe_project_filename(project_name or 'project')}.json",
+        }

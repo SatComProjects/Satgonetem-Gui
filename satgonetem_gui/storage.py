@@ -85,10 +85,10 @@ def _is_within(path: Path, root: Path) -> bool:
 def safe_project_filename(project_name: str) -> str:
     """Convert a project name into a collision-resistant safe path component."""
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", project_name).strip("._-")
+    digest = hashlib.sha256(project_name.encode("utf-8")).hexdigest()[:8]
     if not cleaned:
-        return "project"
-    if cleaned != project_name:
-        digest = hashlib.sha256(project_name.encode("utf-8")).hexdigest()[:8]
+        return f"project-{digest}"
+    if cleaned != project_name or re.search(r"-[0-9a-f]{8}$", cleaned):
         cleaned = f"{cleaned}-{digest}"
     return cleaned
 

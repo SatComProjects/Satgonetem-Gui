@@ -58,6 +58,22 @@ def test_resolve_data_file_requires_a_regular_file(tmp_path: Path) -> None:
         resolve_data_file("missing.txt", search)
 
 
+def test_safe_project_filename_keeps_distinct_names_distinct() -> None:
+    """Names that sanitize to the same text still produce different files."""
+    names = ["東京", "***", "!!!", "___", "My Project", "my project"]
+    filenames = [safe_project_filename(name) for name in names]
+
+    assert len(set(filenames)) == len(names)
+    assert all(filenames)
+
+
+def test_safe_project_filename_does_not_reuse_a_generated_name() -> None:
+    """A literal name matching another name's generated filename is hashed."""
+    generated = safe_project_filename("My Project")
+
+    assert safe_project_filename(generated) != generated
+
+
 def test_resolve_save_path_accepts_a_file_inside_the_root(tmp_path: Path) -> None:
     """A save file under the configured root is allowed."""
     root = tmp_path / "projects"
