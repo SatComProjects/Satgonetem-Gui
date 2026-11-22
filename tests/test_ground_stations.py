@@ -8,6 +8,7 @@ import pytest
 from satgonetem_gui.ground_stations import (
     parse_ground_station_file,
     stable_ground_stations_dir,
+    validate_ground_station_text,
     validate_inline_stations,
     write_stations_to_temp,
 )
@@ -141,3 +142,18 @@ def test_stable_ground_stations_dir_lives_under_save_root(tmp_path: Path) -> Non
     save_root = tmp_path / "projects"
 
     assert stable_ground_stations_dir(save_root) == (save_root / ".satgonetem" / "ground_stations")
+
+
+@pytest.mark.parametrize(
+    ("row", "message"),
+    [
+        ("0,Berlin,91,13.4,0", "latitude"),
+        ("0,Berlin,52,181,0", "longitude"),
+        ("0,Berlin,52,13.4,-1001", "elevation"),
+        ("0,Berlin,nan,13.4,0", "finite"),
+    ],
+)
+def test_embedded_ground_text_rejects_out_of_range_rows(row: str, message: str) -> None:
+    """Uploaded embedded files are held to the same bounds as inline stations."""
+    with pytest.raises(ValueError, match=message):
+        validate_ground_station_text(row)

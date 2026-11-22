@@ -30,11 +30,11 @@ class Position(BaseModel):
 class GroundStationPoint(BaseModel):
     """One row from a ground-station CSV file."""
 
-    index: int
-    name: str
-    latitude: float
-    longitude: float
-    elevation_m: float
+    index: int = Field(ge=0)
+    name: str = Field(min_length=1)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    elevation_m: float = Field(ge=-1000, le=100_000)
 
 
 class GroundStationPreset(BaseModel):

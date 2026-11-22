@@ -42,6 +42,25 @@ def parse_ground_station_file(path: Path) -> list[dict[str, Any]]:
     return stations
 
 
+def _validate_station_values(
+    index: int,
+    latitude: float,
+    longitude: float,
+    elevation_m: float,
+) -> None:
+    """Enforce the finite and geographic bounds shared by both input paths."""
+    if not all(math.isfinite(value) for value in (latitude, longitude, elevation_m)):
+        raise ValueError("Ground station coordinates must be finite.")
+    if index < 0:
+        raise ValueError("Ground station index must be non-negative.")
+    if not -90.0 <= latitude <= 90.0:
+        raise ValueError("Ground station latitude must be between -90 and 90.")
+    if not -180.0 <= longitude <= 180.0:
+        raise ValueError("Ground station longitude must be between -180 and 180.")
+    if elevation_m < -1000.0:
+        raise ValueError("Ground station elevation must be at least -1000 metres.")
+
+
 def validate_inline_stations(stations: object) -> list[dict[str, Any]]:
     """Validate inline station dictionaries before writing a core-readable file.
 
@@ -90,21 +109,7 @@ def validate_inline_stations(stations: object) -> list[dict[str, Any]]:
             raise ValueError(
                 "Ground station index and coordinates must be numeric."
             ) from exc
-        if not all(
-            math.isfinite(value)
-            for value in (latitude, longitude, elevation_m)
-        ):
-            raise ValueError("Ground station coordinates must be finite.")
-        if index < 0:
-            raise ValueError("Ground station index must be non-negative.")
-        if not -90.0 <= latitude <= 90.0:
-            raise ValueError("Ground station latitude must be between -90 and 90.")
-        if not -180.0 <= longitude <= 180.0:
-            raise ValueError("Ground station longitude must be between -180 and 180.")
-        if elevation_m < -1000.0:
-            raise ValueError(
-                "Ground station elevation must be at least -1000 metres."
-            )
+        _validate_station_values(index, latitude, longitude, elevation_m)
         validated.append(
             {
                 "index": index,
@@ -147,14 +152,18 @@ def validate_ground_station_text(content: str, source: str = "ground file") -> N
                 "Ground station names must not contain commas, quotes, or newlines."
             )
         try:
-            int(parts[0])
-            float(parts[2])
-            float(parts[3])
-            float(parts[4])
+            index = int(parts[0])
+            latitude = float(parts[2])
+            longitude = float(parts[3])
+            elevation_m = float(parts[4])
         except ValueError as exc:
             raise ValueError(
                 f"{source} line {line_number} has non-numeric index or coordinates."
             ) from exc
+        try:
+            _validate_station_values(index, latitude, longitude, elevation_m)
+        except ValueError as exc:
+            raise ValueError(f"{source} line {line_number}: {exc}") from exc
 
 
 def stable_ground_stations_dir(save_root: Path) -> Path:

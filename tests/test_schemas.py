@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from satgonetem_gui.schemas import (
+    GroundStationPoint,
     Hping3Request,
     Iperf3Request,
     PingRequest,
@@ -64,6 +65,33 @@ def test_hping_interval_requires_a_value_after_the_unit() -> None:
 
     with pytest.raises(ValidationError):
         Hping3Request(src="a", dst="b", interval="u")
+
+
+@pytest.mark.parametrize(
+    "point",
+    [
+        {"latitude": 91},
+        {"latitude": float("nan")},
+        {"longitude": -181},
+        {"longitude": float("inf")},
+        {"elevation_m": -1001},
+        {"elevation_m": float("inf")},
+        {"index": -1},
+    ],
+)
+def test_ground_station_point_rejects_out_of_range_values(point: dict) -> None:
+    """Preset response rows enforce the same bounds as inline stations."""
+    base = {
+        "index": 0,
+        "name": "Berlin",
+        "latitude": 52.52,
+        "longitude": 13.405,
+        "elevation_m": 34.0,
+    }
+    base.update(point)
+
+    with pytest.raises(ValidationError):
+        GroundStationPoint(**base)
 
 
 def test_project_load_content_is_bounded() -> None:
