@@ -5,7 +5,7 @@
  * /api/routing/status for routing state. Allows the user to start/stop
  * GoNetem and to apply or delete addressing and routing.
  */
-import { api } from "./api.js";
+import { api } from "./api.js?v=2";
 
 const POLL_INTERVAL_MS = 2000;
 

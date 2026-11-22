@@ -83,12 +83,36 @@ export async function apiRequest(path, options = {}) {
   return body;
 }
 
+export async function apiGetAll(path, options = {}) {
+  const { pageSize = 1000, ...requestOptions } = options;
+  const items = [];
+  let offset = 0;
+  for (let pageNumber = 0; pageNumber < 1000; pageNumber += 1) {
+    const separator = path.includes("?") ? "&" : "?";
+    const page = await apiRequest(
+      `${path}${separator}limit=${pageSize}&offset=${offset}`,
+      requestOptions,
+    );
+    if (!Array.isArray(page)) {
+      throw new ApiError("Expected a list response.", 0);
+    }
+    items.push(...page);
+    if (page.length < pageSize) return items;
+    offset += pageSize;
+  }
+  throw new ApiError("Pagination limit reached.", 0);
+}
+
 export const api = {
-  get(path) {
-    return apiRequest(path);
+  get(path, options) {
+    return apiRequest(path, options);
   },
-  post(path, body) {
+  getAll(path, options) {
+    return apiGetAll(path, options);
+  },
+  post(path, body, options = {}) {
     return apiRequest(path, {
+      ...options,
       method: "POST",
       body: body === undefined ? undefined : JSON.stringify(body),
     });

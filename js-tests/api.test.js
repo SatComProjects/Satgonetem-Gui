@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, api, apiRequest } from "../satgonetem_gui/static/api.js";
+import {
+  ApiError,
+  api,
+  apiGetAll,
+  apiRequest,
+} from "../satgonetem_gui/static/api.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -90,6 +95,29 @@ describe("api client", () => {
       message: "Invalid request. (Input should be >= 1)",
       status: 422,
     });
+  });
+
+  it("fetches every page of a bounded list", async () => {
+    const requested = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url) => {
+        requested.push(url);
+        const offset = Number(new URL(url, "http://test").searchParams.get("offset"));
+        const page = offset === 0 ? [{ id: 1 }, { id: 2 }] : [{ id: 3 }];
+        return jsonResponse(200, page);
+      }),
+    );
+
+    await expect(apiGetAll("/api/items", { pageSize: 2 })).resolves.toEqual([
+      { id: 1 },
+      { id: 2 },
+      { id: 3 },
+    ]);
+    expect(requested).toEqual([
+      "/api/items?limit=2&offset=0",
+      "/api/items?limit=2&offset=2",
+    ]);
   });
 
   it("aborts a request that exceeds its timeout", async () => {

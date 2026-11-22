@@ -1,4 +1,4 @@
-import { api, ApiError } from "./api.js";
+import { api, ApiError } from "./api.js?v=2";
 import {
     describeGroundStation,
     describeSatellite,
@@ -414,9 +414,9 @@ async function showWorldMsg(text, isError = false) {
 async function updateWorld() {
     try {
         const [satellites, groundStations, links] = await Promise.all([
-            api.get("/api/satellites"),
-            api.get("/api/ground_stations"),
-            api.get("/api/links"),
+            api.getAll("/api/satellites"),
+            api.getAll("/api/ground_stations"),
+            api.getAll("/api/links"),
         ]);
 
         if (!Array.isArray(satellites) || !Array.isArray(groundStations)) return;

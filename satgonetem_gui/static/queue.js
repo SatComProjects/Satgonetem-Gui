@@ -1,5 +1,5 @@
 /** Shared traffic job queue, persistence, polling, and result charts. */
-import { api, ApiError } from "./api.js";
+import { api, ApiError } from "./api.js?v=2";
 import { escapeHtml } from "./escape.js";
 import {
   addItem,

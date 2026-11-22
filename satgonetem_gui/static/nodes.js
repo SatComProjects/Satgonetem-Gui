@@ -1,5 +1,5 @@
 /** Node Explorer page controller. */
-import { api } from "./api.js";
+import { api } from "./api.js?v=2";
 import { escapeHtml } from "./escape.js";
 import { cacheEntry, isFresh } from "./nodes_model.js";
 
@@ -213,7 +213,7 @@ function renderNodes(nodes) {
 
 async function loadNodes() {
   try {
-    const nodes = await api.get("/api/nodes");
+    const nodes = await api.getAll("/api/nodes");
     showMsg("");
     renderNodes(Array.isArray(nodes) ? nodes : []);
   } catch (error) {
