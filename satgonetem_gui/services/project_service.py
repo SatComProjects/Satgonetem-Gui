@@ -8,6 +8,7 @@ from pathlib import Path
 from ..config import Settings
 from ..errors import APIError
 from ..ground_stations import parse_ground_station_file
+from ..project_documents import validate_project_create_payload
 from ..schemas import ProjectCreateRequest
 from ..state import RuntimeState
 from ..storage import SavePathError, resolve_save_path
@@ -48,6 +49,16 @@ class ProjectService:
             resolve_save_path(payload.save_path, name, self.settings.save_root)
         except SavePathError as exc:
             raise APIError(400, str(exc)) from exc
+
+        try:
+            shells = json.loads(payload.walker_shells_json)
+            grounds = json.loads(payload.ground_objects_properties_json)
+            validate_project_create_payload(shells, grounds)
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise APIError(
+                422,
+                f"Invalid project configuration: {exc}",
+            ) from exc
 
         started = self.state.project_tasks.start(
             name=name,

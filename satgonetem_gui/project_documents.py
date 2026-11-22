@@ -11,7 +11,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from .ground_stations import validate_ground_station_text
+from .ground_stations import validate_ground_station_text, validate_inline_stations
 
 
 class ProjectDocumentError(ValueError):
@@ -64,6 +64,62 @@ def _data_file_is_allowed(data_file: str, roots: list[Path]) -> bool:
         if _is_within(resolved, roots):
             return True
     return False
+
+
+def validate_project_create_payload(
+    shells: object,
+    grounds: object,
+) -> None:
+    """Validate the nested shapes accepted by the project-create form.
+
+    The request schema validates that the hidden fields contain JSON arrays;
+    this function validates their elements before a background build starts, so
+    malformed input is a 422 instead of a late project-state error.
+    """
+    if not isinstance(shells, list) or not shells:
+        raise ValueError("At least one orbit shell is required.")
+    for shell in shells:
+        if not isinstance(shell, dict):
+            raise ValueError("Each orbit shell must be an object.")
+        for field in (
+            "type",
+            "constellation_property",
+            "orbital_connectivity_property",
+            "ground_object_white_list",
+        ):
+            if field not in shell:
+                raise ValueError(f"Orbit shell is missing {field}.")
+        if not isinstance(shell["type"], str) or not shell["type"].strip():
+            raise ValueError("Orbit shell type must be a string.")
+        if not isinstance(shell["constellation_property"], dict):
+            raise ValueError("Orbit shell constellation_property must be an object.")
+        if not isinstance(shell["orbital_connectivity_property"], dict):
+            raise ValueError(
+                "Orbit shell orbital_connectivity_property must be an object."
+            )
+        if not isinstance(shell["ground_object_white_list"], list):
+            raise ValueError("Orbit shell ground_object_white_list must be a list.")
+
+    if not isinstance(grounds, list) or not grounds:
+        raise ValueError("At least one ground object is required.")
+    for ground in grounds:
+        if not isinstance(ground, dict):
+            raise ValueError("Each ground object must be an object.")
+        for field in ("identifier", "type", "connectivity_properties"):
+            if field not in ground:
+                raise ValueError(f"Ground object is missing {field}.")
+        if not isinstance(ground["identifier"], str) or not ground["identifier"].strip():
+            raise ValueError("Ground object identifier must be a string.")
+        if not isinstance(ground["type"], str) or not ground["type"].strip():
+            raise ValueError("Ground object type must be a string.")
+        if not isinstance(ground["connectivity_properties"], dict):
+            raise ValueError("Ground object connectivity_properties must be an object.")
+        stations = ground.get("stations")
+        data_file = ground.get("data_file")
+        if stations:
+            validate_inline_stations(stations)
+        elif not isinstance(data_file, str) or not data_file.strip():
+            raise ValueError("Ground object has no stations or data_file.")
 
 
 def validate_project_document(
