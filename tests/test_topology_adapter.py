@@ -568,3 +568,157 @@ def test_adapter_status_truncates_long_simulation_errors(settings) -> None:
     assert message is not None
     assert message.startswith("RuntimeError: ")
     assert len(message) == 500
+
+
+class _FakeSatellite:
+    """Satellite stand-in exposing the public addressability API."""
+
+    def __init__(self, name: str, satellite_id: int, addressable: bool = False) -> None:
+        self.name = name
+        self.id = satellite_id
+        self.addressable = addressable
+        self.address_calls: list[bool] = []
+
+    def is_addressable(self) -> bool:
+        return self.addressable
+
+    def set_addressable(self, status: bool) -> None:
+        self.address_calls.append(status)
+        self.addressable = status
+
+
+class _AddressabilityTopology:
+    """Topology stand-in recording public satellite enable calls."""
+
+    def __init__(self, satellites: list[_FakeSatellite]) -> None:
+        self.satellites = {satellite.id: satellite for satellite in satellites}
+        self.enable_calls: list[list[_FakeSatellite]] = []
+
+    def set_addressable_satellites(self, satellites) -> None:
+        targets = list(satellites)
+        self.enable_calls.append(targets)
+        for satellite in targets:
+            satellite.set_addressable(True)
+
+
+def test_adapter_addressability_status_is_sorted_with_total(settings) -> None:
+    """Status reports sorted addressable names and the satellite total."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _AddressabilityTopology(
+        [
+            _FakeSatellite("Sat10", 10, True),
+            _FakeSatellite("Sat2", 2, True),
+            _FakeSatellite("Sat0", 0, False),
+        ]
+    )
+
+    assert adapter.satellite_addressability(topology) == {
+        "addressable": ["Sat10", "Sat2"],
+        "total": 3,
+    }
+
+
+def test_adapter_enables_satellites_through_the_core_method(settings) -> None:
+    """Enabling delegates to the public bulk core operation."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    first = _FakeSatellite("Sat0", 0)
+    second = _FakeSatellite("Sat1", 1)
+    topology = _AddressabilityTopology([first, second])
+
+    assert adapter.set_satellites_addressable(topology, True, None) == 2
+
+    assert topology.enable_calls == [[first, second]]
+    assert first.addressable is True
+    assert second.addressable is True
+
+
+def test_adapter_enables_only_requested_satellites(settings) -> None:
+    """A targeted enable passes exactly the matching satellites."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    first = _FakeSatellite("Sat0", 0)
+    second = _FakeSatellite("Sat1", 1)
+    topology = _AddressabilityTopology([first, second])
+
+    assert adapter.set_satellites_addressable(topology, True, ["Sat1"]) == 1
+
+    assert topology.enable_calls == [[second]]
+    assert first.addressable is False
+    assert second.addressable is True
+
+
+def test_adapter_disables_satellites_through_each_public_node(settings) -> None:
+    """Disabling flips each target directly and skips the bulk enable call."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    first = _FakeSatellite("Sat0", 0, True)
+    second = _FakeSatellite("Sat1", 1, True)
+    topology = _AddressabilityTopology([first, second])
+
+    assert adapter.set_satellites_addressable(topology, False, ["Sat1"]) == 1
+
+    assert topology.enable_calls == []
+    assert first.addressable is True
+    assert second.addressable is False
+    assert second.address_calls == [False]
+
+    assert adapter.set_satellites_addressable(topology, False, None) == 2
+    assert first.addressable is False
+    assert second.addressable is False
+
+
+def test_adapter_rejects_unknown_satellites_before_any_change(settings) -> None:
+    """An unknown name fails the whole request without partial updates."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    first = _FakeSatellite("Sat0", 0)
+    topology = _AddressabilityTopology([first])
+
+    with pytest.raises(ValueError, match="Unknown satellite: Sat404"):
+        adapter.set_satellites_addressable(topology, True, ["Sat404"])
+    with pytest.raises(ValueError, match="Unknown satellite: Sat400"):
+        adapter.set_satellites_addressable(topology, True, ["Sat0", "Sat400"])
+
+    assert first.addressable is False
+    assert topology.enable_calls == []
+
+
+def test_adapter_addressability_with_no_targets_is_a_noop(settings) -> None:
+    """An empty satellite set or selection updates nothing."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+
+    assert adapter.set_satellites_addressable(_AddressabilityTopology([]), True) == 0
+
+    topology = _AddressabilityTopology([_FakeSatellite("Sat0", 0)])
+    assert adapter.set_satellites_addressable(topology, True, []) == 0
+    assert topology.enable_calls == []
+
+
+def test_node_detail_exposes_addressability_for_satellites_only(settings) -> None:
+    """Satellite details carry the toggle state; ground stations do not."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    satellite = SimpleNamespace(
+        name="Sat0",
+        type="Satellite",
+        id=0,
+        interfaces=[],
+        position={"latitude": 1.0, "longitude": 2.0, "altitude": 550.0},
+        loopback=SimpleNamespace(ipv4="10.0.0.1"),
+        get_routing_table=lambda: [],
+        is_addressable=lambda: True,
+    )
+    ground = SimpleNamespace(
+        name="Gnd0",
+        type="GroundStation",
+        id=1,
+        interfaces=[],
+        position={"latitude": 3.0, "longitude": 4.0, "altitude": 0.1},
+        loopback=SimpleNamespace(ipv4="10.0.0.2"),
+        get_routing_table=lambda: [],
+        city="Berlin",
+    )
+    nodes = {"Sat0": satellite, "Gnd0": ground}
+    topology = SimpleNamespace(
+        get_node_by_name=nodes.get,
+        _sync_node_positions=lambda: None,
+    )
+
+    assert adapter.node_detail(topology, "Sat0")["addressable"] is True
+    assert "addressable" not in adapter.node_detail(topology, "Gnd0")

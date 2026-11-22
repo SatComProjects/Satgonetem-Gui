@@ -47,6 +47,19 @@ class NetworkOperationError(RuntimeError):
     """Raised when a GoNetEm operation reports failure via a return code."""
 
 
+class AddressabilityController(Protocol):
+    """Satellite traffic-addressability queries and mutations."""
+
+    def satellite_addressability(self, topology: Any) -> dict[str, Any]: ...
+
+    def set_satellites_addressable(
+        self,
+        topology: Any,
+        enabled: bool,
+        names: list[str] | None = None,
+    ) -> int: ...
+
+
 class NetworkController(Protocol):
     """Routing and container lifecycle operations."""
 

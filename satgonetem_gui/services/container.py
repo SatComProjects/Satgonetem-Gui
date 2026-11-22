@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from ..state import RuntimeState
+from .addressability_service import AddressabilityService
 from .project_service import ProjectService
 from .routing_service import RoutingService
 from .simulation_service import SimulationService
@@ -17,6 +18,7 @@ class ApplicationServices:
     runtime: RuntimeState
     project: ProjectService
     topology: TopologyService
+    addressability: AddressabilityService
     routing: RoutingService
     traffic: TrafficService
     simulation: SimulationService
