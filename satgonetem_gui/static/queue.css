@@ -206,3 +206,258 @@
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 12px;
 }
+
+/* Experiment history (injected into #results-body) */
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.history-toolbar .button {
+  flex: 0 0 auto;
+}
+
+.history-count {
+  margin-right: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--input-bg);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.history-msg {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+
+.history-list {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.history-table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.history-table thead th {
+  padding: 9px 12px;
+  background: rgba(61, 169, 252, 0.06);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.history-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.history-table th:first-child,
+.history-table td:first-child {
+  width: 84px;
+  text-align: center;
+}
+
+.history-table tbody .history-row:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.history-table tbody .history-row:hover td,
+.history-table tbody .history-row:focus-within td {
+  background: rgba(61, 169, 252, 0.06);
+}
+
+.history-table tbody .history-row:has(.history-select:checked) td {
+  background: rgba(61, 169, 252, 0.1);
+}
+
+.history-table tbody .history-row:has(.history-select:checked) td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.history-table tbody .history-row:last-child td {
+  border-bottom: 0;
+}
+
+.history-select {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.history-when {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.history-kind {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.history-endpoints {
+  min-width: 150px;
+}
+
+.history-summary {
+  min-width: 160px;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-actions {
+  min-width: 214px;
+  white-space: nowrap;
+}
+
+.history-actions .button + .button {
+  margin-left: 6px;
+}
+
+.history-empty {
+  margin: 0;
+  padding: 22px 16px;
+  text-align: center;
+}
+
+.history-empty[hidden] {
+  display: none;
+}
+
+.history-compare-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.history-compare-bar .button {
+  flex: 0 0 auto;
+}
+
+.history-compare-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.history-compare-summary {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.history-compare-table {
+  width: 100%;
+  min-width: 400px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.history-compare-table th,
+.history-compare-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.history-compare-table thead th {
+  background: rgba(61, 169, 252, 0.06);
+  border-bottom-color: var(--border);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.history-compare-table th:first-child,
+.history-compare-table td:first-child {
+  text-align: left;
+}
+
+.history-compare-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.history-compare-delta {
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-compare-delta.positive {
+  color: var(--ok);
+}
+
+.history-compare-delta.negative {
+  color: var(--bad);
+}
+
+.history-compare-delta.neutral {
+  color: var(--muted);
+}
+
+.history-compare-grid .chart-container {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.history-compare-grid canvas {
+  display: block;
+  max-width: 100%;
+}
+
+#jq-history:focus-visible,
+.history-toolbar .button:focus-visible,
+.history-actions .button:focus-visible,
+.history-compare-bar .button:focus-visible,
+.history-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .history-compare-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

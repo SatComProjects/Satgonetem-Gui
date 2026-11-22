@@ -5,6 +5,12 @@ export const ACTIVE_STATUSES = new Set(["queued", "scheduled", "running", "start
 
 let idCounter = 0;
 
+function optionalTimestamp(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 export function newQueueItem(fields, id = null) {
   idCounter += 1;
   return {
@@ -14,6 +20,8 @@ export function newQueueItem(fields, id = null) {
     label: fields.label || fields.kind || "job",
     delay: Number(fields.delay) || 0,
     start_at: null,
+    created_at: Date.now(),
+    started_at: null,
     status: "queued",
     job_id: null,
     results: null,
@@ -72,14 +80,9 @@ export function normalizeStoredItems(raw) {
       payload: item.payload || {},
       label: item.label || item.kind,
       delay: Number(item.delay) || 0,
-      start_at:
-        item.start_at === null ||
-        item.start_at === undefined ||
-        item.start_at === ""
-          ? null
-          : Number.isFinite(Number(item.start_at))
-            ? Number(item.start_at)
-            : null,
+      start_at: optionalTimestamp(item.start_at),
+      created_at: optionalTimestamp(item.created_at),
+      started_at: optionalTimestamp(item.started_at),
       status: item.status || "queued",
       job_id: item.job_id || null,
       results: item.results || null,

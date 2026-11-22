@@ -5,13 +5,24 @@ from pathlib import Path
 PACKAGE = Path(__file__).resolve().parent.parent / "satgonetem_gui"
 BASE_TEMPLATE = PACKAGE / "templates" / "base.html"
 TRAFFIC_MODULE = PACKAGE / "static" / "traffic.js"
+QUEUE_MODULE = PACKAGE / "static" / "queue.js"
 
-QUEUE_SCRIPT = "/static/queue.js?v=22"
-QUEUE_IMPORT = "./queue.js?v=22"
+QUEUE_SCRIPT = "/static/queue.js?v=23"
+QUEUE_IMPORT = "./queue.js?v=23"
+QUEUE_MODEL_IMPORT = "./queue_model.js?v=3"
+HISTORY_MODEL_IMPORT = "./history_model.js?v=1"
 WORLD_TEMPLATE = PACKAGE / "templates" / "world.html"
 SIMULATION_CONTROLS = PACKAGE / "static" / "simulation_controls.js"
 SIMULATION_MODEL_IMPORT = "./simulation_model.js?v=1"
 ADDRESSABILITY_MODEL_IMPORT = "./addressability_model.js?v=1"
+
+
+def test_queue_imports_the_versioned_history_and_queue_models() -> None:
+    """Queue module changes stay cache-busted alongside their pure models."""
+    content = QUEUE_MODULE.read_text(encoding="utf-8")
+
+    assert f'from "{HISTORY_MODEL_IMPORT}"' in content
+    assert f'from "{QUEUE_MODEL_IMPORT}"' in content
 
 
 def test_addressability_controls_import_the_versioned_model() -> None:
