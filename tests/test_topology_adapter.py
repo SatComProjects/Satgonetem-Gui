@@ -195,6 +195,60 @@ def test_adapter_start_failure_after_status_check_still_cleans_up(settings) -> N
     assert calls == ["start", "stop"]
 
 
+def test_node_detail_uses_the_core_node_type_not_the_name(settings) -> None:
+    """A ground station named with a Sat prefix is still classified as ground."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    node = SimpleNamespace(
+        name="SatGround",
+        type="GroundStation",
+        id=7,
+        interfaces=[],
+        position={"latitude": 1.0, "longitude": 2.0, "altitude": 0.1},
+        loopback=SimpleNamespace(ipv4="10.0.0.1"),
+        get_routing_table=lambda: [],
+        city="Berlin",
+    )
+    topology = SimpleNamespace(
+        get_node_by_name=lambda _name: node,
+        _sync_node_positions=lambda: None,
+    )
+
+    detail = adapter.node_detail(topology, "SatGround")
+
+    assert detail is not None
+    assert detail["type"] == "ground_station"
+    assert detail["city"] == "Berlin"
+    assert "default_qos_is_on" not in detail
+
+
+def test_adapter_writes_topology_atomically(settings, tmp_path) -> None:
+    """A failed serialization leaves the previous target intact."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    target = tmp_path / "project.json"
+    target.write_text("old", encoding="utf-8")
+
+    class FailingTopology:
+        def to_file(self, path):
+            Path(path).write_text("partial", encoding="utf-8")
+            raise RuntimeError("write failed")
+
+    with pytest.raises(RuntimeError, match="write failed"):
+        adapter._write_topology_atomically(FailingTopology(), target)
+
+    assert target.read_text(encoding="utf-8") == "old"
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_position_sync_hook_change_is_reported(settings) -> None:
+    """A core rename of the private position hook fails loudly."""
+    from satgonetem_gui.adapters.satgonetem_topology import (
+        SatGoNetemTopologyAdapter as Adapter,
+    )
+
+    with pytest.raises(RuntimeError, match="_sync_node_positions"):
+        Adapter._sync_positions(SimpleNamespace())
+
+
 def test_adapter_delete_is_idempotent_when_not_initialized(settings) -> None:
     """Deleting routing that was never applied is a no-op."""
     from types import SimpleNamespace
@@ -283,7 +337,7 @@ def test_build_rejects_comma_in_station_name_before_core(settings) -> None:
     grounds[0]["stations"][0]["name"] = "Berlin, DE"
     payload["ground_objects_properties_json"] = json.dumps(grounds)
 
-    with pytest.raises(ValueError, match="must not contain commas or newlines"):
+    with pytest.raises(ValueError, match="must not contain commas, quotes, or newlines"):
         adapter.build(ProjectCreateRequest(**payload))
 
 

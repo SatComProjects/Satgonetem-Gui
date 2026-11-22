@@ -23,7 +23,6 @@ function buildInterfaceRow(iface) {
     `<td>${escapeHtml(iface.name)}</td>` +
     `<td>${escapeHtml(iface.iname)}</td>` +
     `<td>${escapeHtml(iface.ipv4 || "-")}</td>` +
-    `<td>${escapeHtml(iface.ipv6 || "-")}</td>` +
     `<td>${escapeHtml(iface.type || "-")}</td>` +
     `<td>${iface.is_active ? "Active" : "Inactive"}</td>` +
     `<td>${escapeHtml(iface.peer_name || "-")}</td>` +
@@ -47,10 +46,7 @@ function buildDetailPanel(data) {
   html += "</dl></div>";
 
   html += '<div class="detail-section"><h4>Loopback</h4><dl class="detail-dl">';
-  for (const [label, value] of [
-    ["IPv4", loopback.ipv4],
-    ["IPv6", loopback.ipv6],
-  ]) {
+  for (const [label, value] of [["IPv4", loopback.ipv4]]) {
     html += `<div class="detail-row"><dt>${label}</dt><dd>${escapeHtml(value || "-")}</dd></div>`;
   }
   html += "</dl></div>";
@@ -69,7 +65,7 @@ function buildDetailPanel(data) {
   html += '<div class="detail-section"><h4>Interfaces</h4>';
   if (data.interfaces && data.interfaces.length) {
     html +=
-      '<table class="iface-table"><thead><tr><th>Name</th><th>Dev</th><th>IPv4</th><th>IPv6</th><th>Type</th><th>State</th><th>Peer</th></tr></thead><tbody>';
+      '<table class="iface-table"><thead><tr><th>Name</th><th>Dev</th><th>IPv4</th><th>Type</th><th>State</th><th>Peer</th></tr></thead><tbody>';
     for (const iface of data.interfaces) html += buildInterfaceRow(iface);
     html += "</tbody></table>";
   } else {

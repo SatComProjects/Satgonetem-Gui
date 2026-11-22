@@ -8,6 +8,7 @@ from satgonetem_gui.storage import (
     SavePathError,
     resolve_data_file,
     resolve_save_path,
+    safe_project_filename,
 )
 
 
@@ -74,7 +75,8 @@ def test_resolve_save_path_appends_safe_name_for_a_directory(tmp_path: Path) -> 
 
     path = resolve_save_path(str(root), "My Project/One", root)
 
-    assert path == root / "My_Project_One.json"
+    assert path == root / f"{safe_project_filename('My Project/One')}.json"
+    assert path.name.startswith("My_Project_One-")
 
 
 def test_resolve_save_path_rejects_paths_outside_the_root(tmp_path: Path) -> None:
@@ -100,4 +102,4 @@ def test_resolve_save_path_treats_a_new_directory_name_as_a_directory(tmp_path: 
 
     path = resolve_save_path(str(root / "new-shell"), "My Project", root)
 
-    assert path == root / "new-shell" / "My_Project.json"
+    assert path == root / "new-shell" / f"{safe_project_filename('My Project')}.json"

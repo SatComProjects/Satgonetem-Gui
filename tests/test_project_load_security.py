@@ -103,6 +103,18 @@ def test_project_load_rejects_malformed_embedded_station_rows(client) -> None:
     assert "five comma-separated columns" in response.json()["error"]
 
 
+def test_project_load_rejects_relative_data_files(client) -> None:
+    """Relative paths would be read from the process CWD, not the checked root."""
+    document = {
+        "simulation_property": {"ground_objects_properties": [{"data_file": "stations.csv"}]}
+    }
+
+    response = _post_load(client, document)
+
+    assert response.status_code == 400
+    assert "must be absolute" in response.json()["error"]
+
+
 def test_project_load_rejects_data_file_outside_allowed_roots(
     client,
     tmp_path: Path,

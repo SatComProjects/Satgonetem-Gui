@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, api } from "../satgonetem_gui/static/api.js";
+import { ApiError, api, apiRequest } from "../satgonetem_gui/static/api.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -42,5 +42,76 @@ describe("api client", () => {
     );
 
     await expect(api.get("/api/status")).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("rejects malformed JSON and unexpected non-JSON success bodies", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("{not-json", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    await expect(api.get("/api/status")).rejects.toMatchObject({
+      message: "Invalid JSON response.",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("<html>proxy</html>", {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          }),
+      ),
+    );
+    await expect(api.get("/api/status")).rejects.toMatchObject({
+      message: "Unexpected non-JSON response.",
+    });
+  });
+
+  it("surfaces the first validation detail in the message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(422, {
+          ok: false,
+          error: "Invalid request.",
+          details: [{ loc: ["body", "duration"], msg: "Input should be >= 1" }],
+        }),
+      ),
+    );
+
+    await expect(api.get("/api/status")).rejects.toMatchObject({
+      message: "Invalid request. (Input should be >= 1)",
+      status: 422,
+    });
+  });
+
+  it("aborts a request that exceeds its timeout", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_path, options) =>
+          new Promise((_resolve, reject) => {
+            options.signal.addEventListener("abort", () =>
+              reject(new Error("aborted")),
+            );
+          }),
+      ),
+    );
+
+    const request = apiRequest("/api/status", { timeout: 10 });
+    const assertion = expect(request).rejects.toMatchObject({
+      message: "Request timed out.",
+    });
+    await vi.advanceTimersByTimeAsync(11);
+    await assertion;
+    vi.useRealTimers();
   });
 });

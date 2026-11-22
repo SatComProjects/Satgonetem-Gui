@@ -1,13 +1,14 @@
 """Ground-station CSV parsing and file output."""
 
 import csv
+import math
 import os
 import tempfile
 from pathlib import Path
 from typing import Any
 
 STATION_FIELDS = ("index", "name", "latitude", "longitude", "elevation_m")
-_FORBIDDEN_NAME_CHARACTERS = (",", "\r", "\n")
+_FORBIDDEN_NAME_CHARACTERS = (",", '"', "\r", "\n")
 
 
 def parse_ground_station_file(path: Path) -> list[dict[str, Any]]:
@@ -74,11 +75,11 @@ def validate_inline_stations(stations: object) -> list[dict[str, Any]]:
                 + "."
             )
         name = station["name"]
-        if not isinstance(name, str):
-            raise ValueError("Ground station names must be strings.")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Ground station names must be non-empty strings.")
         if any(character in name for character in _FORBIDDEN_NAME_CHARACTERS):
             raise ValueError(
-                "Ground station names must not contain commas or newlines."
+                "Ground station names must not contain commas, quotes, or newlines."
             )
         try:
             index = int(station["index"])
@@ -89,6 +90,19 @@ def validate_inline_stations(stations: object) -> list[dict[str, Any]]:
             raise ValueError(
                 "Ground station index and coordinates must be numeric."
             ) from exc
+        if not all(
+            math.isfinite(value)
+            for value in (latitude, longitude, elevation_m)
+        ):
+            raise ValueError("Ground station coordinates must be finite.")
+        if index < 0:
+            raise ValueError("Ground station index must be non-negative.")
+        if not -90.0 <= latitude <= 90.0:
+            raise ValueError("Ground station latitude must be between -90 and 90.")
+        if not -180.0 <= longitude <= 180.0:
+            raise ValueError("Ground station longitude must be between -180 and 180.")
+        if elevation_m < 0:
+            raise ValueError("Ground station elevation must be non-negative.")
         validated.append(
             {
                 "index": index,
@@ -128,7 +142,7 @@ def validate_ground_station_text(content: str, source: str = "ground file") -> N
             )
         if any(character in parts[1] for character in _FORBIDDEN_NAME_CHARACTERS):
             raise ValueError(
-                "Ground station names must not contain commas or newlines."
+                "Ground station names must not contain commas, quotes, or newlines."
             )
         try:
             int(parts[0])

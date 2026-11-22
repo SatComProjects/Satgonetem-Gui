@@ -13,6 +13,7 @@ export function newQueueItem(fields, id = null) {
     payload: fields.payload || {},
     label: fields.label || fields.kind || "job",
     delay: Number(fields.delay) || 0,
+    start_at: null,
     status: "queued",
     job_id: null,
     results: null,
@@ -51,6 +52,11 @@ export function startableItems(items) {
   );
 }
 
+export function remainingDelay(item, now = Date.now()) {
+  if (!item || !Number.isFinite(item.start_at)) return null;
+  return Math.max(0, item.start_at - now);
+}
+
 export function normalizeStoredItems(raw) {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -61,6 +67,14 @@ export function normalizeStoredItems(raw) {
       payload: item.payload || {},
       label: item.label || item.kind,
       delay: Number(item.delay) || 0,
+      start_at:
+        item.start_at === null ||
+        item.start_at === undefined ||
+        item.start_at === ""
+          ? null
+          : Number.isFinite(Number(item.start_at))
+            ? Number(item.start_at)
+            : null,
       status: item.status || "queued",
       job_id: item.job_id || null,
       results: item.results || null,

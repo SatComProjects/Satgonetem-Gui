@@ -42,6 +42,20 @@ def test_malformed_json_returns_422(client) -> None:
     assert "detail" not in body
 
 
+def test_validation_details_do_not_echo_request_input(client) -> None:
+    """Validation details report location/type/message, not the full payload."""
+    secret = "s" * 100
+    response = client.post(
+        "/api/project/create",
+        json={"name": secret, "start_date": secret, "end_date": secret},
+    )
+
+    assert response.status_code == 422
+    details = response.json()["details"]
+    assert details
+    assert all("input" not in item for item in details)
+
+
 def test_missing_required_fields_return_422(client) -> None:
     """Pydantic validates create requests before the endpoint runs."""
     response = client.post("/api/project/create", json={})

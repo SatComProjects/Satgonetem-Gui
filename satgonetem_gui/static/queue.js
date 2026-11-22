@@ -7,6 +7,7 @@ import {
   findItem,
   isTerminal,
   normalizeStoredItems,
+  remainingDelay,
   removeItem,
   startableItems,
   updateItem,
@@ -17,16 +18,39 @@ const MAX_POLL_FAILURES = 5;
 
 const jq = { items: [], timers: {} };
 let lastFocused = null;
+const activeCharts = [];
+
+function createChart(canvas, config) {
+  const chart = new Chart(canvas, config);
+  activeCharts.push(chart);
+  return chart;
+}
+
+function destroyCharts() {
+  for (const chart of activeCharts.splice(0)) {
+    try {
+      chart.destroy();
+    } catch {
+      /* a detached chart is already harmless */
+    }
+  }
+}
 
 function byId(id) {
   return document.getElementById(id);
 }
 
 function jqSave() {
+  const message = byId("jq-storage-msg");
   try {
-    localStorage.setItem(JQ_KEY, JSON.stringify(jq.items));
+    const items = jq.items.map(({ results: _results, ...rest }) => rest);
+    localStorage.setItem(JQ_KEY, JSON.stringify(items));
+    if (message) message.textContent = "";
   } catch {
-    /* storage may be unavailable */
+    if (message) {
+      message.textContent =
+        "Queue state could not be saved in this browser; active jobs stay tracked in this tab.";
+    }
   }
 }
 
@@ -75,14 +99,21 @@ function jqLoad() {
   } catch {
     stored = [];
   }
-  jq.items = stored.map((item) =>
-    item.status === "starting" || item.status === "scheduled"
-      ? { ...item, status: "queued" }
-      : item,
-  );
+  jq.items = stored.map((item) => {
+    if (item.status === "starting") {
+      return { ...item, status: "queued", start_at: null };
+    }
+    if (item.status === "scheduled" && !Number.isFinite(item.start_at)) {
+      return { ...item, status: "queued", start_at: null };
+    }
+    return item;
+  });
   for (const item of jq.items) {
     if (item.status === "running" && item.job_id) {
       schedule(item.id, 0, () => jqTrack(item.id));
+    } else if (item.status === "scheduled") {
+      const delay = remainingDelay(item);
+      schedule(item.id, delay ?? 0, () => jqStartNow(item.id));
     }
   }
   jqSave();
@@ -223,6 +254,7 @@ function jqStartOne(id) {
   const delayMs = Math.max(0, (Number(item.delay) || 0) * 1000);
   jq.items = updateItem(jq.items, id, {
     status: delayMs > 0 ? "scheduled" : "starting",
+    start_at: delayMs > 0 ? Date.now() + delayMs : null,
     error: null,
   });
   jqSave();
@@ -233,8 +265,12 @@ function jqStartOne(id) {
 async function jqStartNow(id) {
   clearTimer(id);
   const item = findItem(jq.items, id);
-  if (!item) return;
-  jq.items = updateItem(jq.items, id, { status: "starting", error: null });
+  if (!item) return false;
+  jq.items = updateItem(jq.items, id, {
+    status: "starting",
+    start_at: null,
+    error: null,
+  });
   jqSave();
   jqRender();
   let data;
@@ -250,13 +286,14 @@ async function jqStartNow(id) {
       jqSave();
       jqRender();
     }
-    return;
+    return false;
   }
-  if (!findItem(jq.items, id)) {
-    // The item was removed or cleared while the start request was in flight,
-    // so cancel the orphaned backend job instead of recreating the item.
+  const current = findItem(jq.items, id);
+  if (!current || isTerminal(current)) {
+    // The item was removed, cleared, or cancelled while the start request was
+    // in flight, so cancel the orphaned backend job instead of resurrecting it.
     cancelJob(data.job_id);
-    return;
+    return false;
   }
   jq.items = updateItem(jq.items, id, {
     status: "running",
@@ -267,6 +304,7 @@ async function jqStartNow(id) {
   jqSave();
   jqRender();
   jqTrack(id);
+  return true;
 }
 
 async function jqTrack(id) {
@@ -319,7 +357,10 @@ async function jqTrack(id) {
       jqRender();
       return;
     }
-    jq.items = updateItem(jq.items, id, { poll_failures: 0 });
+    if (current.poll_failures) {
+      jq.items = updateItem(jq.items, id, { poll_failures: 0 });
+      jqSave();
+    }
     schedule(id, 1000, () => jqTrack(id));
   } catch (error) {
     const current = findItem(jq.items, id);
@@ -367,7 +408,6 @@ async function jqCancel(id) {
       const current = findItem(jq.items, id);
       if (current && !isTerminal(current)) {
         jq.items = updateItem(jq.items, id, {
-          status: "error",
           error: error.message || "Cancel failed",
         });
         jqSave();
@@ -395,6 +435,7 @@ function openModal(title, body) {
   const modal = byId("results-modal");
   const titleElement = byId("results-title");
   const bodyElement = byId("results-body");
+  destroyCharts();
   if (titleElement) titleElement.textContent = title;
   if (bodyElement) bodyElement.innerHTML = body;
   if (modal) {
@@ -407,6 +448,7 @@ function openModal(title, body) {
 function closeResults() {
   const modal = byId("results-modal");
   if (modal) modal.style.display = "none";
+  destroyCharts();
   if (lastFocused && typeof lastFocused.focus === "function") {
     lastFocused.focus();
   }
@@ -714,7 +756,7 @@ function plotIperf3(item) {
       const overlays = isTcp
         ? flowDatasets(perCwnd, "Flow CWND")
         : flowDatasets(perThroughput, "Flow Mbps");
-      new Chart(mainChart, {
+      createChart(mainChart, {
         type: "line",
         data: {
           labels: times,
@@ -730,7 +772,7 @@ function plotIperf3(item) {
         perAux,
         isUdp ? "Flow Loss %" : "Flow Retrans",
       );
-      new Chart(auxChart, {
+      createChart(auxChart, {
         type: "line",
         data: {
           labels: times,
@@ -751,7 +793,7 @@ function plotIperf3(item) {
     if (secondaryChart && window.Chart) {
       if (isTcp) {
         const overlays = flowDatasets(perRtt, "Flow RTT");
-        new Chart(secondaryChart, {
+        createChart(secondaryChart, {
           type: "line",
           data: {
             labels: times,
@@ -768,7 +810,7 @@ function plotIperf3(item) {
         });
       } else {
         const overlays = flowDatasets(perJitter, "Flow Jitter");
-        new Chart(secondaryChart, {
+        createChart(secondaryChart, {
           type: "line",
           data: {
             labels: times,
@@ -788,7 +830,7 @@ function plotIperf3(item) {
 
     const cumulativeChart = byId("chart-cum");
     if (cumulativeChart && window.Chart) {
-      new Chart(cumulativeChart, {
+      createChart(cumulativeChart, {
         type: "line",
         data: {
           labels: times,
@@ -809,7 +851,7 @@ function plotIperf3(item) {
       const throughputChart = byId("chart-tput-tcp");
       if (throughputChart && window.Chart) {
         const overlays = flowDatasets(perThroughput, "Flow Mbps");
-        new Chart(throughputChart, {
+        createChart(throughputChart, {
           type: "line",
           data: {
             labels: times,
@@ -902,7 +944,7 @@ function plotHping3(item) {
 function newChart(canvasId, type, labels, datasets) {
   const canvas = byId(canvasId);
   if (!canvas || !window.Chart) return null;
-  return new Chart(canvas, {
+  return createChart(canvas, {
     type,
     data: { labels, datasets },
     options: {
@@ -939,4 +981,4 @@ function fmtBytes(bytes) {
 
 queueInit();
 
-export { jqAdd, jqStartOne };
+export { jqAdd, jqStartNow, jqStartOne };

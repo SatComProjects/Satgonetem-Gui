@@ -34,17 +34,25 @@ from ..services.ports import NetworkOperationError
 from ..state import ProjectResult
 from ..storage import resolve_data_file, resolve_save_path
 
-apply_satcom_fix()
-
 logger = logging.getLogger(__name__)
 
 DATA_SEARCH_DIR = GROUND_STATIONS_DIR
+_CORE_INITIALIZED = False
+
+
+def initialize_core() -> None:
+    """Apply the pinned core's performance patch once, outside module import."""
+    global _CORE_INITIALIZED
+    if not _CORE_INITIALIZED:
+        apply_satcom_fix()
+        _CORE_INITIALIZED = True
 
 
 class SatGoNetemTopologyAdapter:
     """Concrete adapter around ``TopologyManager`` and its configuration models."""
 
     def __init__(self, settings: Settings) -> None:
+        initialize_core()
         self.settings = settings
 
     def build(self, payload: ProjectCreateRequest) -> ProjectResult:
@@ -107,8 +115,7 @@ class SatGoNetemTopologyAdapter:
                 self.settings.save_root,
             )
             if save_target is not None:
-                save_target.parent.mkdir(parents=True, exist_ok=True)
-                topology.to_file(str(save_target))
+                self._write_topology_atomically(topology, save_target)
 
             return ProjectResult(
                 topology_manager=topology,
@@ -311,9 +318,13 @@ class SatGoNetemTopologyAdapter:
         except Exception:
             logger.exception("Failed to read routing table for %s", name)
 
+        node_kind = str(getattr(node, "type", "")).lower()
+        is_ground = node_kind.startswith("ground") or (
+            not node_kind and name.startswith("Gnd")
+        )
         data: dict[str, Any] = {
             "name": node.name,
-            "type": "satellite" if name.startswith("Sat") else "ground_station",
+            "type": "ground_station" if is_ground else "satellite",
             "id": node.id,
             "position": {
                 "latitude": node.position.get("latitude"),
@@ -324,13 +335,13 @@ class SatGoNetemTopologyAdapter:
             "loopback": {"ipv4": getattr(node.loopback, "ipv4", "")},
             "routing_table": routing_table,
         }
-        if name.startswith("Sat"):
+        if is_ground:
+            data["city"] = getattr(node, "city", None)
+        else:
             data["default_qos_is_on"] = getattr(node, "default_qos_is_on", False)
             data["program_specific_qos_is_on"] = getattr(
                 node, "program_specific_qos_is_on", False
             )
-        else:
-            data["city"] = getattr(node, "city", None)
         return data
 
     def find_node(self, topology: Any, name: str) -> Any | None:
@@ -429,6 +440,23 @@ class SatGoNetemTopologyAdapter:
         if topology.get_gonetem_status():
             raise NetworkOperationError("GoNetEm failed to stop.")
 
+    @staticmethod
+    def _write_topology_atomically(topology: Any, target: Path) -> None:
+        """Write through a sibling temp file and atomically replace the target."""
+        target.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temp_name = tempfile.mkstemp(
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+        )
+        os.close(descriptor)
+        temp_path = Path(temp_name)
+        try:
+            topology.to_file(str(temp_path))
+            temp_path.replace(target)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
     def _require_ground_files(self, topology: Any) -> None:
         """Fail before core serialization when a referenced data file is unusable.
 
@@ -518,8 +546,13 @@ class SatGoNetemTopologyAdapter:
     @staticmethod
     def _sync_positions(topology: Any) -> None:
         """Refresh positions through the dependency's private sync hook."""
+        sync = getattr(topology, "_sync_node_positions", None)
+        if not callable(sync):
+            raise RuntimeError(
+                "Core contract changed: _sync_node_positions is unavailable."
+            )
         try:
-            topology._sync_node_positions()
+            sync()
         except Exception:
             logger.exception("Failed to sync node positions.")
 

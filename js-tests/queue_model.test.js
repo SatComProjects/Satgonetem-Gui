@@ -6,6 +6,7 @@ import {
   findItem,
   isTerminal,
   normalizeStoredItems,
+  remainingDelay,
   removeItem,
   startableItems,
   updateItem,
@@ -51,10 +52,26 @@ describe("queue model", () => {
     expect(isTerminal(findItem(items, "q1"))).toBe(false);
   });
 
-  it("starts new items with no poll failures", () => {
+  it("starts new items with no poll failures or scheduled time", () => {
     const items = addItem([], fields, "q1");
 
     expect(items[0].poll_failures).toBe(0);
+    expect(items[0].start_at).toBeNull();
+  });
+
+  it("computes remaining delay and restores start_at from storage", () => {
+    const items = normalizeStoredItems([
+      { id: "q1", kind: "ping", status: "scheduled", start_at: 5_000 },
+      { id: "q2", kind: "ping", status: "scheduled", start_at: "bad" },
+      { id: "q3", kind: "ping", status: "scheduled", start_at: null },
+    ]);
+
+    expect(items[0].start_at).toBe(5_000);
+    expect(remainingDelay(items[0], 4_000)).toBe(1_000);
+    expect(remainingDelay(items[0], 6_000)).toBe(0);
+    expect(items[1].start_at).toBeNull();
+    expect(remainingDelay(items[1], 4_000)).toBeNull();
+    expect(items[2].start_at).toBeNull();
   });
 
   it("normalizes persisted items defensively", () => {

@@ -65,11 +65,11 @@ def test_parse_ground_station_file_handles_quoted_fields_and_bom(
 
 def test_validate_inline_stations_rejects_core_incompatible_names() -> None:
     """Comma and newline names fail with a message the UI can display."""
-    for name in ("Berlin, DE", "Berlin\nDE", "Berlin\rDE"):
+    for name in ("Berlin, DE", "Berlin\nDE", "Berlin\rDE", 'Berlin "Mitte"'):
         station = dict(STATIONS[0], name=name)
         with pytest.raises(
             ValueError,
-            match="must not contain commas or newlines",
+            match="must not contain commas, quotes, or newlines",
         ):
             validate_inline_stations([station])
 
@@ -82,6 +82,23 @@ def test_validate_inline_stations_requires_fields_and_numeric_coordinates() -> N
     station = dict(STATIONS[0], latitude="north")
     with pytest.raises(ValueError, match="must be numeric"):
         validate_inline_stations([station])
+
+
+def test_validate_inline_stations_rejects_out_of_range_coordinates() -> None:
+    """Latitude, longitude, elevation, and index stay in their valid ranges."""
+    cases = [
+        ({"latitude": 91}, "latitude"),
+        ({"latitude": -91}, "latitude"),
+        ({"longitude": 181}, "longitude"),
+        ({"longitude": -181}, "longitude"),
+        ({"elevation_m": -1}, "elevation"),
+        ({"elevation_m": float("nan")}, "finite"),
+        ({"index": -1}, "index"),
+    ]
+    for changes, message in cases:
+        station = dict(STATIONS[0], **changes)
+        with pytest.raises(ValueError, match=message):
+            validate_inline_stations([station])
 
 
 def test_write_stations_to_temp_uses_unique_files(tmp_path: Path) -> None:
@@ -103,25 +120,19 @@ def test_write_stations_to_temp_uses_unique_files(tmp_path: Path) -> None:
         second.unlink(missing_ok=True)
 
 
-def test_write_stations_to_temp_quotes_allowed_special_characters(
-    tmp_path: Path,
-) -> None:
-    """Quotation marks stay intact while remaining core-compatible."""
+def test_write_stations_to_temp_rejects_quotes(tmp_path: Path) -> None:
+    """Quotes would trigger CSV quoting that the core's split parser cannot read."""
     stations = [dict(STATIONS[0], name='Berlin "Mitte"')]
 
-    path = write_stations_to_temp(stations, directory=tmp_path)
-    try:
-        assert path.read_text(encoding="utf-8") == ('0,"Berlin ""Mitte""",52.52,13.405,34.0\n')
-        assert parse_ground_station_file(path)[0]["name"] == 'Berlin "Mitte"'
-    finally:
-        path.unlink(missing_ok=True)
+    with pytest.raises(ValueError, match="commas, quotes, or newlines"):
+        write_stations_to_temp(stations, directory=tmp_path)
 
 
 def test_write_stations_to_temp_rejects_comma_names(tmp_path: Path) -> None:
     """The write layer gives a clear error instead of a core column error."""
     stations = [dict(STATIONS[0], name="Berlin, DE")]
 
-    with pytest.raises(ValueError, match="must not contain commas or newlines"):
+    with pytest.raises(ValueError, match="must not contain commas, quotes, or newlines"):
         write_stations_to_temp(stations, directory=tmp_path)
 
 

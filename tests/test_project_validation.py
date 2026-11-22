@@ -55,7 +55,7 @@ def test_create_rejects_comma_station_names(client) -> None:
     response = _create(client, payload)
 
     assert response.status_code == 422
-    assert "commas or newlines" in response.json()["error"]
+    assert "commas, quotes, or newlines" in response.json()["error"]
 
 
 def test_create_rejects_ground_without_stations_or_data_file(client) -> None:

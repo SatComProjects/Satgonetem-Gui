@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from satgonetem.traffic import PingStatus
 
 from tests.factories import PLANES, PROJECT_NAME, SATELLITES_PER_PLANE, project_payload
 from tests.helpers import wait_for_project_state
@@ -49,6 +50,14 @@ def test_ground_stations_endpoint(project_client) -> None:
     assert stations[0]["name"] == "Gnd100"
     assert stations[0]["city"] == "Berlin"
     assert stations[0]["position"]["altitude"] == pytest.approx(0.034)
+
+
+def test_topology_lists_support_bounded_pagination(project_client) -> None:
+    """List endpoints accept a bounded limit/offset window."""
+    response = project_client.get("/api/satellites?limit=2&offset=1")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 2
 
 
 def test_links_endpoint(project_client) -> None:
@@ -300,6 +309,9 @@ def test_cancel_api_stops_a_fake_job(project_client, services) -> None:
     class FakeFlow:
         def __init__(self) -> None:
             self.stopped = False
+
+        def status(self) -> PingStatus:
+            return PingStatus.RUNNING
 
         def stop(self) -> None:
             self.stopped = True

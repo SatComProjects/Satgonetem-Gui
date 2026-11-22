@@ -119,7 +119,12 @@ class SatGoNetemTrafficAdapter:
         if status == FlowStatus.DONE:
             try:
                 result = flow.results()
-                intervals = getattr(result, "_data", {}).get("intervals", [])
+                raw = getattr(result, "_data", None)
+                if not isinstance(raw, dict):
+                    raise RuntimeError(
+                        "Unsupported Iperf3Results shape: missing interval data."
+                    )
+                intervals = raw.get("intervals", [])
                 return TrafficPoll(
                     "done",
                     results=serialize_iperf3_results(result, intervals),

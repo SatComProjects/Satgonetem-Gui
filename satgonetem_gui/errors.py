@@ -47,10 +47,18 @@ def install_error_handlers(app: FastAPI) -> None:
     async def handle_validation_error(
         _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        details = [
+            {
+                key: value
+                for key, value in error.items()
+                if key not in {"input", "ctx", "url"}
+            }
+            for error in exc.errors()
+        ]
         return _error_response(
             422,
             "Invalid request.",
-            jsonable_encoder(exc.errors()),
+            jsonable_encoder(details),
         )
 
     @app.exception_handler(StarletteHTTPException)

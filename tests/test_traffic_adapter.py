@@ -172,6 +172,19 @@ def test_poll_done_result_failure_returns_error(kind, flow_class, status) -> Non
     assert poll.error == "flow failed"
 
 
+def test_poll_done_missing_interval_data_returns_error() -> None:
+    """A core result shape change is reported, not silently charted as empty."""
+    result = SimpleNamespace(protocol="TCP")
+    flow = object.__new__(Iperf3Flow)
+    flow.status = lambda: FlowStatus.DONE
+    flow.results = lambda: result
+
+    poll = SatGoNetemTrafficAdapter().poll("iperf3", flow)
+
+    assert poll.status == "error"
+    assert "interval data" in poll.error
+
+
 @pytest.mark.parametrize(
     ("kind", "flow_class", "status"),
     [

@@ -121,8 +121,11 @@ configured save root.
 
 The GUI has no authentication and is intended for trusted local use. It binds
 `127.0.0.1` by default, constrains project saves to `SATGONETEM_GUI_SAVE_ROOT`,
-and does not expose a public API. Do not bind it to a public interface without
-placing it behind an authenticating reverse proxy.
+and does not expose a public API. Requests with a non-loopback `Host` header and
+browser mutations from another origin are rejected. If a deliberate reverse
+proxy or non-loopback hostname is used, add it to
+`SATGONETEM_GUI_ALLOWED_HOSTS` (comma-separated). Do not bind it to a public
+interface without placing it behind an authenticating reverse proxy.
 
 ## Development
 

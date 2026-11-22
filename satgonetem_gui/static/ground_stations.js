@@ -164,8 +164,20 @@ document.getElementById("add_custom_btn").addEventListener("click", () => {
   const latitude = parseFloat(document.getElementById("c_lat").value);
   const longitude = parseFloat(document.getElementById("c_lon").value);
   const elevation = parseFloat(document.getElementById("c_elev").value || "0");
-  if (!name || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+  if (!name || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     alert("Name, latitude, and longitude are required.");
+    return;
+  }
+  if (latitude < -90 || latitude > 90) {
+    alert("Latitude must be between -90 and 90.");
+    return;
+  }
+  if (longitude < -180 || longitude > 180) {
+    alert("Longitude must be between -180 and 180.");
+    return;
+  }
+  if (!Number.isFinite(elevation) || elevation < 0) {
+    alert("Elevation must be a non-negative number of metres.");
     return;
   }
   customStations.push({
@@ -173,7 +185,7 @@ document.getElementById("add_custom_btn").addEventListener("click", () => {
     name,
     latitude,
     longitude,
-    elevation_m: Number.isNaN(elevation) ? 0 : elevation,
+    elevation_m: elevation,
   });
   customNextIdx += 1;
   document.getElementById("c_name").value = "";

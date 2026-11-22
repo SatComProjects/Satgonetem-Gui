@@ -229,6 +229,31 @@ def test_serialize_iperf3_results_skips_a_malformed_middle_interval() -> None:
     json.dumps(data, allow_nan=False)
 
 
+def test_serialize_ping_results_hides_zero_rtt_for_unreachable_targets() -> None:
+    """The core's 0.0 RTT placeholder is not reported as a real latency."""
+    result = SimpleNamespace(
+        packets_transmitted=3,
+        packets_received=0,
+        packet_loss_percent=100.0,
+        reachable=False,
+        rtt_min_ms=0.0,
+        rtt_avg_ms=0.0,
+        rtt_max_ms=0.0,
+        rtt_mdev_ms=0.0,
+    )
+
+    assert serialize_ping_results(result) == {
+        "packets_transmitted": 3,
+        "packets_received": 0,
+        "packet_loss_percent": 100.0,
+        "reachable": False,
+        "rtt_min_ms": None,
+        "rtt_avg_ms": None,
+        "rtt_max_ms": None,
+        "rtt_mdev_ms": None,
+    }
+
+
 def test_serialize_ping_results_is_json_safe_for_non_finite_numbers() -> None:
     """Ping summary metrics are cleaned before reaching the JSON encoder."""
     result = SimpleNamespace(
