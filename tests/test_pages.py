@@ -66,6 +66,8 @@ def test_openapi_schema_contains_all_public_routes(client) -> None:
         "/api/diagnostics/connectivity/{job_id}",
         "/api/diagnostics/connectivity/{job_id}/export",
         "/api/analysis/coverage",
+        "/api/topology/health",
+        "/api/topology/export",
         "/api/experiments",
         "/api/experiments/{run_id}",
         "/api/experiments/{run_id}/artifacts/{name}",

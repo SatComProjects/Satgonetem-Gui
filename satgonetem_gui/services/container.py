@@ -12,6 +12,7 @@ from .project_catalog_service import ProjectCatalogService
 from .project_service import ProjectService
 from .routing_service import RoutingService
 from .simulation_service import SimulationService
+from .topology_export_service import TopologyExportService
 from .topology_service import TopologyService
 from .traffic_service import TrafficService
 
@@ -24,6 +25,7 @@ class ApplicationServices:
     project: ProjectService
     catalog: ProjectCatalogService
     topology: TopologyService
+    topology_export: TopologyExportService
     addressability: AddressabilityService
     routing: RoutingService
     traffic: TrafficService
