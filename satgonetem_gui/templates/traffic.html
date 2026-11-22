@@ -21,6 +21,19 @@
         </label>
       </div>
 
+      <div class="addressability-panel" id="tg-addressability-row">
+        <div class="form-row addressability-head">
+          <label class="inline" for="tg-satellites">
+            <input type="checkbox" id="tg-satellites"
+                   aria-describedby="tg-addressability-count tg-addressability-note"
+                   disabled>
+            Include satellites as traffic endpoints
+          </label>
+          <span class="addressability-count" id="tg-addressability-count">Checking...</span>
+        </div>
+        <p class="addressability-note muted" id="tg-addressability-note" aria-live="polite"></p>
+      </div>
+
       <div class="form-row">
         <label>Source
           <select id="tg-src"></select>
@@ -145,5 +158,5 @@
 
 </div>
 
-<script type="module" src="/static/traffic.js?v=17"></script>
+<script type="module" src="/static/traffic.js?v=18"></script>
 {% endblock %}

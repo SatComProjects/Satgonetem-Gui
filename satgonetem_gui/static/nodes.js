@@ -56,6 +56,19 @@ function buildDetailPanel(data) {
     html += `<div class="detail-row"><dt>Default QoS</dt><dd>${data.default_qos_is_on ? "On" : "Off"}</dd></div>`;
     html += `<div class="detail-row"><dt>Program QoS</dt><dd>${data.program_specific_qos_is_on ? "On" : "Off"}</dd></div>`;
     html += "</dl></div>";
+
+    const addressable = Boolean(data.addressable);
+    const safeName = escapeHtml(data.name);
+    html += '<div class="detail-section addressability-control">';
+    html += "<h4>Traffic</h4>";
+    html += `<p class="muted" id="addressability-state-${safeName}">Traffic endpoint: ${addressable ? "Enabled" : "Disabled"}</p>`;
+    html +=
+      `<button type="button" class="button small addressability-toggle" ` +
+      `data-action="toggle-addressable" data-node-name="${safeName}" ` +
+      `data-enabled="${addressable}">` +
+      `${addressable ? "Disable as traffic endpoint" : "Enable as traffic endpoint"}` +
+      "</button>";
+    html += "</div>";
   }
 
   if (data.type === "ground_station" && data.city) {
@@ -130,7 +143,49 @@ function buildNodeRow(node) {
   );
 }
 
+async function toggleAddressable(button) {
+  const name = button.dataset.nodeName;
+  if (!name) return;
+  const enabled = button.dataset.enabled !== "true";
+  button.disabled = true;
+  try {
+    const data = await api.post(
+      `/api/nodes/${encodeURIComponent(name)}/addressable`,
+      { enabled },
+    );
+    const isEnabled = Boolean(data.addressable);
+    button.dataset.enabled = String(isEnabled);
+    button.textContent = isEnabled
+      ? "Disable as traffic endpoint"
+      : "Enable as traffic endpoint";
+
+    const state = el(`addressability-state-${name}`);
+    if (state) {
+      const text = `Traffic endpoint: ${isEnabled ? "Enabled" : "Disabled"}`;
+      state.textContent = data.routing_refresh_required
+        ? `${text}. Re-apply addressing and routing.`
+        : text;
+    }
+    detailCache.delete(name);
+    showMsg(
+      data.routing_refresh_required
+        ? "Endpoints updated. Re-apply Addressing & Routing on the Dashboard before running traffic."
+        : "Endpoints updated.",
+    );
+  } catch (error) {
+    showMsg(`Error: ${error.message || error}`, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function initNodeList(container) {
+  container.addEventListener("click", (event) => {
+    const toggle = event.target.closest('[data-action="toggle-addressable"]');
+    if (!toggle || !container.contains(toggle)) return;
+    event.preventDefault();
+    toggleAddressable(toggle);
+  });
   container.addEventListener("click", (event) => {
     const row = event.target.closest(".node-row");
     if (!row || !container.contains(row)) return;
