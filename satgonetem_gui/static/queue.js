@@ -170,6 +170,8 @@ function jqRender() {
     .map((item) => {
       const id = escapeHtml(item.id);
       const canStart = item.status === "queued" || item.status === "scheduled";
+      const canCancel =
+        item.status === "running" || item.status === "scheduled";
       return `
         <div class="queue-item">
           <div class="queue-item-header">
@@ -181,7 +183,7 @@ function jqRender() {
           <div class="queue-item-actions">
             ${item.status === "done" ? `<button type="button" class="button small secondary" data-action="plot" data-id="${id}">Plot</button>` : ""}
             ${canStart ? `<button type="button" class="button small" data-action="start" data-id="${id}">Start</button>` : ""}
-            ${item.status === "running" ? `<button type="button" class="button small secondary" data-action="cancel" data-id="${id}">Cancel</button>` : ""}
+            ${canCancel ? `<button type="button" class="button small secondary" data-action="cancel" data-id="${id}">Cancel</button>` : ""}
             <button type="button" class="button small secondary" data-action="remove" data-id="${id}">Remove</button>
           </div>
         </div>`;
@@ -253,6 +255,18 @@ function jqStartAll() {
 function jqStartOne(id) {
   const item = findItem(jq.items, id);
   if (!item || item.status === "running" || item.status === "starting") return;
+  if (item.status === "scheduled") {
+    clearTimer(id);
+    jq.items = updateItem(jq.items, id, {
+      status: "starting",
+      start_at: null,
+      error: null,
+    });
+    jqSave();
+    jqRender();
+    schedule(id, 0, () => jqStartNow(id));
+    return;
+  }
   const delayMs = Math.max(0, (Number(item.delay) || 0) * 1000);
   jq.items = updateItem(jq.items, id, {
     status: delayMs > 0 ? "scheduled" : "starting",
