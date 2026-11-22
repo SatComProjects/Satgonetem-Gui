@@ -8,7 +8,6 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
@@ -38,14 +37,22 @@ def _allowed_hosts(settings: Settings) -> list[str]:
     return sorted(hosts)
 
 
-def _install_origin_guard(app: FastAPI, hosts: list[str]) -> None:
-    """Reject state-changing requests from a non-allowed browser origin."""
+def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
+    """Reject untrusted Host headers and cross-origin browser mutations."""
     allowed_names = {
         host.strip("[]") for host in hosts
     } | {"127.0.0.1", "localhost", "testserver", "::1"}
 
     @app.middleware("http")
-    async def same_origin_guard(request, call_next):
+    async def request_guard(request, call_next):
+        host_header = request.headers.get("host", "")
+        host_name = (urlsplit(f"//{host_header}").hostname or "").lower()
+        if host_name not in allowed_names:
+            return JSONResponse(
+                status_code=400,
+                content={"ok": False, "error": "Invalid Host header."},
+            )
+
         if request.method in UNSAFE_METHODS:
             origin = request.headers.get("origin")
             if origin:
@@ -96,8 +103,7 @@ def create_app(
 
     app = FastAPI(title="SatGoNetem GUI")
     allowed_hosts = _allowed_hosts(settings)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
-    _install_origin_guard(app, allowed_hosts)
+    _install_request_guards(app, allowed_hosts)
     install_error_handlers(app)
     app.state.settings = settings
     app.state.services = services

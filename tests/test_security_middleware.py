@@ -6,6 +6,8 @@ def test_untrusted_host_header_is_rejected(client) -> None:
     response = client.get("/api/status", headers={"Host": "evil.example"})
 
     assert response.status_code == 400
+    assert response.json()["ok"] is False
+    assert "Host" in response.json()["error"]
 
 
 def test_cross_origin_mutation_is_rejected(client) -> None:
