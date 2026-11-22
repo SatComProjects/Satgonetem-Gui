@@ -112,7 +112,10 @@ def resolve_save_path(
     candidate = Path(requested).expanduser()
     if not candidate.is_absolute():
         candidate = root / candidate
-    candidate = candidate.resolve()
+    try:
+        candidate = candidate.resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise SavePathError("Save path is invalid.") from exc
     try:
         candidate.relative_to(root)
     except ValueError as exc:
