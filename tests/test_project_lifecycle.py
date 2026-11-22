@@ -95,6 +95,11 @@ def test_reset_returns_to_idle() -> None:
         "pending_name": None,
         "loaded": False,
         "error": None,
+        "phase": "idle",
+        "progress": None,
+        "started_at": None,
+        "finished_at": None,
+        "elapsed_ms": None,
     }
 
 
@@ -187,3 +192,86 @@ def test_new_project_clears_addressing_state() -> None:
     session.set_addressing_applied(True)
     session.reset()
     assert session.addressing_applied is False
+
+
+def test_begin_starts_the_validating_phase() -> None:
+    """A reserved build reports validating with no synthetic percentage."""
+    session = ProjectSession()
+
+    assert session.begin("Project", save_path="/tmp/project", operation="create")
+
+    snapshot = session.snapshot()
+    assert snapshot["phase"] == "validating"
+    assert snapshot["progress"] == 0
+    assert snapshot["started_at"] is not None
+    assert snapshot["finished_at"] is None
+    assert snapshot["elapsed_ms"] is not None
+    assert snapshot["elapsed_ms"] >= 0
+
+
+def test_phase_updates_require_the_active_creating_operation() -> None:
+    """Only the current operation may advance the phase while creating."""
+    session = ProjectSession()
+    assert session.begin("Project", save_path="", operation="create")
+    token = session.token
+
+    assert session.set_phase("building", token=token) is True
+    snapshot = session.snapshot()
+    assert snapshot["phase"] == "building"
+    assert snapshot["progress"] is None
+
+    assert session.set_phase("building", 42, token=(token or 0) + 1) is False
+    assert session.snapshot()["progress"] is None
+
+    session.succeed(_fake_manager(), "Project", "")
+    assert session.set_phase("building", token=token) is False
+    snapshot = session.snapshot()
+    assert snapshot["phase"] == "ready"
+    assert snapshot["progress"] == 100
+    assert snapshot["finished_at"] is not None
+    assert snapshot["elapsed_ms"] is not None
+    assert snapshot["elapsed_ms"] >= 0
+
+
+def test_task_manager_marks_finalizing_before_installing() -> None:
+    """The task manager reports finalizing just before a successful install."""
+    session = ProjectSession()
+    observed = {}
+    original_succeed = session.succeed
+
+    def record_phase(*args, **kwargs):
+        observed["phase"] = session.snapshot()["phase"]
+        observed["progress"] = session.snapshot()["progress"]
+        return original_succeed(*args, **kwargs)
+
+    session.succeed = record_phase
+    manager = ProjectTaskManager(session)
+
+    assert manager.start(
+        "Phases",
+        "",
+        "create",
+        lambda: ProjectResult(object(), "Phases", ""),
+    )
+    thread = manager.thread
+    assert thread is not None
+    thread.join(timeout=2)
+
+    assert observed == {"phase": "finalizing", "progress": 95}
+    assert session.snapshot()["phase"] == "ready"
+
+
+def test_failure_records_the_error_phase() -> None:
+    """A failed operation ends in the explicit error phase."""
+    session = ProjectSession()
+    session.begin("Broken", save_path="", operation="create")
+
+    session.fail("bad shell")
+
+    snapshot = session.snapshot()
+    assert snapshot["phase"] == "error"
+    assert snapshot["progress"] == 100
+    assert snapshot["started_at"] is not None
+    assert snapshot["finished_at"] is not None
+    assert snapshot["elapsed_ms"] is not None
+    assert snapshot["elapsed_ms"] >= 0

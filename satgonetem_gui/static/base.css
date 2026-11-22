@@ -11,6 +11,9 @@
   --ok-border: #1f4d2a;
   --bad: #f87171;
   --bad-border: #4b1f1f;
+  --warning: #fbbf24;
+  --warning-border: #4a3a12;
+  --unknown: #7d8ea3;
 }
 
 * {
@@ -155,4 +158,154 @@ button.small,
 .button.small {
   padding: 5px 10px;
   font-size: 0.8rem;
+}
+
+/* Preflight readiness checks ---------------------------------------------
+ * Shared by the dashboard Readiness card and the New Project panel.
+ * Rows are injected from the diagnostics response; colours come from the
+ * row's data-status so the dot and accent always agree.
+ */
+
+.preflight-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.preflight-head .card-title {
+  margin: 0;
+}
+
+.preflight-head .button {
+  flex-shrink: 0;
+  background: #101823;
+}
+
+.preflight-head .button:hover {
+  background: #182230;
+}
+
+.preflight-msg {
+  margin: 0 0 10px;
+  min-height: 1.35em;
+  overflow-wrap: anywhere;
+}
+
+.preflight-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+.preflight-checks:empty {
+  display: none;
+}
+
+.preflight-checks > .muted {
+  margin: 4px 0 0;
+}
+
+.preflight-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 0 8px 10px;
+  border-top: 1px solid var(--border-subtle);
+  border-left: 2px solid transparent;
+}
+
+.preflight-check:first-child {
+  border-top: none;
+}
+
+.preflight-check > .status-dot {
+  flex: 0 0 auto;
+  margin: 5px 0 0;
+}
+
+.preflight-check-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.preflight-check-body strong {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.preflight-check-message,
+.preflight-hint {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.preflight-check-message {
+  color: var(--muted);
+}
+
+.preflight-hint {
+  color: var(--muted);
+}
+
+.preflight-hint:empty {
+  display: none;
+}
+
+.preflight-check[data-status="ok"] {
+  border-left-color: var(--ok);
+}
+
+.preflight-check[data-status="warning"] {
+  border-left-color: var(--warning);
+}
+
+.preflight-check[data-status="error"] {
+  border-left-color: var(--bad);
+}
+
+.preflight-check[data-status="unknown"] {
+  border-left-color: var(--border);
+}
+
+.preflight-check[data-status="ok"] > .status-dot {
+  background: var(--ok);
+  border-color: var(--ok-border);
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.12);
+}
+
+.preflight-check[data-status="warning"] > .status-dot {
+  background: var(--warning);
+  border-color: var(--warning-border);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.12);
+}
+
+.preflight-check[data-status="error"] > .status-dot {
+  background: var(--bad);
+  border-color: var(--bad-border);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.12);
+}
+
+.preflight-check[data-status="unknown"] > .status-dot {
+  background: transparent;
+  border-color: var(--unknown);
+  box-shadow: none;
+}
+
+.preflight-check[data-status="unknown"] .preflight-check-body strong {
+  color: var(--muted);
+}
+
+.preflight-check[data-status="warning"] .preflight-hint {
+  color: #e8c777;
+}
+
+.preflight-check[data-status="error"] .preflight-hint {
+  color: #f1b3b3;
 }

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from .adapters.environment_doctor import LocalEnvironmentDoctor
 from .adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
 from .config import Settings, load_settings
@@ -18,6 +19,7 @@ from .errors import install_error_handlers
 from .resources import GROUND_STATIONS_DIR
 from .routes import (
     addressability,
+    diagnostics,
     pages,
     projects,
     routing,
@@ -27,6 +29,7 @@ from .routes import (
 )
 from .services.addressability_service import AddressabilityService
 from .services.container import ApplicationServices
+from .services.preflight_service import PreflightService
 from .services.project_service import ProjectService
 from .services.routing_service import RoutingService
 from .services.simulation_service import SimulationService
@@ -144,6 +147,7 @@ def build_services(settings: Settings) -> ApplicationServices:
     )
     routing = RoutingService(topology, topology_adapter, reader=topology_adapter)
     traffic = TrafficService(topology, traffic_adapter)
+    preflight = PreflightService(LocalEnvironmentDoctor(settings))
     return ApplicationServices(
         runtime=runtime,
         project=project,
@@ -152,6 +156,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         routing=routing,
         traffic=traffic,
         simulation=simulation,
+        preflight=preflight,
     )
 
 
@@ -188,4 +193,5 @@ def create_app(
     app.include_router(routing.router)
     app.include_router(simulation.router)
     app.include_router(traffic.router)
+    app.include_router(diagnostics.router)
     return app

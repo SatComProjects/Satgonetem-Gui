@@ -11,6 +11,7 @@ import pytest
 
 from satgonetem_gui.routes import (
     addressability,
+    diagnostics,
     projects,
     routing,
     topology,
@@ -21,6 +22,7 @@ BLOCKING_ENDPOINTS = [
     addressability.api_satellite_addressability,
     addressability.api_set_satellite_addressability,
     addressability.api_set_node_addressability,
+    diagnostics.api_preflight,
     projects.api_ground_station_presets,
     projects.api_project_create,
     projects.api_project_status,

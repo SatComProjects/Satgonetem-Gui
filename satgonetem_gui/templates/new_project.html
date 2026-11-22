@@ -40,7 +40,7 @@
 </section>
 
 <section id="create-status" class="card" style="display:none; margin-top:12px;">
-  <h3>Creating Project...</h3>
+  <h3 id="create-status-title">Creating Project...</h3>
   <div class="row">
     <span id="create-progress-label" class="loading-label">Constellation</span>
     <div class="progress-bar"><div id="create-progress-fill" class="progress-fill" style="width:0%"></div></div>
@@ -125,6 +125,16 @@
   </div>
 </div>
 
+<section class="card preflight-panel" id="preflight-panel">
+  <div class="preflight-head">
+    <h3 class="card-title">Project Readiness</h3>
+    <button type="button" class="button small secondary" id="preflight-run">Run check</button>
+  </div>
+  <p class="muted preflight-msg" id="preflight-msg" aria-live="polite">Run a readiness check before creating.</p>
+  <div class="preflight-estimate" id="preflight-estimate"></div>
+  <div class="preflight-checks" id="preflight-checks"></div>
+</section>
+
 <section class="card" style="margin-top:16px;">
   <div class="actions">
     <button id="createBtn" type="button">Create</button>
@@ -132,5 +142,5 @@
   </div>
 </section>
 
-<script type="module" src="/static/new_project.js?v=14"></script>
+<script type="module" src="/static/new_project.js?v=15"></script>
 {% endblock %}

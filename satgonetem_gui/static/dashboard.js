@@ -7,6 +7,7 @@
  */
 import { api } from "./api.js?v=4";
 import { initSimulationControls } from "./simulation_controls.js?v=1";
+import { runPreflight } from "./preflight_ui.js?v=1";
 
 const POLL_INTERVAL_MS = 2000;
 const simulation = initSimulationControls({ poll: false });
@@ -38,6 +39,7 @@ let gonetemBusy = false;
 let statusInFlight = false;
 let routingInFlight = false;
 let routingBusy = false;
+let preflightInFlight = false;
 
 /**
  * Apply a status snapshot from /api/status to the DOM.
@@ -216,8 +218,35 @@ el("btn-delete").addEventListener("click", async function () {
   await pollRoutingStatus();
 });
 
+async function refreshPreflight() {
+  const checks = el("preflight-checks");
+  if (!checks || preflightInFlight) return;
+  preflightInFlight = true;
+  const button = el("preflight-recheck");
+  if (button) button.disabled = true;
+  try {
+    await runPreflight({
+      checksElement: checks,
+      msgElement: el("preflight-msg"),
+    });
+  } catch (err) {
+    const message = el("preflight-msg");
+    if (message) {
+      message.textContent =
+        "Readiness check failed: " + (err.message || "network error");
+      message.style.color = "var(--bad)";
+    }
+  } finally {
+    preflightInFlight = false;
+    if (button) button.disabled = false;
+  }
+}
+
+el("preflight-recheck")?.addEventListener("click", refreshPreflight);
+
 pollStatus();
 setInterval(pollStatus, POLL_INTERVAL_MS);
 
 pollRoutingStatus();
 setInterval(pollRoutingStatus, POLL_INTERVAL_MS);
+refreshPreflight();

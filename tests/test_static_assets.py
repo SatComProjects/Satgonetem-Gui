@@ -17,6 +17,10 @@ WORLD_TEMPLATE = PACKAGE / "templates" / "world.html"
 SIMULATION_CONTROLS = PACKAGE / "static" / "simulation_controls.js"
 SIMULATION_MODEL_IMPORT = "./simulation_model.js?v=1"
 ADDRESSABILITY_MODEL_IMPORT = "./addressability_model.js?v=1"
+PREFLIGHT_MODEL_IMPORT = "./preflight_model.js?v=1"
+PREFLIGHT_UI_IMPORT = "./preflight_ui.js?v=1"
+DASHBOARD_MODULE = PACKAGE / "static" / "dashboard.js"
+NEW_PROJECT_MODULE = PACKAGE / "static" / "new_project.js"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
 WORLD_MODULE = PACKAGE / "static" / "world.js"
 
@@ -31,6 +35,14 @@ def test_link_controllers_import_the_versioned_model() -> None:
     """Node Explorer and World View share one cache-busted link model."""
     for path in (NODES_MODULE, WORLD_MODULE):
         assert f'"{LINKS_MODEL_IMPORT}"' in path.read_text(encoding="utf-8")
+
+
+def test_preflight_pages_import_the_versioned_ui_and_model() -> None:
+    """Dashboard and New Project share cache-busted preflight modules."""
+    for path in (DASHBOARD_MODULE, NEW_PROJECT_MODULE):
+        content = path.read_text(encoding="utf-8")
+        assert f'"{PREFLIGHT_UI_IMPORT}"' in content
+    assert f'"{PREFLIGHT_MODEL_IMPORT}"' in NEW_PROJECT_MODULE.read_text(encoding="utf-8")
 
 
 def test_queue_imports_the_versioned_history_and_queue_models() -> None:

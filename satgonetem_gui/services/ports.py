@@ -7,6 +7,12 @@ from ..schemas import Hping3Request, Iperf3Request, PingRequest, ProjectCreateRe
 from ..state import ProjectResult
 
 
+class EnvironmentDoctor(Protocol):
+    """Local environment readiness checks for preflight diagnostics."""
+
+    def environment_checks(self) -> list[dict[str, Any]]: ...
+
+
 class ProjectGateway(Protocol):
     """Project build, load, save, and configuration operations."""
 

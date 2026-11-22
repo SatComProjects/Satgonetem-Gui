@@ -219,6 +219,22 @@ not import those dependency internals.
 - Deferred utilization until the core's `/tmp/interfaces` monitor contract is
   verified or replaced.
 
+## Phase 14 changes
+
+- Added a bounded environment doctor (`LocalEnvironmentDoctor`) for storage,
+  Docker, required images, and GoNetEm server reachability.
+- Added `POST /api/diagnostics/preflight` with a pure constellation estimate
+  (satellites, inline stations, containers, rough memory) and explicit
+  `blocking` semantics; only storage/configuration errors block creation.
+- Replaced synthetic create percentages with session phase/progress fields
+  (`validating`, `building`, `loading`, `finalizing`, `ready`, `error`) and
+  monotonic elapsed time; UI phases without a percentage use an indeterminate
+  bar.
+- Added Dashboard/New Project readiness panels, Vitest formatting/model tests,
+  and Playwright coverage for readiness, blocking creation, and indeterminate
+  progress.
+- Declared direct `docker` and `pyyaml` dependencies.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -241,12 +257,14 @@ not import those dependency internals.
 - Vitest covers the pure queue, ground-station selection, traffic payload, API
   wrapper, simulation formatting/action rules, addressability summaries/rules,
   experiment-history compaction/export/comparison, forwarding-path formatting,
-  link formatting/filtering/width, and escaping modules.
+  link formatting/filtering/width, preflight/phase formatting, and escaping
+  modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
   node expansion, dashboard counts, simulation panel accessibility,
   addressability endpoint refresh, history reopen/capture/export/delete/compare,
-  forwarding-path rendering, link-inspector rendering, and the WebGL fallback.
+  forwarding-path rendering, link-inspector rendering, readiness checks,
+  blocking creation, indeterminate build progress, and the WebGL fallback.
   World View WebGL rendering itself remains a manual desktop check.
 
 ## Current measurements
@@ -258,11 +276,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **527 passed, 1 skipped** in about 51 s with coverage. Frontend:
-**87 Vitest tests**, **21 Playwright tests**.
+Result: **571 passed, 1 skipped** in about 37 s with coverage. Frontend:
+**93 Vitest tests**, **25 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**90.14%** over 2482 statements.
+**90.35%** over 2845 statements.
 
 ## Tooling decisions
 

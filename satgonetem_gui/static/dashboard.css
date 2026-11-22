@@ -67,3 +67,12 @@
   min-height: 1.2em;
   margin-top: 10px;
 }
+
+/* Readiness card -------------------------------------------------------- */
+
+#preflight-card {
+  min-width: 0;
+  background:
+    radial-gradient(120% 100% at 100% 0, rgba(61, 169, 252, 0.07), transparent 60%),
+    var(--card);
+}

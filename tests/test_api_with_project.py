@@ -153,6 +153,12 @@ def test_project_status_reports_loaded(project_client) -> None:
     assert data["project_name"] == PROJECT_NAME
     assert data["loaded"] is True
     assert data["error"] is None
+    assert data["phase"] == "ready"
+    assert data["progress"] == 100
+    assert data["started_at"] is not None
+    assert data["finished_at"] is not None
+    assert isinstance(data["elapsed_ms"], int)
+    assert data["elapsed_ms"] >= 0
 
 
 def test_routing_status_without_containers(project_client) -> None:

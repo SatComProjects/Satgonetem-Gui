@@ -1782,3 +1782,61 @@ def test_addressability_mutations_report_routing_refresh_after_the_update() -> N
     assert service.set_one("Sat1", True)["routing_refresh_required"] is True
     assert service.set_all(False)["routing_refresh_required"] is True
     assert service.status()["routing_refresh_required"] is True
+
+
+def test_project_create_reports_the_building_phase(tmp_path) -> None:
+    """The background runner advances from validating to building to ready."""
+    runtime = RuntimeState()
+    observed = {}
+
+    class Gateway:
+        def build(self, payload):
+            observed["phase"] = runtime.project.snapshot()["phase"]
+            return ProjectResult(object(), payload.name, "")
+
+    service = ProjectService(
+        runtime,
+        Gateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    service.start_create(ProjectCreateRequest(**project_payload("Phases")))
+    thread = runtime.project_tasks.thread
+    assert thread is not None
+    thread.join(timeout=5)
+
+    assert observed["phase"] == "building"
+    snapshot = runtime.project.snapshot()
+    assert snapshot["phase"] == "ready"
+    assert snapshot["progress"] == 100
+    assert snapshot["started_at"] is not None
+    assert snapshot["finished_at"] is not None
+
+
+def test_project_load_reports_the_loading_phase(tmp_path) -> None:
+    """A load advances from validating to loading to ready."""
+    runtime = RuntimeState()
+    observed = {}
+
+    class Gateway:
+        def load(self, _content):
+            observed["phase"] = runtime.project.snapshot()["phase"]
+            return ProjectResult(object(), "Loaded", "")
+
+        def cleanup_ground_files(self, _topology):
+            pass
+
+    service = ProjectService(
+        runtime,
+        Gateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    assert asyncio.run(service.load("{}")) == "Loaded"
+    assert observed["phase"] == "loading"
+    snapshot = runtime.project.snapshot()
+    assert snapshot["phase"] == "ready"
+    assert snapshot["progress"] == 100
+    assert snapshot["finished_at"] is not None
