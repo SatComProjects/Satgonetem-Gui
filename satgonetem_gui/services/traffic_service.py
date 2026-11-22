@@ -44,6 +44,7 @@ class TrafficJob:
     error: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
+    clock: Callable[[], float] = field(default=time.time, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @property
@@ -73,7 +74,7 @@ class TrafficJob:
                 self.results = results
             if error is not None:
                 self.error = error
-            self.updated_at = time.time()
+            self.updated_at = self.clock()
             return True
 
     def snapshot(self) -> dict[str, Any]:
@@ -115,14 +116,16 @@ class JobRegistry:
                 self._evict_terminal_locked()
             if len(self._jobs) >= self.max_jobs:
                 raise JobCapacityError("Traffic job limit reached.")
+            now = self.clock()
             job = TrafficJob(
                 job_id=f"j{uuid.uuid4().hex}",
                 kind=kind,
                 flow=flow,
                 src=src,
                 dst=dst,
-                created_at=self.clock(),
-                updated_at=self.clock(),
+                created_at=now,
+                updated_at=now,
+                clock=self.clock,
             )
             self._jobs[job.job_id] = job
         return job

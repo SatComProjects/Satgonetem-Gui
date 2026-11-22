@@ -320,7 +320,6 @@ def test_registry_prunes_expired_terminal_jobs() -> None:
     registry = JobRegistry(max_jobs=10, ttl_seconds=10, clock=lambda: now)
     job = registry.create("ping", object(), "a", "b")
     job.transition("done")
-    job.updated_at = 0.0
     now = 100.0
 
     registry.prune()
