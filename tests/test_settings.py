@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from satgonetem_gui.config import load_settings
 
 
@@ -36,6 +38,25 @@ def test_environment_overrides_settings(monkeypatch, tmp_path: Path) -> None:
     assert settings.host == "0.0.0.0"
     assert settings.port == 9000
     assert settings.save_root == (tmp_path / "projects").resolve()
+
+
+@pytest.mark.parametrize("host", ["", "   "])
+def test_empty_host_falls_back_to_loopback(monkeypatch, host: str) -> None:
+    """An empty or whitespace-only host must not bind every interface."""
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("SATGONETEM_GUI_HOST", host)
+
+    assert load_settings().host == "127.0.0.1"
+
+
+@pytest.mark.parametrize("port", ["0", "65536", "-1", "not-a-port"])
+def test_invalid_port_is_rejected(monkeypatch, port: str) -> None:
+    """Ports outside 1-65535 and non-integers fail with a clear error."""
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("SATGONETEM_GUI_PORT", port)
+
+    with pytest.raises(ValueError, match="SATGONETEM_GUI_PORT"):
+        load_settings()
 
 
 def test_main_uses_loaded_settings(monkeypatch) -> None:
