@@ -269,6 +269,18 @@ not import those dependency internals.
 - Added the `/experiments` page, experiment specification, Vitest formatting,
   and Playwright run/artifact coverage.
 
+## Phase 18 changes
+
+- Added `GET /api/experiments/{run_id}/metrics?tail=N` for bounded, parsed
+  metric samples from running and completed runs.
+- Added a run detail panel with a live chart, summary stats, report, scenario,
+  and artifacts; added two-to-four-run comparison with a metric overlay and
+  scenario line diff.
+- Stripped the core report's absolute `run_dir` from stored and served
+  summaries.
+- Added the detail/compare specification, Vitest chart-data/table/diff tests,
+  and Playwright detail/compare coverage.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -293,7 +305,7 @@ not import those dependency internals.
   experiment-history compaction/export/comparison, forwarding-path formatting,
   link formatting/filtering/width/usage colors, preflight/phase formatting,
   project-workspace formatting, connectivity matrix formatting, experiment
-  status/summary/artifact formatting, and escaping modules.
+  status/summary/artifact/detail formatting and diffing, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
   node expansion, dashboard counts, simulation panel accessibility,
@@ -301,8 +313,8 @@ not import those dependency internals.
   forwarding-path rendering, link-inspector rendering, readiness checks,
   blocking creation, indeterminate build progress, workspace list/open/save,
   connectivity start/heatmap/export, experiment start/list/artifact download,
-  and the WebGL fallback. World View WebGL rendering itself remains a manual
-  desktop check.
+  detail/live metrics, comparison/diff, and the WebGL fallback. World View
+  WebGL rendering itself remains a manual desktop check.
 
 ## Current measurements
 
@@ -313,11 +325,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **716 passed, 1 skipped** in about 46 s with coverage. Frontend:
-**108 Vitest tests**, **30 Playwright tests**.
+Result: **723 passed, 1 skipped** in about 46 s with coverage. Frontend:
+**114 Vitest tests**, **32 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**88.83%** over 4181 statements.
+**88.97%** over 4218 statements.
 
 ## Tooling decisions
 
