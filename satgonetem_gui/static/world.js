@@ -1,4 +1,8 @@
 import { api } from "./api.js";
+import {
+    describeGroundStation,
+    describeSatellite,
+} from "./world_model.js";
 
 const SAT_COLOR = Cesium.Color.fromCssColorString("#3b82f6");
 const GS_CONN_COLOR = Cesium.Color.fromCssColorString("#22c55e");
@@ -257,7 +261,7 @@ function updateSatellites(satellites) {
                     pixelSize: 5,
                     color: SAT_COLOR,
                 },
-                description: `<b>${sat.name}</b><br>Lat: ${p.latitude.toFixed(2)}<br>Lon: ${p.longitude.toFixed(2)}<br>Alt: ${p.altitude.toFixed(0)} km`,
+                description: describeSatellite(sat.name, p),
                 show: vis.satellites,
             });
         }
@@ -297,8 +301,6 @@ function updateGroundStations(groundStations, connected) {
         seen.add(gs.name);
 
         const color = connected.has(gs.name) ? GS_CONN_COLOR : GS_DISC_COLOR;
-        const city = gs.city ? ` (${gs.city})` : "";
-        const statusText = connected.has(gs.name) ? "Connected" : "Disconnected";
 
         if (gsEntities[gs.name]) {
             gsEntities[gs.name].position = pos;
@@ -324,7 +326,12 @@ function updateGroundStations(groundStations, connected) {
                     pixelOffset: new Cesium.Cartesian2(0, -18),
                     show: true,
                 },
-                description: `<b>${gs.name}${city}</b><br>Lat: ${p.latitude.toFixed(2)}<br>Lon: ${p.longitude.toFixed(2)}<br>Status: ${statusText}`,
+                description: describeGroundStation(
+                    gs.name,
+                    gs.city,
+                    p,
+                    connected.has(gs.name),
+                ),
                 show: vis.groundStations,
             });
         }
