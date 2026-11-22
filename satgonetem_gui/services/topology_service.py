@@ -1,10 +1,18 @@
 """Read-only topology queries."""
 
+import re
 from typing import Any
 
 from ..errors import APIError
 from ..state import ProjectSession
 from .ports import TopologyReader
+
+_NODE_NAME_RE = re.compile(r"^(?:Sat|Gnd)\d+$")
+
+
+def is_node_name(name: str) -> bool:
+    """Return whether a name matches the core's ``Sat<id>``/``Gnd<id>`` form."""
+    return bool(_NODE_NAME_RE.fullmatch(name))
 
 
 class TopologyService:
@@ -57,14 +65,20 @@ class TopologyService:
 
     def node_detail(self, name: str) -> dict:
         """Return one node's details or raise 404."""
-        detail = self.reader.node_detail(self.require_topology(), name)
+        topology = self.require_topology()
+        if not is_node_name(name):
+            raise APIError(404, f"Node not found: {name}")
+        detail = self.reader.node_detail(topology, name)
         if detail is None:
             raise APIError(404, f"Node not found: {name}")
         return detail
 
     def find_node(self, name: str) -> Any | None:
         """Return a concrete node object for traffic setup."""
-        return self.reader.find_node(self.require_topology(), name)
+        topology = self.require_topology()
+        if not is_node_name(name):
+            return None
+        return self.reader.find_node(topology, name)
 
     def traffic_nodes(self) -> list[dict[str, str]]:
         """Return traffic source/destination options."""

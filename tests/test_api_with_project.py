@@ -82,6 +82,15 @@ def test_nodes_and_node_detail(project_client) -> None:
     assert ground_response.json()["node"]["city"] == "Berlin"
 
 
+@pytest.mark.parametrize("name", ["Satellite", "Sat", "Gnd", "Gndabc", "Sat-1"])
+def test_malformed_node_names_return_404(project_client, name: str) -> None:
+    """Names the core cannot parse are client errors, not 500s."""
+    response = project_client.get(f"/api/nodes/{name}")
+
+    assert response.status_code == 404
+    assert response.json()["ok"] is False
+
+
 def test_unknown_node_returns_404(project_client) -> None:
     """A missing node name is a 404, not a server error."""
     response = project_client.get("/api/nodes/NoSuchNode")
