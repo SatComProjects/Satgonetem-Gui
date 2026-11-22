@@ -121,6 +121,11 @@ def serialize_iperf3_results(
     return clean_json(data)
 
 
+def _ping_rtt(value: Any, reachable: bool) -> Any:
+    """Return None instead of the core's 0.0 placeholder for a lost packet."""
+    return value if reachable or value not in (0, 0.0) else None
+
+
 def serialize_ping_results(result: Any) -> dict[str, Any]:
     """Extract summary data from a ping result object."""
     return clean_json(
@@ -129,10 +134,10 @@ def serialize_ping_results(result: Any) -> dict[str, Any]:
             "packets_received": result.packets_received,
             "packet_loss_percent": result.packet_loss_percent,
             "reachable": result.reachable,
-            "rtt_min_ms": result.rtt_min_ms,
-            "rtt_avg_ms": result.rtt_avg_ms,
-            "rtt_max_ms": result.rtt_max_ms,
-            "rtt_mdev_ms": result.rtt_mdev_ms,
+            "rtt_min_ms": _ping_rtt(result.rtt_min_ms, result.reachable),
+            "rtt_avg_ms": _ping_rtt(result.rtt_avg_ms, result.reachable),
+            "rtt_max_ms": _ping_rtt(result.rtt_max_ms, result.reachable),
+            "rtt_mdev_ms": _ping_rtt(result.rtt_mdev_ms, result.reachable),
         }
     )
 
