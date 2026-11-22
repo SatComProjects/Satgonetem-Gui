@@ -11,6 +11,14 @@ def test_unknown_route_uses_the_error_envelope(client) -> None:
     assert body["error"]
 
 
+def test_method_not_allowed_keeps_the_allow_header(client) -> None:
+    """The shared HTTP error handler preserves framework response headers."""
+    response = client.put("/api/status")
+
+    assert response.status_code == 405
+    assert "allow" in {name.lower() for name in response.headers}
+
+
 def test_missing_project_uses_the_error_envelope(client) -> None:
     """A known route without a loaded project uses the envelope."""
     response = client.get("/api/satellites")

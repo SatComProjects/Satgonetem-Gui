@@ -6,7 +6,10 @@ from .. import schemas
 from ..dependencies import get_services
 from ..services.container import ApplicationServices
 
-router = APIRouter(tags=["projects"])
+router = APIRouter(
+    tags=["projects"],
+    responses=schemas.error_responses(400, 404, 409, 422, 500),
+)
 
 # Blocking service calls are declared with ``def`` so FastAPI runs them in its
 # threadpool instead of on the event loop. Only handlers awaiting an async

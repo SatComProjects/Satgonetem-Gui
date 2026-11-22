@@ -26,11 +26,13 @@ def _error_response(
     status_code: int,
     message: str,
     details=None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     body = ErrorResponse(error=message, details=details)
     return JSONResponse(
         status_code=status_code,
         content=body.model_dump(exclude_none=True),
+        headers=headers,
     )
 
 
@@ -56,7 +58,7 @@ def install_error_handlers(app: FastAPI) -> None:
         _request: Request, exc: StarletteHTTPException
     ) -> JSONResponse:
         message = str(exc.detail) if exc.detail else "Request failed."
-        return _error_response(exc.status_code, message)
+        return _error_response(exc.status_code, message, headers=exc.headers)
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(_request: Request, exc: Exception) -> JSONResponse:

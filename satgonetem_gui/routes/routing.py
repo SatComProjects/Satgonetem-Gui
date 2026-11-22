@@ -6,7 +6,10 @@ from .. import schemas
 from ..dependencies import get_services
 from ..services.container import ApplicationServices
 
-router = APIRouter(tags=["routing"])
+router = APIRouter(
+    tags=["routing"],
+    responses=schemas.error_responses(404, 409, 422, 500),
+)
 
 # The blocking status read is declared with ``def`` so FastAPI runs it in its
 # threadpool. Mutating handlers stay ``async def`` because the service offloads

@@ -14,6 +14,11 @@ class ErrorResponse(BaseModel):
     details: Any | None = None
 
 
+def error_responses(*statuses: int) -> dict[int, dict[str, Any]]:
+    """Build OpenAPI response declarations for the shared error envelope."""
+    return {status: {"model": ErrorResponse} for status in statuses}
+
+
 class Position(BaseModel):
     """Geodetic position returned by topology endpoints."""
 
