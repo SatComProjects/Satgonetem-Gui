@@ -54,10 +54,33 @@ describe("queue model", () => {
   });
 
   it("starts new items with no poll failures or scheduled time", () => {
+    const before = Date.now();
     const items = addItem([], fields, "q1");
 
     expect(items[0].poll_failures).toBe(0);
     expect(items[0].start_at).toBeNull();
+    expect(items[0].created_at).toBeGreaterThanOrEqual(before);
+    expect(items[0].started_at).toBeNull();
+  });
+
+  it("preserves valid run timestamps and defaults old storage safely", () => {
+    const items = normalizeStoredItems([
+      {
+        id: "q1",
+        kind: "ping",
+        created_at: 1_000,
+        started_at: 2_000,
+      },
+      { id: "q2", kind: "ping", created_at: "bad", started_at: "" },
+      { id: "q3", kind: "ping" },
+    ]);
+
+    expect(items[0].created_at).toBe(1_000);
+    expect(items[0].started_at).toBe(2_000);
+    expect(items[1].created_at).toBeNull();
+    expect(items[1].started_at).toBeNull();
+    expect(items[2].created_at).toBeNull();
+    expect(items[2].started_at).toBeNull();
   });
 
   it("computes remaining delay and restores start_at from storage", () => {

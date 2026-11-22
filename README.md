@@ -11,6 +11,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Simulation Controls** | Play, pause, step, reset, seek, and change the playback speed of the emulated constellation. |
 | **Node Explorer** | Browse all satellites and ground stations with detailed status. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
+| **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
 | **Routing Control** | Apply Static/Dijkstra, OSPF, IS-IS, or SR-MPLS routing across the emulated topology. |
 | **GoNetem Integration** | Start and stop Dockerised network nodes directly from the web UI. |
 | **Save / Load** | Export and import projects as JSON files. |
@@ -99,7 +100,7 @@ package.json            # Frontend test/tooling manifest
 | `/` | Dashboard — constellation statistics, simulation playback, GoNetem status, routing controls |
 | `/world` | 3D Globe — real-time satellite and ground station visualisation with simulation playback |
 | `/nodes` | Node Explorer — list and inspect all topology nodes |
-| `/traffic` | Traffic Generator — create and queue traffic jobs |
+| `/traffic` | Traffic Generator — create and queue traffic jobs, review history and comparisons |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
 | `/docs` | API Documentation — auto-generated Swagger UI |
@@ -122,6 +123,19 @@ setting is session-scoped because SatGoNetEm v0.3.1 does not serialize the
 addressable flag, so re-enable it after loading or replacing a project. If
 addressing and routing are already applied, re-apply them before running
 traffic so the new endpoints receive routes.
+
+## Experiment History
+
+Completed traffic runs are copied into a compact browser-local ledger. Open
+**History** in the floating Job Queue to reopen a result, delete a run, export
+one run or the whole ledger as JSON/CSV, or compare two same-kind runs. The
+comparison shows a summary table with Run B minus Run A deltas and a primary
+series chart (iperf3 throughput or hping3 RTT).
+
+Only successful runs are recorded. History is per-browser, retains at most 20
+runs (about 2 MB), and samples long iperf3 interval arrays. It is lost if
+browser storage is cleared; it is not a substitute for server-side provenance
+or cross-machine sharing.
 
 ## Configuration
 
