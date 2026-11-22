@@ -76,7 +76,15 @@ def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
             origin = request.headers.get("origin")
             if origin:
                 try:
-                    origin_host = (urlsplit(origin).hostname or "").lower()
+                    parsed_origin = urlsplit(origin)
+                    origin_host = (parsed_origin.hostname or "").lower()
+                    origin_port = parsed_origin.port or (
+                        443 if parsed_origin.scheme == "https" else 80
+                    )
+                    parsed_host = urlsplit(f"//{host_header}")
+                    request_port = parsed_host.port or (
+                        443 if parsed_origin.scheme == "https" else 80
+                    )
                 except ValueError:
                     return JSONResponse(
                         status_code=403,
@@ -85,7 +93,12 @@ def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
                             "error": "Cross-origin request rejected.",
                         },
                     )
-                if origin_host.strip("[]") not in allowed_names:
+                same_host = (parsed_host.hostname or "").lower() == origin_host
+                if (
+                    origin_host.strip("[]") not in allowed_names
+                    or not same_host
+                    or origin_port != request_port
+                ):
                     return JSONResponse(
                         status_code=403,
                         content={
@@ -93,7 +106,12 @@ def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
                             "error": "Cross-origin request rejected.",
                         },
                     )
-        return await call_next(request)
+        response = await call_next(request)
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault(
+            "Content-Security-Policy", "frame-ancestors 'none'"
+        )
+        return response
 
 
 def build_services(settings: Settings) -> ApplicationServices:

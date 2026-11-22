@@ -66,6 +66,44 @@ def test_malformed_origin_header_returns_a_guard_response(tmp_path) -> None:
     assert "Cross-origin" in response.json()["error"]
 
 
+def test_origin_on_another_loopback_port_is_rejected(client) -> None:
+    """Another local service cannot drive mutations through the browser."""
+    response = client.post(
+        "/api/routing/apply",
+        headers={
+            "Host": "127.0.0.1:8000",
+            "Origin": "http://127.0.0.1:9999",
+        },
+        json={"method": "static"},
+    )
+
+    assert response.status_code == 403
+    assert "Cross-origin" in response.json()["error"]
+
+
+def test_origin_on_the_same_loopback_port_is_accepted(client) -> None:
+    """A same-origin mutation on the configured port reaches the handler."""
+    response = client.post(
+        "/api/routing/apply",
+        headers={
+            "Host": "127.0.0.1:8000",
+            "Origin": "http://127.0.0.1:8000",
+        },
+        json={"method": "static"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_pages_send_anti_framing_headers(client) -> None:
+    """The unauthenticated panel cannot be embedded by a remote page."""
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+
+
 def test_configured_host_is_matched_case_insensitively(tmp_path, monkeypatch) -> None:
     """An operator-configured mixed-case host matches lowercased requests."""
     monkeypatch.delenv("SATGONETEM_GUI_ALLOWED_HOSTS", raising=False)
