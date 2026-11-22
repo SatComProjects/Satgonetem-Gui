@@ -217,6 +217,7 @@ def test_serialize_iperf3_results_skips_a_malformed_middle_interval() -> None:
     )
     intervals = [
         {"sum": {"end": 1.0, "bits_per_second": 1.0}},
+        {"sum": {"end": 2.0, "bits_per_second": 2.0}, "omitted": True},
         {"sum": {"end": "not-a-number"}},
         {"sum": {"end": 3.0, "bits_per_second": 3.0}},
         "not-an-interval",

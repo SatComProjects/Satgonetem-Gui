@@ -112,6 +112,8 @@ def serialize_iperf3_results(
         data["total_out_of_order"] = result.total_out_of_order
 
     for interval in intervals or []:
+        if not isinstance(interval, dict) or interval.get("omitted"):
+            continue
         try:
             data["intervals"].append(_serialize_iperf3_interval(interval))
         except Exception:
