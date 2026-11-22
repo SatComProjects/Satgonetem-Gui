@@ -293,10 +293,12 @@ import { normalizeProjectName } from "./new_project_model.js";
     maxAttempts = maxAttempts || 1200;
     delayMs = delayMs || 500;
     var attempts = 0;
+    var transportFailures = 0;
     var lastStatus = null;
     while (attempts < maxAttempts) {
       try {
         lastStatus = await api.get("/api/project/status");
+        transportFailures = 0;
         if (lastStatus.state === "error") {
           var projectError = new Error(lastStatus.error || "Project creation failed");
           projectError.projectFailure = true;
@@ -314,6 +316,15 @@ import { normalizeProjectName } from "./new_project_model.js";
       } catch (e) {
         if (e && e.projectFailure) {
           throw e;
+        }
+        transportFailures += 1;
+        if (transportFailures >= 5) {
+          var lost = new Error(
+            "Lost contact with the project status endpoint: " +
+              String((e && e.message) || e)
+          );
+          lost.projectFailure = true;
+          throw lost;
         }
       }
       attempts++;
