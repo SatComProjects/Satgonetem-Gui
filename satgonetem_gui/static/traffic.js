@@ -1,7 +1,7 @@
 /** Traffic Generator UI controller. */
 import { api } from "./api.js?v=3";
 // Keep this queue.js version in sync with the script tag in templates/base.html.
-import { jqAdd, jqStartNow, jqStartOne } from "./queue.js?v=14";
+import { jqAdd, jqStartNow, jqStartOne } from "./queue.js?v=15";
 import { buildTrafficPayload } from "./traffic_model.js";
 
 function byId(id) {

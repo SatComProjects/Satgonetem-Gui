@@ -412,6 +412,9 @@ async function jqCancel(id) {
         });
         jqSave();
         jqRender();
+        if (current.job_id) {
+          schedule(id, 1500, () => jqTrack(id));
+        }
       }
       return;
     }
