@@ -4,6 +4,7 @@ import {
   describeGroundStation,
   describeSatellite,
   formatCoordinate,
+  hasPosition,
 } from "../satgonetem_gui/static/world_model.js";
 
 describe("world entity descriptions", () => {
@@ -22,6 +23,13 @@ describe("world entity descriptions", () => {
     expect(formatCoordinate(undefined)).toBe("-");
     expect(formatCoordinate("not-a-number")).toBe("-");
     expect(formatCoordinate(12.345, 1)).toBe("12.3");
+  });
+
+  it("requires finite latitude and longitude", () => {
+    expect(hasPosition(null)).toBe(false);
+    expect(hasPosition({ latitude: null, longitude: 1 })).toBe(false);
+    expect(hasPosition({ latitude: 1, longitude: undefined })).toBe(false);
+    expect(hasPosition({ latitude: 1, longitude: 2 })).toBe(true);
   });
 
   it("renders satellite and station status text", () => {

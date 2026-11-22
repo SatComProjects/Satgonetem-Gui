@@ -207,6 +207,7 @@
 
 {% block content %}
 <h2 style="margin-bottom:4px;">World View</h2>
+<p class="muted" id="world-msg" aria-live="polite"></p>
 
 <div id="world-fallback" class="card" style="display:none; margin-top:8px;">
   <h3>3D view unavailable</h3>
@@ -288,5 +289,5 @@
   </div>
 </div>
 
-<script type="module" src="/static/world_boot.js?v=2"></script>
+<script type="module" src="/static/world_boot.js?v=3"></script>
 {% endblock %}

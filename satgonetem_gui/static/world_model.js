@@ -2,6 +2,20 @@
 
 import { escapeHtml } from "./escape.js";
 
+function coordinateNumber(value) {
+  if (value === null || value === undefined) return NaN;
+  const text = String(value).trim();
+  return text === "" ? NaN : Number(text);
+}
+
+export function hasPosition(position) {
+  if (!position) return false;
+  return (
+    Number.isFinite(coordinateNumber(position.latitude)) &&
+    Number.isFinite(coordinateNumber(position.longitude))
+  );
+}
+
 export function formatCoordinate(value, digits = 2) {
   if (value === null || value === undefined) return "-";
   const text = String(value).trim();
