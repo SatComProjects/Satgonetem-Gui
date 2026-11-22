@@ -64,6 +64,3 @@ def create_app(
     app.include_router(routing.router)
     app.include_router(traffic.router)
     return app
-
-
-app = create_app()
