@@ -17,6 +17,7 @@ export function newQueueItem(fields, id = null) {
     job_id: null,
     results: null,
     error: null,
+    poll_failures: 0,
   };
 }
 
@@ -64,5 +65,6 @@ export function normalizeStoredItems(raw) {
       job_id: item.job_id || null,
       results: item.results || null,
       error: item.error || null,
+      poll_failures: Math.max(0, Number(item.poll_failures) || 0),
     }));
 }
