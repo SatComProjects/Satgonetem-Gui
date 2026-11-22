@@ -120,6 +120,13 @@ def _loaded_session() -> ProjectSession:
     return session
 
 
+def _ready_topology() -> TopologyService:
+    """Return a loaded topology with addressing applied for traffic tests."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology.set_addressing_applied(True)
+    return topology
+
+
 def test_topology_status_is_empty_without_a_project() -> None:
     """The dashboard can read an empty status before a project is loaded."""
     service = TopologyService(ProjectSession(), FakeReader())
@@ -172,9 +179,21 @@ def test_traffic_requires_gonetem() -> None:
     assert error.value.status_code == 409
 
 
+def test_traffic_requires_addressing() -> None:
+    """Traffic cannot start before container interfaces are addressed."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    service = TrafficService(topology, FakeTraffic())
+
+    with pytest.raises(APIError) as error:
+        service.start("iperf3", Iperf3Request(src="Sat0", dst="Sat0"))
+
+    assert error.value.status_code == 409
+    assert "addressing" in error.value.message.lower()
+
+
 def test_traffic_rejects_unknown_kind() -> None:
     """Only registered flow strategies can be started."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = TrafficService(topology, FakeTraffic())
 
     with pytest.raises(APIError) as error:
@@ -185,7 +204,7 @@ def test_traffic_rejects_unknown_kind() -> None:
 
 def test_traffic_start_and_status() -> None:
     """A started job is polled through the one status path."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic()
     service = TrafficService(topology, gateway)
 
@@ -198,7 +217,7 @@ def test_traffic_start_and_status() -> None:
 
 def test_traffic_cancel_stops_flow_and_stays_cancelled() -> None:
     """Cancel polls once, calls stop, and avoids future polling."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="running")
     service = TrafficService(topology, gateway)
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
@@ -216,7 +235,7 @@ def test_traffic_cancel_stops_flow_and_stays_cancelled() -> None:
 
 def test_cancel_before_poll_preserves_completed_results() -> None:
     """Cancel polls first so a finished flow keeps its results."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="done")
     service = TrafficService(topology, gateway)
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
@@ -236,7 +255,7 @@ def test_cancel_before_poll_preserves_completed_results() -> None:
 
 def test_cancel_poll_failure_does_not_discard_an_unverified_job() -> None:
     """If the state cannot be verified, leave the job running for a retry."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="running")
 
     def fail_poll(_kind, _flow):
@@ -259,7 +278,7 @@ def test_cancel_poll_failure_does_not_discard_an_unverified_job() -> None:
 
 def test_traffic_cancel_failure_keeps_job_running() -> None:
     """A failed stop is reported and does not fake a cancellation."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="running")
 
     def fail(_flow):
@@ -278,7 +297,7 @@ def test_traffic_cancel_failure_keeps_job_running() -> None:
 
 def test_cancel_finished_job_returns_conflict() -> None:
     """Finished jobs are terminal and cannot be cancelled."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = TrafficService(topology, FakeTraffic())
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
     service.status(job_id)
@@ -334,7 +353,7 @@ def test_registry_prunes_expired_terminal_jobs() -> None:
 
 def test_capacity_rejection_stops_the_unregistered_flow() -> None:
     """A running job keeps its slot, so the unregistered flow is stopped."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="running")
     jobs = JobRegistry(max_jobs=1)
     jobs.create("ping", object(), "a", "b")
@@ -358,7 +377,7 @@ def test_registration_failure_stops_the_unregistered_flow() -> None:
         def running(self):
             return []
 
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic()
     service = TrafficService(topology, gateway, BrokenRegistry())
 
@@ -371,7 +390,7 @@ def test_registration_failure_stops_the_unregistered_flow() -> None:
 
 def test_lazy_reclaim_polls_finished_jobs_when_the_registry_is_full() -> None:
     """A full registry polls running jobs once and retries job creation."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="done")
     registry = JobRegistry(max_jobs=1)
     service = TrafficService(topology, gateway, registry)
@@ -388,7 +407,7 @@ def test_lazy_reclaim_polls_finished_jobs_when_the_registry_is_full() -> None:
 
 def test_traffic_service_preserves_an_injected_empty_registry() -> None:
     """An empty registry is falsy but must not be replaced by the service."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     registry = JobRegistry(max_jobs=1)
 
     service = TrafficService(topology, FakeTraffic(), registry)
@@ -399,7 +418,7 @@ def test_traffic_service_preserves_an_injected_empty_registry() -> None:
 
 def test_status_treats_an_unknown_gateway_state_as_a_terminal_error() -> None:
     """An unrecognized poll state becomes a terminal error, not 'unknown'."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="unknown")
     service = TrafficService(topology, gateway)
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
@@ -537,7 +556,7 @@ def test_strategy_registry_covers_all_tools() -> None:
     """The registry exposes exactly the typed traffic strategies."""
     from satgonetem_gui.schemas import Hping3Request
 
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = TrafficService(topology, FakeTraffic())
 
     assert set(service.strategies) == {"iperf3", "ping", "hping3"}
@@ -548,7 +567,7 @@ def test_strategy_registry_covers_all_tools() -> None:
 
 def test_routing_apply_delete_and_stop_track_addressing() -> None:
     """Addressing is set only after apply and cleared by delete/stop."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     controller = FakeController()
     service = RoutingService(topology, controller)
 
@@ -644,7 +663,7 @@ def test_routing_status_does_not_use_gonetem_as_addressing() -> None:
 
 def test_routing_init_failure_keeps_addressing_state_truthful() -> None:
     """Addressing can succeed before routing initialization fails."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = RoutingService(topology, FakeController(fail_init=True))
 
     with pytest.raises(APIError) as error:
@@ -711,7 +730,7 @@ def test_routing_addressing_failure_maps_500() -> None:
 
 def test_routing_delete_failure_maps_500() -> None:
     """A failed delete is reported and leaves address state unchanged."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     topology.set_addressing_applied(True)
     service = RoutingService(topology, FailingController("delete"))
 
@@ -724,7 +743,7 @@ def test_routing_delete_failure_maps_500() -> None:
 
 def test_routing_start_failure_maps_500() -> None:
     """A failed container start is reported."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = RoutingService(topology, FailingController("start"))
 
     with pytest.raises(APIError) as error:
@@ -735,7 +754,7 @@ def test_routing_start_failure_maps_500() -> None:
 
 def test_routing_stop_failure_keeps_addressing() -> None:
     """A failed stop is reported and does not clear address state."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     topology.set_addressing_applied(True)
     service = RoutingService(topology, FailingController("stop"))
 

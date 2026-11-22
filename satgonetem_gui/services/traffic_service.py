@@ -197,6 +197,8 @@ class TrafficService:
         self.topology.require_topology()
         if not self.topology.gonetem_is_on():
             raise APIError(409, "GoNetEm is not running.")
+        if not self.topology.addressing_applied:
+            raise APIError(409, "Apply addressing before starting traffic.")
 
         source = self.topology.find_node(request.src)
         destination = self.topology.find_node(request.dst)
