@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/experiments.css">
+  <link rel="stylesheet" href="/static/experiments.css?v=2">
 {% endblock %}
 
 {% block content %}
@@ -94,6 +94,11 @@
         </p>
       </div>
     </div>
+    <div class="experiment-compare-bar" id="experiment-compare-bar" hidden>
+      <span class="muted" id="experiment-selection-count" aria-live="polite">0 selected</span>
+      <button type="button" class="button small" id="experiment-compare-btn" disabled>Compare</button>
+      <button type="button" class="button small secondary" id="experiment-clear-selection">Clear</button>
+    </div>
     <div class="experiment-list" id="experiments-list"></div>
     <p class="experiment-empty" id="experiments-empty" hidden>
       <strong>No runs yet</strong>
@@ -101,7 +106,67 @@
     </p>
   </section>
 
+  <section class="card exp-detail-card" id="experiment-detail" hidden aria-labelledby="experiment-detail-title">
+    <div class="exp-detail-head">
+      <div>
+        <p class="exp-eyebrow">Run detail</p>
+        <h3 class="card-title" id="experiment-detail-title">Run</h3>
+        <p class="muted exp-detail-sub" id="experiment-detail-sub"></p>
+      </div>
+      <button type="button" class="button small secondary" id="experiment-detail-close">Close</button>
+    </div>
+    <p class="exp-run-status" id="experiment-detail-status" role="status" aria-live="polite"></p>
+    <div class="exp-detail-grid">
+      <div class="exp-detail-main">
+        <div class="exp-chart-wrap">
+          <canvas id="experiment-detail-chart" role="img" aria-label="Run metrics chart"></canvas>
+        </div>
+        <p class="muted exp-chart-msg" id="experiment-detail-chart-msg"></p>
+        <div class="experiment-artifacts" id="experiment-detail-artifacts"></div>
+        <details class="exp-detail-fold">
+          <summary>Report</summary>
+          <pre class="exp-pre" id="experiment-detail-report"></pre>
+        </details>
+        <details class="exp-detail-fold">
+          <summary>Scenario</summary>
+          <pre class="exp-pre" id="experiment-detail-scenario"></pre>
+        </details>
+      </div>
+      <aside class="exp-detail-side">
+        <dl class="exp-detail-stats" id="experiment-detail-stats"></dl>
+      </aside>
+    </div>
+  </section>
+
+  <section class="card exp-compare-card" id="experiment-compare" hidden aria-labelledby="experiment-compare-title">
+    <div class="exp-detail-head">
+      <div>
+        <p class="exp-eyebrow">Run comparison</p>
+        <h3 class="card-title" id="experiment-compare-title">Compare runs</h3>
+        <p class="muted" id="experiment-compare-sub"></p>
+      </div>
+      <button type="button" class="button small secondary" id="experiment-compare-close">Close</button>
+    </div>
+    <div class="exp-compare-controls">
+      <label class="exp-field" for="experiment-compare-metric">
+        <span class="exp-field-label">Metric</span>
+        <select id="experiment-compare-metric">
+          <option value="tx_bps">Total TX (bps)</option>
+          <option value="rx_bps">Total RX (bps)</option>
+          <option value="active_links">Active links</option>
+          <option value="avg_loss_percent">Average loss (%)</option>
+        </select>
+      </label>
+    </div>
+    <div class="exp-chart-wrap exp-chart-wide">
+      <canvas id="experiment-compare-chart" role="img" aria-label="Comparison metrics chart"></canvas>
+    </div>
+    <p class="muted exp-chart-msg" id="experiment-compare-msg" aria-live="polite"></p>
+    <div class="exp-compare-table" id="experiment-compare-table"></div>
+    <div class="exp-compare-diff" id="experiment-compare-diff"></div>
+  </section>
+
 </div>
 
-<script type="module" src="/static/experiments.js?v=1"></script>
+<script type="module" src="/static/experiments.js?v=2"></script>
 {% endblock %}
