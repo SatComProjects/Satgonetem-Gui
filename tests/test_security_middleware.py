@@ -109,9 +109,7 @@ def test_configured_host_is_matched_case_insensitively(tmp_path, monkeypatch) ->
     monkeypatch.delenv("SATGONETEM_GUI_ALLOWED_HOSTS", raising=False)
     app = _make_app(tmp_path, host="MyHost.local")
     with TestClient(app, raise_server_exceptions=False) as test_client:
-        response = test_client.get(
-            "/api/status", headers={"Host": "myhost.local"}
-        )
+        response = test_client.get("/api/status", headers={"Host": "myhost.local"})
 
     assert response.status_code == 200
 
@@ -127,12 +125,8 @@ def test_wildcard_bind_accepts_local_addresses(tmp_path, monkeypatch) -> None:
     )
     app = _make_app(tmp_path, host="0.0.0.0")
     with TestClient(app, raise_server_exceptions=False) as test_client:
-        by_address = test_client.get(
-            "/api/status", headers={"Host": "192.168.1.5:8000"}
-        )
-        by_name = test_client.get(
-            "/api/status", headers={"Host": "workstation.local"}
-        )
+        by_address = test_client.get("/api/status", headers={"Host": "192.168.1.5:8000"})
+        by_name = test_client.get("/api/status", headers={"Host": "workstation.local"})
 
     assert by_address.status_code == 200
     assert by_name.status_code == 200
