@@ -5,6 +5,12 @@ import {
   validateGroundNumbers,
   validateShellNumbers,
 } from "./new_project_model.js?v=2";
+import {
+  formatElapsed,
+  phaseLabel,
+  progressPercent,
+} from "./preflight_model.js?v=1";
+import { runPreflight } from "./preflight_ui.js?v=1";
 
   var shells = [];
   var grounds = [];
@@ -24,6 +30,67 @@ import {
   var msgEl = document.getElementById("create-msg");
   var gsCountLabel = document.getElementById("gs_count_label");
   var pendingList = document.getElementById("gs_pending_list");
+  var preflightPanel = document.getElementById("preflight-panel");
+  var preflightChecks = document.getElementById("preflight-checks");
+  var preflightMsg = document.getElementById("preflight-msg");
+  var preflightEstimate = document.getElementById("preflight-estimate");
+  var preflightRun = document.getElementById("preflight-run");
+  var createStatusTitle = document.getElementById("create-status-title");
+
+  function preflightPayload() {
+    return {
+      walker_shells_json: JSON.stringify(shells),
+      ground_objects_properties_json: JSON.stringify(grounds),
+    };
+  }
+
+  async function refreshPreflight() {
+    if (!preflightChecks) return null;
+    if (preflightPanel) preflightPanel.style.display = "block";
+    if (preflightRun) preflightRun.disabled = true;
+    try {
+      return await runPreflight(
+        {
+          checksElement: preflightChecks,
+          msgElement: preflightMsg,
+          estimateElement: preflightEstimate,
+        },
+        preflightPayload(),
+      );
+    } catch (error) {
+      if (preflightMsg) {
+        preflightMsg.textContent =
+          "Readiness check failed: " + String(error.message || error);
+        preflightMsg.style.color = "var(--bad)";
+      }
+      return null;
+    } finally {
+      if (preflightRun) preflightRun.disabled = false;
+    }
+  }
+
+  function applyProjectStatus(status) {
+    if (!status) return;
+    if (progLabel) progLabel.textContent = phaseLabel(status.phase);
+    if (progText) progText.textContent = formatElapsed(status.elapsed_ms);
+    if (createStatusTitle) {
+      createStatusTitle.textContent =
+        status.phase === "ready"
+          ? "Project Ready"
+          : status.phase === "error"
+            ? "Project Failed"
+            : "Creating Project...";
+    }
+    if (!progFill) return;
+    const percent = progressPercent(status.progress);
+    if (percent === null) {
+      progFill.classList.add("indeterminate");
+      progFill.style.width = "100%";
+    } else {
+      progFill.classList.remove("indeterminate");
+      progFill.style.width = percent + "%";
+    }
+  }
 
   function renderPendingStations() {
     if (!pendingList) return;
@@ -333,7 +400,7 @@ import {
     }
   }
 
-  async function waitForProjectReady(projectName, maxAttempts, delayMs) {
+  async function waitForProjectReady(projectName, maxAttempts, delayMs, onStatus) {
     maxAttempts = maxAttempts || 1200;
     delayMs = delayMs || 500;
     var attempts = 0;
@@ -343,6 +410,7 @@ import {
       try {
         lastStatus = await api.get("/api/project/status");
         transportFailures = 0;
+        if (onStatus) onStatus(lastStatus);
         if (lastStatus.state === "error") {
           var projectError = new Error(lastStatus.error || "Project creation failed");
           projectError.projectFailure = true;
@@ -407,22 +475,35 @@ import {
 
     try {
       createBtn.disabled = true;
+      var preflight = await refreshPreflight();
+      if (preflight && preflight.blocking) {
+        if (msgEl) {
+          msgEl.textContent =
+            "Readiness check found a blocking problem. Fix it and run the check again.";
+        }
+        createBtn.disabled = false;
+        return;
+      }
+
       createBox.style.display = "block";
       if (msgEl) msgEl.textContent = "Starting project creation...";
-      if (progLabel) progLabel.textContent = "Constellation";
-      if (progFill) progFill.style.width = "10%";
+      applyProjectStatus({ phase: "validating", progress: 0, elapsed_ms: 0 });
 
       await api.post("/api/project/create", payload);
 
       if (msgEl) msgEl.textContent = "Building constellation topology...";
-      if (progFill) progFill.style.width = "30%";
+      applyProjectStatus({ phase: "building", progress: null });
 
-      await waitForProjectReady(projectName);
+      await waitForProjectReady(projectName, undefined, undefined, applyProjectStatus);
 
-      if (progFill) progFill.style.width = "100%";
+      if (progFill) {
+        progFill.classList.remove("indeterminate");
+        progFill.style.width = "100%";
+      }
       if (msgEl) msgEl.textContent = "Done. Redirecting to dashboard...";
       setTimeout(function () { window.location.href = "/"; }, 1000);
     } catch (err) {
+      if (progFill) progFill.classList.remove("indeterminate");
       if (msgEl) msgEl.textContent = "Error: " + String(err.message || err);
       createBtn.disabled = false;
     }
@@ -439,6 +520,10 @@ import {
     updateGsLabel();
   }
 
+  if (preflightRun) {
+    preflightRun.addEventListener("click", refreshPreflight);
+  }
+
   var formBackupRaw = sessionStorage.getItem("satgonetem_form_backup");
   if (formBackupRaw) {
     try {
@@ -449,11 +534,13 @@ import {
       console.error("Could not restore form backup:", e);
       seedDefaults();
     }
+    refreshPreflight();
   } else {
     var editProject = new URLSearchParams(window.location.search).get("edit");
     if (editProject) {
-      loadProjectConfig(editProject);
+      loadProjectConfig(editProject).then(refreshPreflight);
     } else {
       seedDefaults();
+      refreshPreflight();
     }
   }

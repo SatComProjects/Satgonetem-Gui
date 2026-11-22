@@ -52,6 +52,15 @@
     </dl>
   </section>
 
+  <section class="card" id="preflight-card">
+    <div class="preflight-head">
+      <h3 class="card-title">Readiness</h3>
+      <button type="button" class="button small secondary" id="preflight-recheck">Recheck</button>
+    </div>
+    <p class="muted preflight-msg" id="preflight-msg" aria-live="polite">Checking...</p>
+    <div class="preflight-checks" id="preflight-checks"></div>
+  </section>
+
   <section class="card" id="card-simulation">
     <h3 class="card-title">Simulation</h3>
     {% include "_simulation_panel.html" %}
@@ -108,5 +117,5 @@
 
 </div>
 
-<script type="module" src="/static/dashboard.js?v=11"></script>
+<script type="module" src="/static/dashboard.js?v=12"></script>
 {% endblock %}
