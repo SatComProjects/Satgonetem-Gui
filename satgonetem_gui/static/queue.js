@@ -120,8 +120,27 @@ function bindStaticControls() {
   byId("results-backdrop")?.addEventListener("click", closeResults);
   document.addEventListener("keydown", (event) => {
     const modal = byId("results-modal");
-    if (event.key === "Escape" && modal && modal.style.display !== "none") {
+    if (!modal || modal.style.display === "none") return;
+    if (event.key === "Escape") {
       closeResults();
+      return;
+    }
+    if (event.key === "Tab") {
+      const focusable = Array.from(
+        modal.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.disabled);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
   });
 }
@@ -521,6 +540,25 @@ async function jqPlot(id) {
   else if (item.kind === "hping3") plotHping3(item);
 }
 
+const modalBackground = [];
+
+function setModalBackgroundInert(inert) {
+  if (inert) {
+    modalBackground.length = 0;
+    for (const child of document.body.children) {
+      if (child.id === "results-modal" || child.tagName === "SCRIPT") continue;
+      if (!child.inert) {
+        child.inert = true;
+        modalBackground.push(child);
+      }
+    }
+    return;
+  }
+  for (const child of modalBackground.splice(0)) {
+    child.inert = false;
+  }
+}
+
 function openModal(title, body) {
   const modal = byId("results-modal");
   const titleElement = byId("results-title");
@@ -531,6 +569,7 @@ function openModal(title, body) {
   if (modal) {
     lastFocused = document.activeElement;
     modal.style.display = "flex";
+    setModalBackgroundInert(true);
     byId("results-close")?.focus();
   }
 }
@@ -538,9 +577,12 @@ function openModal(title, body) {
 function closeResults() {
   const modal = byId("results-modal");
   if (modal) modal.style.display = "none";
+  setModalBackgroundInert(false);
   destroyCharts();
-  if (lastFocused && typeof lastFocused.focus === "function") {
+  if (lastFocused && lastFocused.isConnected && typeof lastFocused.focus === "function") {
     lastFocused.focus();
+  } else {
+    byId("jq-toggle")?.focus();
   }
   lastFocused = null;
 }
