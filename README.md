@@ -14,6 +14,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Readiness Checks** | Preflight storage, Docker, image, and GoNetEm checks plus a rough container/memory estimate. |
 | **Project Workspace** | List, reopen, save in place, duplicate, and delete projects under the configured save root. |
 | **Usage Link Colors** | Opt-in World View link coloring from green (idle) to red (at/above capacity). |
+| **Connectivity Matrix** | Ping every ordered pair of addressable nodes with a loss/RTT heatmap and CSV/JSON export. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
 | **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
@@ -108,6 +109,7 @@ package.json            # Frontend test/tooling manifest
 | `/traffic` | Traffic Generator — create and queue traffic jobs, review history and comparisons |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/projects` | Projects — list, reopen, save, duplicate, and delete workspace projects |
+| `/connectivity` | Connectivity Matrix — full-mesh loss/RTT heatmap with exports |
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
 | `/docs` | API Documentation — auto-generated Swagger UI |
 
@@ -195,6 +197,15 @@ From the page you can reopen a project, save the current project to the
 workspace, update the current workspace file in place, duplicate a project file,
 or delete one. Saving in place requires a project that was opened from or saved
 to the workspace. Malformed JSON files are skipped with a visible warning.
+
+## Connectivity Matrix
+
+The Connectivity page runs a full-mesh ping check over selected addressable
+ground stations and satellites. It requires GoNetEm containers and applied
+addressing/routing. Runs are capped at 32 nodes and 2,000 ordered pairs, run in
+the background, and render an N×N heatmap of packet loss and average RTT.
+Completed jobs can be exported as CSV or JSON. The matrix is a snapshot; rerun
+after topology or routing changes.
 
 ## Usage Link Colors
 

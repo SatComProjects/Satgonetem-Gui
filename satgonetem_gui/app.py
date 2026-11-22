@@ -19,6 +19,7 @@ from .errors import install_error_handlers
 from .resources import GROUND_STATIONS_DIR
 from .routes import (
     addressability,
+    connectivity,
     diagnostics,
     pages,
     projects,
@@ -29,6 +30,7 @@ from .routes import (
     workspace,
 )
 from .services.addressability_service import AddressabilityService
+from .services.connectivity_service import ConnectivityService
 from .services.container import ApplicationServices
 from .services.preflight_service import PreflightService
 from .services.project_catalog_service import ProjectCatalogService
@@ -160,6 +162,7 @@ def build_services(settings: Settings) -> ApplicationServices:
     routing = RoutingService(topology, topology_adapter, reader=topology_adapter)
     traffic = TrafficService(topology, traffic_adapter)
     preflight = PreflightService(LocalEnvironmentDoctor(settings))
+    connectivity_service = ConnectivityService(topology, topology_adapter)
     return ApplicationServices(
         runtime=runtime,
         project=project,
@@ -170,6 +173,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         traffic=traffic,
         simulation=simulation,
         preflight=preflight,
+        connectivity=connectivity_service,
     )
 
 
@@ -208,4 +212,5 @@ def create_app(
     app.include_router(simulation.router)
     app.include_router(traffic.router)
     app.include_router(diagnostics.router)
+    app.include_router(connectivity.router)
     return app

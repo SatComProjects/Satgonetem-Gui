@@ -19,7 +19,9 @@ from sat_com_builder.models import (
     SimulationProperty,
     WalkerShellProperty,
 )
+from satgonetem import connectivity as satgonetem_connectivity
 from satgonetem.services.topology_satcom import NetworkConfig, TopologyManager
+from satgonetem.traffic import PingConfig
 from satgonetem.utils.satcom_fix import apply_satcom_fix
 
 from ..config import Settings
@@ -583,6 +585,87 @@ class SatGoNetemTopologyAdapter:
         stations.sort(key=lambda item: item[0])
         satellites.sort(key=lambda item: item[0])
         return [node for _, node in stations + satellites]
+
+    def resolve_connectivity_nodes(
+        self,
+        topology: Any,
+        names: list[str] | None,
+    ) -> list[str]:
+        """Return the validated ordered node names for a connectivity matrix."""
+        candidates: list[str] = []
+        stations = sorted(
+            topology.ground_stations.values(),
+            key=lambda station: station.id,
+        )
+        for station in stations:
+            if station.interfaces:
+                candidates.append(station.name)
+
+        satellites = sorted(
+            topology.satellites.values(),
+            key=lambda satellite: satellite.id,
+        )
+        for satellite in satellites:
+            if satellite.is_addressable() and satellite.interfaces:
+                candidates.append(satellite.name)
+
+        if names is None:
+            selected = list(candidates)
+        else:
+            available = set(candidates)
+            selected = []
+            seen: set[str] = set()
+            for name in names:
+                if name not in available:
+                    raise ValueError(
+                        f"Node is not an addressable traffic endpoint: {name}"
+                    )
+                if name in seen:
+                    continue
+                seen.add(name)
+                selected.append(name)
+
+        if len(selected) < 2:
+            raise ValueError("At least two addressable nodes are required.")
+        return selected
+
+    def run_connectivity_matrix(
+        self,
+        topology: Any,
+        names: list[str],
+        *,
+        ping_count: int,
+        max_workers: int,
+        flow_timeout_seconds: float,
+    ) -> dict[str, Any]:
+        """Ping every ordered pair through the core connectivity API."""
+        nodes = []
+        for name in names:
+            node = topology.get_node_by_name(name)
+            if node is None:
+                raise ValueError(
+                    f"Node is not an addressable traffic endpoint: {name}"
+                )
+            nodes.append(node)
+
+        try:
+            matrix = satgonetem_connectivity.build_connectivity_matrix(
+                nodes,
+                config=PingConfig(
+                    count=ping_count,
+                    interval_sec=0.01,
+                    preload=1,
+                    packet_size=64,
+                ),
+                max_workers=max_workers,
+                flow_timeout_sec=flow_timeout_seconds,
+            )
+            result = matrix.to_dict()
+        except Exception as exc:
+            logger.exception("Connectivity matrix failed.")
+            raise RuntimeError("Connectivity check failed.") from exc
+
+        return {"nodes": list(names), **result}
 
     def gonetem_is_on(self, topology: Any) -> bool:
         """Return whether containers are running."""
