@@ -30,6 +30,7 @@ export async function apiRequest(path, options = {}) {
   const controller = new AbortController();
   let timer;
   let timedOut = false;
+  let callerAborted = false;
   const timeoutPromise = new Promise((_resolve, reject) => {
     timer = setTimeout(() => {
       timedOut = true;
@@ -37,10 +38,19 @@ export async function apiRequest(path, options = {}) {
       reject(new ApiError("Request timed out.", 0));
     }, timeout);
   });
+  const relayAbort = () => {
+    callerAborted = true;
+    controller.abort();
+  };
   if (signal) {
-    if (signal.aborted) controller.abort();
-    else signal.addEventListener("abort", () => controller.abort(), { once: true });
+    if (signal.aborted) relayAbort();
+    else signal.addEventListener("abort", relayAbort, { once: true });
   }
+
+  const abortError = () =>
+    timedOut
+      ? new ApiError("Request timed out.", 0)
+      : new ApiError("Request aborted.", 0);
 
   try {
     const response = await Promise.race([
@@ -59,7 +69,7 @@ export async function apiRequest(path, options = {}) {
         body = await Promise.race([response.json(), timeoutPromise]);
       } catch (error) {
         if (error instanceof ApiError) throw error;
-        if (timedOut) throw new ApiError("Request timed out.", 0);
+        if (timedOut || callerAborted) throw abortError();
         throw new ApiError("Invalid JSON response.", response.status);
       }
     } else {
@@ -68,7 +78,7 @@ export async function apiRequest(path, options = {}) {
         text = await Promise.race([response.text(), timeoutPromise]);
       } catch (error) {
         if (error instanceof ApiError) throw error;
-        if (timedOut) throw new ApiError("Request timed out.", 0);
+        if (timedOut || callerAborted) throw abortError();
       }
       if (response.ok) {
         if (text.trim() !== "") {
@@ -93,10 +103,11 @@ export async function apiRequest(path, options = {}) {
     return body;
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    if (timedOut) throw new ApiError("Request timed out.", 0);
+    if (timedOut || callerAborted) throw abortError();
     throw new ApiError(`Network error: ${error.message || error}`, 0);
   } finally {
     clearTimeout(timer);
+    if (signal) signal.removeEventListener("abort", relayAbort);
   }
 }
 

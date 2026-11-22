@@ -1,4 +1,4 @@
-import { api, ApiError } from "./api.js?v=3";
+import { api, ApiError } from "./api.js?v=4";
 import {
     describeGroundStation,
     describeSatellite,

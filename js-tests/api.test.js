@@ -148,6 +148,43 @@ describe("api client", () => {
     vi.useRealTimers();
   });
 
+  it("reports caller cancellation as aborted, not timed out", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_path, options) =>
+          new Promise((_resolve, reject) => {
+            options.signal.addEventListener("abort", () =>
+              reject(new Error("aborted")),
+            );
+          }),
+      ),
+    );
+
+    const controller = new AbortController();
+    const request = apiRequest("/api/status", { signal: controller.signal });
+    controller.abort();
+
+    await expect(request).rejects.toMatchObject({ message: "Request aborted." });
+  });
+
+  it("removes the caller abort listener when the request settles", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, { ok: true })));
+    const signal = {
+      aborted: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+
+    await apiRequest("/api/status", { signal });
+
+    expect(signal.addEventListener).toHaveBeenCalledTimes(1);
+    expect(signal.removeEventListener).toHaveBeenCalledWith(
+      "abort",
+      signal.addEventListener.mock.calls[0][1],
+    );
+  });
+
   it("aborts a request that exceeds its timeout", async () => {
     vi.useFakeTimers();
     vi.stubGlobal(

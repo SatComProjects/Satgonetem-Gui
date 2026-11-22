@@ -1,5 +1,5 @@
 /** Load/save project actions shared by every page. */
-import { api } from "./api.js?v=3";
+import { api } from "./api.js?v=4";
 
 function initLoad() {
   const link = document.getElementById("loadProjectLink");

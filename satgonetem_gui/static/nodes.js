@@ -1,5 +1,5 @@
 /** Node Explorer page controller. */
-import { api } from "./api.js?v=3";
+import { api } from "./api.js?v=4";
 import { escapeHtml } from "./escape.js";
 import { cacheEntry, isFresh } from "./nodes_model.js";
 
