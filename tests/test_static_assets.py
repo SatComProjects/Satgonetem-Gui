@@ -23,6 +23,8 @@ DASHBOARD_MODULE = PACKAGE / "static" / "dashboard.js"
 NEW_PROJECT_MODULE = PACKAGE / "static" / "new_project.js"
 PROJECTS_MODULE = PACKAGE / "static" / "projects.js"
 PROJECTS_MODEL_IMPORT = "./projects_model.js?v=1"
+CONNECTIVITY_MODULE = PACKAGE / "static" / "connectivity.js"
+CONNECTIVITY_MODEL_IMPORT = "./connectivity_model.js?v=1"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
 WORLD_MODULE = PACKAGE / "static" / "world.js"
 
@@ -37,6 +39,11 @@ def test_link_controllers_import_the_versioned_model() -> None:
     """Node Explorer and World View share one cache-busted link model."""
     for path in (NODES_MODULE, WORLD_MODULE):
         assert f'"{LINKS_MODEL_IMPORT}"' in path.read_text(encoding="utf-8")
+
+
+def test_connectivity_page_imports_the_versioned_model() -> None:
+    """The heatmap controller uses one cache-busted connectivity model."""
+    assert f'"{CONNECTIVITY_MODEL_IMPORT}"' in CONNECTIVITY_MODULE.read_text(encoding="utf-8")
 
 
 def test_projects_page_imports_the_versioned_model() -> None:

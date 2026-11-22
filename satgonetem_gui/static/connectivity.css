@@ -1,0 +1,937 @@
+/* Connectivity matrix ------------------------------------------------------
+ * Full-mesh ping diagnostic. The data table is injected by connectivity.js;
+ * this file owns the page frame, setup controls, status states, and the
+ * packet-loss color scale.
+ */
+
+.conn-page {
+  /* Packet-loss scale: quiet deep tones with light ink so a 32 x 32 grid
+   * stays readable on the dark surface. Cells receive one of these classes
+   * from the page script. */
+  --loss-none-bg: #166b47;
+  --loss-none-ink: #eafff2;
+  --loss-low-bg: #527a1f;
+  --loss-low-ink: #f4ffdf;
+  --loss-mid-bg: #8c6410;
+  --loss-mid-ink: #fff4cf;
+  --loss-high-bg: #a34a12;
+  --loss-high-ink: #ffe5d3;
+  --loss-full-bg: #b12a2a;
+  --loss-full-ink: #ffe3e3;
+  --loss-unreachable-bg: #451a1a;
+  --loss-unreachable-ink: #ffc1c1;
+
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.conn-page > * {
+  min-width: 0;
+}
+
+/* Page header -------------------------------------------------------------- */
+
+.conn-page-head {
+  position: relative;
+  overflow: hidden;
+  padding: 22px 24px 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 160% at 100% -20%, rgba(61, 169, 252, 0.16), transparent 58%),
+    linear-gradient(135deg, rgba(61, 169, 252, 0.045), transparent 46%),
+    var(--card);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+.conn-page-head::after {
+  content: "";
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 340px;
+  height: 190px;
+  background-image: radial-gradient(rgba(138, 160, 183, 0.22) 1px, transparent 1.4px);
+  background-size: 14px 14px;
+  -webkit-mask-image: radial-gradient(80% 100% at 100% 0, #000 0%, transparent 72%);
+  mask-image: radial-gradient(80% 100% at 100% 0, #000 0%, transparent 72%);
+  pointer-events: none;
+}
+
+.conn-heading {
+  position: relative;
+  z-index: 1;
+}
+
+.conn-eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.conn-page .page-title {
+  margin: 5px 0 8px;
+  font-size: clamp(1.55rem, 1.1rem + 1.4vw, 2.05rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.conn-lede {
+  max-width: 66ch;
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.conn-msg {
+  min-height: 1.35em;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.conn-msg.error,
+.conn-msg[data-state="error"] {
+  color: var(--bad);
+}
+
+/* Shared card chrome ------------------------------------------------------- */
+
+.conn-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin-bottom: 14px;
+}
+
+.conn-card-head > div {
+  min-width: 0;
+}
+
+.conn-card-head .card-title {
+  margin: 0;
+}
+
+.conn-card-hint {
+  max-width: 64ch;
+  margin: 4px 0 0;
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
+
+.conn-page .button.secondary {
+  background: #101823;
+  border-color: var(--border-subtle);
+  color: var(--muted);
+}
+
+.conn-page .button.secondary:hover:not(:disabled) {
+  background: #162130;
+  border-color: #2a394b;
+  color: var(--text);
+}
+
+.conn-page .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.conn-page .button.secondary:disabled:hover {
+  background: #101823;
+  border-color: var(--border-subtle);
+  color: var(--muted);
+}
+
+.conn-page button:focus-visible,
+.conn-page input:focus-visible,
+.conn-page .conn-heatmap-wrap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Setup card --------------------------------------------------------------- */
+
+.conn-setup-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.conn-setup-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), rgba(61, 169, 252, 0) 68%);
+  pointer-events: none;
+}
+
+.conn-node-panel {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--input-bg);
+}
+
+.conn-node-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(11, 15, 20, 0.38);
+}
+
+.conn-field-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.conn-node-tools {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 0;
+}
+
+.conn-count {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border: 1px solid rgba(61, 169, 252, 0.26);
+  border-radius: 999px;
+  background: rgba(61, 169, 252, 0.08);
+  color: #bfe3ff;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.conn-nodes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 4px 8px;
+  max-height: 240px;
+  padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.conn-nodes > p,
+.conn-nodes-placeholder {
+  grid-column: 1 / -1;
+  margin: 4px 2px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.conn-node {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 0.84rem;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.conn-node:hover {
+  background: #17212d;
+}
+
+.conn-node:has(input:checked) {
+  border-color: rgba(61, 169, 252, 0.25);
+  background: rgba(61, 169, 252, 0.1);
+}
+
+.conn-node input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.conn-node input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.conn-node span {
+  min-width: 0;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.conn-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.conn-option {
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.conn-option-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
+  color: #b7c7d8;
+  font-weight: 600;
+}
+
+.conn-option-range {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.conn-option input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.conn-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.conn-start {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border: 1px solid rgba(61, 169, 252, 0.65);
+  background: linear-gradient(180deg, #53b8ff 0%, #2f9bea 100%);
+  color: #04121f;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 20px rgba(61, 169, 252, 0.18);
+}
+
+.conn-start::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid currentColor;
+}
+
+.conn-start:hover:not(:disabled) {
+  background: linear-gradient(180deg, #6fc5ff 0%, #3da9fc 100%);
+}
+
+.conn-start:disabled {
+  border-color: #2a394b;
+  background: #182230;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.conn-capacity {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* Run status --------------------------------------------------------------- */
+
+.conn-status-card {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(90% 130% at 100% 0, rgba(61, 169, 252, 0.07), transparent 62%),
+    var(--card);
+}
+
+.conn-status-card[hidden] {
+  display: none;
+}
+
+.conn-status-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent 60%);
+  pointer-events: none;
+}
+
+.conn-status-card[data-state="done"]::before {
+  background: linear-gradient(90deg, var(--ok), transparent 60%);
+}
+
+.conn-status-card[data-state="error"]::before {
+  background: linear-gradient(90deg, var(--bad), transparent 60%);
+}
+
+.conn-status-card .conn-card-head {
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.conn-status-text {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: rgba(11, 15, 20, 0.35);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.conn-status-text::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(138, 160, 183, 0.12);
+}
+
+.conn-status-card[data-state="running"] .conn-status-text {
+  color: var(--accent);
+}
+
+.conn-status-card[data-state="running"] .conn-status-text::before {
+  animation: conn-pulse 1.4s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(61, 169, 252, 0.16);
+}
+
+.conn-status-card[data-state="done"] .conn-status-text {
+  color: var(--ok);
+}
+
+.conn-status-card[data-state="error"] .conn-status-text {
+  color: var(--bad);
+}
+
+.conn-status-card:has(#connectivity-progress:not([hidden])) .conn-status-text {
+  color: var(--accent);
+}
+
+.conn-summary {
+  margin: 0;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.conn-summary:empty {
+  display: none;
+}
+
+.conn-progress {
+  position: relative;
+  height: 3px;
+  margin: 12px 0 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border-subtle);
+}
+
+.conn-progress[hidden] {
+  display: none;
+}
+
+.conn-progress-bar {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(61, 169, 252, 0), var(--accent) 45%, rgba(61, 169, 252, 0));
+  animation: conn-sweep 1.25s ease-in-out infinite;
+}
+
+.conn-empty {
+  margin: 12px 0 0;
+  padding: 16px;
+  border: 1px dashed #263344;
+  border-radius: 10px;
+  background: rgba(11, 15, 20, 0.35);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.conn-empty[hidden],
+.conn-status-card:has(#connectivity-progress:not([hidden])) .conn-empty,
+.conn-status-card:has(#connectivity-export-csv:not([hidden]), #connectivity-export-json:not([hidden])) .conn-empty {
+  display: none;
+}
+
+.conn-export-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.conn-export-row:not(:has(button:not([hidden]))) {
+  display: none;
+}
+
+.conn-export-row .button[hidden] {
+  display: none;
+}
+
+@keyframes conn-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 3px rgba(61, 169, 252, 0.16);
+  }
+
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 6px rgba(61, 169, 252, 0);
+  }
+}
+
+@keyframes conn-sweep {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(340%);
+  }
+}
+
+/* Heatmap ------------------------------------------------------------------ */
+
+.conn-heatmap-card {
+  min-width: 0;
+}
+
+.conn-heatmap-card .conn-card-head {
+  align-items: center;
+}
+
+.conn-legend {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: rgba(11, 15, 20, 0.45);
+}
+
+.conn-legend-scale {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 150px;
+}
+
+.conn-legend-gradient {
+  height: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--loss-none-bg) 0%,
+    var(--loss-low-bg) 25%,
+    var(--loss-mid-bg) 50%,
+    var(--loss-high-bg) 75%,
+    var(--loss-full-bg) 100%
+  );
+}
+
+.conn-legend-ticks {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.conn-legend-unreachable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.conn-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.conn-heatmap-wrap {
+  min-width: 0;
+  max-height: min(68vh, 760px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0c1219;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.conn-heatmap-wrap:has(#connectivity-heatmap:empty) {
+  border-style: dashed;
+}
+
+#connectivity-heatmap:empty {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  padding: 24px;
+  background: radial-gradient(70% 100% at 50% 0, rgba(61, 169, 252, 0.05), transparent 70%);
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+#connectivity-heatmap:empty::after {
+  content: "The matrix appears here after a run.";
+}
+
+.conn-matrix {
+  width: auto;
+  margin: 0 auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.conn-matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--border);
+  background: #101923;
+  color: var(--text);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  vertical-align: bottom;
+}
+
+.conn-matrix thead th:not(.conn-corner) {
+  min-width: 54px;
+  max-width: 96px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.conn-matrix .conn-corner {
+  left: 0;
+  z-index: 4;
+  width: 118px;
+  min-width: 118px;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.conn-matrix tbody th[scope="row"] {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 118px;
+  min-width: 118px;
+  max-width: 118px;
+  padding: 0 10px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid rgba(29, 39, 51, 0.75);
+  background: #0e1620;
+  box-shadow: 7px 0 12px -11px #000;
+  color: var(--text);
+  font-size: 0.71rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-align: left;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.conn-matrix tbody tr:hover th[scope="row"] {
+  background: #17222e;
+}
+
+.conn-matrix td.conn-cell,
+.conn-matrix td.conn-self {
+  height: 34px;
+  padding: 4px 5px;
+  border-right: 1px solid rgba(11, 15, 20, 0.38);
+  border-bottom: 1px solid rgba(11, 15, 20, 0.55);
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.conn-matrix tbody tr:last-child th,
+.conn-matrix tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.conn-matrix tbody td:last-child {
+  border-right: 0;
+}
+
+.conn-cell {
+  background-color: #16202b;
+  color: var(--text);
+  cursor: help;
+  font-size: 0.71rem;
+  font-weight: 700;
+  line-height: 1.08;
+  transition: filter 0.12s ease;
+}
+
+.conn-cell span {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  opacity: 0.88;
+}
+
+.conn-matrix tbody tr:hover td.conn-cell {
+  filter: brightness(1.06);
+}
+
+.conn-cell:hover {
+  filter: brightness(1.12);
+  outline: 2px solid rgba(230, 237, 243, 0.65);
+  outline-offset: -2px;
+}
+
+.conn-self {
+  background-color: #0d141c;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.conn-cell.missing {
+  background-color: #121b25;
+  color: var(--muted);
+  cursor: default;
+  font-weight: 500;
+}
+
+.conn-cell.missing:hover {
+  filter: none;
+  outline: none;
+}
+
+/* The page script assigns one loss class per cell. Exact 0/100 data-loss
+ * values also work on their own so an endpoint is never left neutral. */
+.loss-none {
+  background-color: var(--loss-none-bg);
+  color: var(--loss-none-ink);
+}
+
+.loss-low {
+  background-color: var(--loss-low-bg);
+  color: var(--loss-low-ink);
+}
+
+.loss-mid {
+  background-color: var(--loss-mid-bg);
+  color: var(--loss-mid-ink);
+}
+
+.loss-high {
+  background-color: var(--loss-high-bg);
+  color: var(--loss-high-ink);
+}
+
+.loss-full {
+  background-color: var(--loss-full-bg);
+  color: var(--loss-full-ink);
+}
+
+.unreachable {
+  background-color: var(--loss-unreachable-bg);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 183, 183, 0.08) 0 3px,
+    transparent 3px 7px
+  );
+  color: var(--loss-unreachable-ink);
+}
+
+.conn-cell[data-loss="0"]:not(.unreachable) {
+  background-color: var(--loss-none-bg);
+  color: var(--loss-none-ink);
+}
+
+.conn-cell[data-loss="100"]:not(.unreachable) {
+  background-color: var(--loss-full-bg);
+  color: var(--loss-full-ink);
+}
+
+/* Responsive --------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .conn-page-head {
+    padding: 20px;
+  }
+
+  .conn-heatmap-card .conn-card-head {
+    align-items: flex-start;
+  }
+
+  .conn-legend {
+    width: 100%;
+  }
+
+  .conn-legend-scale {
+    flex: 1 1 140px;
+    width: auto;
+    max-width: 240px;
+  }
+}
+
+@media (max-width: 560px) {
+  .conn-page {
+    gap: 14px;
+  }
+
+  .conn-page-head {
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .conn-page-head::after {
+    width: 220px;
+    height: 150px;
+    opacity: 0.65;
+  }
+
+  .conn-page .page-title {
+    font-size: 1.5rem;
+  }
+
+  .conn-node-tools {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .conn-node-tools .conn-count {
+    margin-right: auto;
+  }
+
+  .conn-nodes {
+    max-height: 210px;
+  }
+
+  .conn-run {
+    align-items: stretch;
+  }
+
+  .conn-start {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .conn-capacity {
+    flex-basis: 100%;
+  }
+
+  .conn-heatmap-wrap {
+    max-height: 60vh;
+  }
+
+  .conn-export-row .button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conn-progress-bar {
+    width: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    transform: none;
+    animation: none;
+  }
+
+  .conn-status-card[data-state="running"] .conn-status-text::before {
+    animation: none;
+  }
+
+  .conn-node,
+  .conn-cell {
+    transition: none;
+  }
+}

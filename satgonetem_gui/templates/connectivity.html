@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/connectivity.css">
+{% endblock %}
+
+{% block content %}
+<div class="conn-page">
+
+  <header class="conn-page-head">
+    <div class="conn-heading">
+      <p class="conn-eyebrow">Full-mesh diagnostics</p>
+      <h2 class="page-title">Connectivity Matrix</h2>
+      <p class="muted conn-lede">
+        Pings every ordered pair of addressable nodes. Containers and routing must be
+        running before a check can start, and larger meshes take longer to finish.
+      </p>
+    </div>
+  </header>
+
+  <p class="muted conn-msg" id="connectivity-msg" aria-live="polite"></p>
+
+  <section class="card conn-setup-card" aria-labelledby="connectivity-setup-title">
+    <div class="conn-card-head">
+      <div>
+        <h3 class="card-title" id="connectivity-setup-title">Run setup</h3>
+        <p class="muted conn-card-hint">
+          Choose the nodes to include, then tune how the pings are sent.
+        </p>
+      </div>
+    </div>
+
+    <div class="conn-node-panel">
+      <div class="conn-node-panel-head">
+        <span class="conn-field-label" id="connectivity-nodes-label">Addressable nodes</span>
+        <div class="conn-node-tools">
+          <span class="conn-count" id="connectivity-node-count" aria-live="polite">0 selected</span>
+          <button type="button" class="button small secondary" id="connectivity-select-all"
+                  aria-controls="connectivity-nodes">Select all</button>
+          <button type="button" class="button small secondary" id="connectivity-clear"
+                  aria-controls="connectivity-nodes">Clear</button>
+        </div>
+      </div>
+      <div id="connectivity-nodes" class="conn-nodes" role="group"
+           aria-labelledby="connectivity-nodes-label">
+        <p class="muted conn-nodes-placeholder">Loading addressable nodes...</p>
+      </div>
+    </div>
+
+    <div class="conn-options" role="group" aria-label="Ping options">
+      <label class="conn-option" for="connectivity-ping-count">
+        <span class="conn-option-label">Pings per pair
+          <span class="conn-option-range">1&ndash;50</span>
+        </span>
+        <input type="number" id="connectivity-ping-count" name="ping_count"
+               value="10" min="1" max="50" step="1" inputmode="numeric" autocomplete="off">
+      </label>
+      <label class="conn-option" for="connectivity-max-workers">
+        <span class="conn-option-label">Parallel workers
+          <span class="conn-option-range">1&ndash;128</span>
+        </span>
+        <input type="number" id="connectivity-max-workers" name="max_workers"
+               value="32" min="1" max="128" step="1" inputmode="numeric" autocomplete="off">
+      </label>
+      <label class="conn-option" for="connectivity-timeout">
+        <span class="conn-option-label">Timeout (s)
+          <span class="conn-option-range">1&ndash;300</span>
+        </span>
+        <input type="number" id="connectivity-timeout" name="timeout"
+               value="60" min="1" max="300" step="1" inputmode="numeric" autocomplete="off">
+      </label>
+    </div>
+
+    <div class="conn-run">
+      <button type="button" class="button conn-start" id="connectivity-start"
+              aria-describedby="connectivity-capacity-note">Run connectivity matrix</button>
+      <p class="muted conn-capacity" id="connectivity-capacity-note">
+        Runs are capped at 32 nodes and 2,000 ordered pairs.
+      </p>
+    </div>
+  </section>
+
+  <section class="card conn-status-card" id="connectivity-status-card"
+           aria-labelledby="connectivity-status-title" hidden>
+    <div class="conn-card-head">
+      <h3 class="card-title" id="connectivity-status-title">Run status</h3>
+      <span class="conn-status-text" id="connectivity-status" role="status" aria-live="polite">Idle</span>
+    </div>
+    <p class="muted conn-summary" id="connectivity-summary"></p>
+    <div class="conn-progress" id="connectivity-progress" role="progressbar"
+         aria-label="Connectivity check in progress" hidden>
+      <span class="conn-progress-bar"></span>
+    </div>
+    <p class="muted conn-empty" id="connectivity-empty">
+      No connectivity matrix yet. Select at least two nodes and run the check.
+    </p>
+    <div class="conn-export-row">
+      <button type="button" class="button small secondary" id="connectivity-export-csv" hidden>Export CSV</button>
+      <button type="button" class="button small secondary" id="connectivity-export-json" hidden>Export JSON</button>
+    </div>
+  </section>
+
+  <section class="card conn-heatmap-card" aria-labelledby="connectivity-heatmap-title">
+    <div class="conn-card-head">
+      <div>
+        <h3 class="card-title" id="connectivity-heatmap-title">Packet loss heatmap</h3>
+        <p class="muted conn-card-hint">
+          Rows are sources, columns are destinations. Cells show packet loss and average RTT; hover for details.
+        </p>
+      </div>
+      <div class="conn-legend" role="group"
+           aria-label="Loss color scale: green at 0 percent, amber around 50 percent, red at 100 percent; hatched cells are unreachable">
+        <span class="conn-legend-scale" aria-hidden="true">
+          <span class="conn-legend-gradient"></span>
+          <span class="conn-legend-ticks"><span>0%</span><span>50%</span><span>100%</span></span>
+        </span>
+        <span class="conn-legend-unreachable">
+          <span class="conn-legend-swatch unreachable" aria-hidden="true"></span>
+          unreachable
+        </span>
+      </div>
+    </div>
+    <div class="conn-heatmap-wrap" id="connectivity-heatmap-wrap" role="region"
+         aria-label="Packet loss matrix, scrollable" tabindex="0">
+      <div id="connectivity-heatmap" class="conn-heatmap"></div>
+    </div>
+  </section>
+
+</div>
+
+<script type="module" src="/static/connectivity.js?v=1"></script>
+{% endblock %}
