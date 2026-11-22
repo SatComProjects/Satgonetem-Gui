@@ -11,6 +11,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Simulation Controls** | Play, pause, step, reset, seek, and change the playback speed of the emulated constellation. |
 | **Node Explorer** | Browse all satellites and ground stations with detailed status and per-node links. |
 | **Link Metrics** | Inspect link delay, capacity, and active state; Globe link width scales with capacity. |
+| **Readiness Checks** | Preflight storage, Docker, image, and GoNetEm checks plus a rough container/memory estimate. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
 | **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
@@ -162,6 +163,20 @@ Utilization is not included yet: the pinned core's link monitor reads
 net-logger output. Capacity comes from the public `get_capacity()` value
 (peer1/downlink for satellite-to-ground links); a zero or unavailable value is
 shown as “Unknown”.
+
+## Readiness Checks and Build Phases
+
+The Dashboard and New Project pages run a bounded preflight check covering
+project storage, the Docker daemon, required container images, and GoNetEm
+server reachability. New Project also shows a rough estimate of satellites,
+ground stations, containers, and memory (128 MB per container). Storage errors
+block creation; Docker and GoNetEm problems are warnings because a project can
+still be built in-process without running containers.
+
+Project creation reports real lifecycle phases (`validating`, `building`,
+`loading`, `finalizing`, `ready`, `error`) and elapsed time. When a phase has no
+meaningful percentage, the progress bar is indeterminate instead of showing a
+made-up number.
 
 ## Configuration
 
