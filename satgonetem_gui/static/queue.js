@@ -20,6 +20,8 @@ const jq = { items: [], timers: {} };
 let lastFocused = null;
 const activeCharts = [];
 let plotGeneration = 0;
+let storageSync = false;
+const TAB_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 function createChart(canvas, config) {
   const chart = new Chart(canvas, config);
@@ -43,6 +45,7 @@ function byId(id) {
 }
 
 function jqSave() {
+  if (storageSync) return;
   const message = byId("jq-storage-msg");
   try {
     const items = jq.items.map(({ results: _results, ...rest }) => rest);
