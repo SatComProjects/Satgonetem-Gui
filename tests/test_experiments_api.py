@@ -53,8 +53,16 @@ def test_experiment_run_writes_and_lists_artifacts(client, services, monkeypatch
             }
 
         def run_scenario(self, path, run_dir, mode):
+            (run_dir / "metrics.jsonl").write_text(
+                '{"sim_time_s": 0.0, "links": []}\n{"sim_time_s": 1.0, "links": []}\n',
+                encoding="utf-8",
+            )
             return {
-                "summary": {"flows": {"count": 0}, "mode": mode},
+                "summary": {
+                    "flows": {"count": 0},
+                    "mode": mode,
+                    "run_dir": str(run_dir),
+                },
                 "errors": [],
             }
 
@@ -74,6 +82,7 @@ def test_experiment_run_writes_and_lists_artifacts(client, services, monkeypatch
     assert run["status"] == "done", run
     assert run["name"] == "Api Experiment"
     assert run["summary"]["mode"] == "offline"
+    assert "run_dir" not in run["summary"]
     assert "provenance.json" in run["artifacts"]
     assert "summary.json" in run["artifacts"]
     assert "scenario.yaml" in run["artifacts"]
@@ -115,3 +124,63 @@ def test_experiment_unknown_run_and_artifact_are_404(client) -> None:
     """Unknown run ids and artifact names do not escape the run directory."""
     assert client.get("/api/experiments/missing").status_code == 404
     assert client.get("/api/experiments/missing/artifacts/summary.json").status_code == 404
+
+
+def test_experiment_metrics_endpoint_tails_samples(client, services, settings) -> None:
+    """Metrics are parsed from JSONL and only the requested tail is returned."""
+    run_id = _start_fake_run(client, services)
+
+    response = client.get(f"/api/experiments/{run_id}/metrics?tail=1")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["run_id"] == run_id
+    assert payload["total"] == 2
+    assert [sample["sim_time_s"] for sample in payload["samples"]] == [1.0]
+    assert (settings.save_root / ".satgonetem" / "experiments" / run_id / "metrics.jsonl").is_file()
+
+
+def test_experiment_metrics_tail_bounds_are_422(client, services) -> None:
+    """Tail must stay within the bounded polling window."""
+    run_id = _start_fake_run(client, services)
+
+    assert client.get(f"/api/experiments/{run_id}/metrics?tail=0").status_code == 422
+    assert client.get(f"/api/experiments/{run_id}/metrics?tail=2001").status_code == 422
+    assert client.get("/api/experiments/missing/metrics").status_code == 404
+
+
+def _start_fake_run(client, services) -> str:
+    """Start one offline run backed by a deterministic fake gateway."""
+
+    class FakeExperimentGateway:
+        def validate_scenario(self, path):
+            return {
+                "name": "Metrics Experiment",
+                "shells": 1,
+                "ground_stations": 0,
+                "traffic": 0,
+                "events": 0,
+                "connectivity": False,
+                "duration_s": 5,
+            }
+
+        def run_scenario(self, path, run_dir, mode):
+            (run_dir / "metrics.jsonl").write_text(
+                '{"sim_time_s": 0.0, "links": []}\n{"sim_time_s": 1.0, "links": []}\n',
+                encoding="utf-8",
+            )
+            return {"summary": {"flows": {"count": 0}}, "errors": []}
+
+        def core_version(self):
+            return "0.3.2-test"
+
+    services.experiments.gateway = FakeExperimentGateway()
+    started = client.post(
+        "/api/experiments",
+        json={"scenario_yaml": MINIMAL_SCENARIO, "mode": "offline"},
+    )
+    assert started.status_code == 200, started.text
+    run_id = started.json()["run_id"]
+    assert _wait_for_run(client, run_id)["status"] == "done"
+    return run_id

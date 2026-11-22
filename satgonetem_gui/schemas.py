@@ -628,3 +628,12 @@ class ExperimentArtifactResponse(BaseModel):
     filename: str
     content: str
     content_type: str
+
+
+class ExperimentMetricsResponse(BaseModel):
+    """One run's parsed metrics samples, newest tail first kept in order."""
+
+    ok: bool = True
+    run_id: str
+    total: int
+    samples: list[dict[str, Any]]

@@ -26,7 +26,7 @@ PROJECTS_MODEL_IMPORT = "./projects_model.js?v=1"
 CONNECTIVITY_MODULE = PACKAGE / "static" / "connectivity.js"
 CONNECTIVITY_MODEL_IMPORT = "./connectivity_model.js?v=1"
 EXPERIMENTS_MODULE = PACKAGE / "static" / "experiments.js"
-EXPERIMENTS_MODEL_IMPORT = "./experiments_model.js?v=1"
+EXPERIMENTS_MODEL_IMPORT = "./experiments_model.js?v=2"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
 WORLD_MODULE = PACKAGE / "static" / "world.js"
 

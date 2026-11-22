@@ -1,6 +1,6 @@
 """Server-side experiment run and artifact API routes."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from .. import schemas
 from ..dependencies import get_services
@@ -53,3 +53,16 @@ def api_experiment_artifact(
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.ExperimentArtifactResponse:
     return schemas.ExperimentArtifactResponse(**services.experiments.artifact(run_id, name))
+
+
+@router.get(
+    "/api/experiments/{run_id}/metrics",
+    response_model=schemas.ExperimentMetricsResponse,
+    responses=schemas.error_responses(404),
+)
+def api_experiment_metrics(
+    run_id: str,
+    tail: int = Query(300, ge=1, le=2000),
+    services: ApplicationServices = Depends(get_services),
+) -> schemas.ExperimentMetricsResponse:
+    return schemas.ExperimentMetricsResponse(**services.experiments.metrics(run_id, tail))

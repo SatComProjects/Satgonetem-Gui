@@ -195,6 +195,7 @@
 }
 
 .exp-page button:focus-visible,
+.exp-page input:focus-visible,
 .exp-page select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -738,6 +739,646 @@
   font-weight: 600;
 }
 
+/* Selection and detail affordances ----------------------------------------
+ * The list itself is injected by experiments.js; these rules cover the
+ * checkbox column and the Details action the controller adds to each row.
+ */
+
+/* Panels toggle with the hidden attribute. Keep that contract explicit, the
+ * way the run list already does, so the flex layouts below cannot resurrect
+ * a hidden panel. */
+.experiment-compare-bar[hidden],
+.exp-detail-card[hidden],
+.exp-compare-card[hidden] {
+  display: none;
+}
+
+.experiment-select-cell {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  width: 22px;
+  height: 22px;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.experiment-select-cell:hover {
+  border-color: #2a394b;
+  background: #0f1620;
+}
+
+.experiment-select-cell:has(.experiment-select:focus-visible) {
+  border-color: var(--accent);
+}
+
+.experiment-select {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+/* Selection outranks the pass/fail rail: it is the state the user is
+ * actively changing, while the rail still tints the surrounding border. */
+.exp-page .experiment-run.selected {
+  border-color: rgba(61, 169, 252, 0.42);
+  background:
+    linear-gradient(135deg, rgba(61, 169, 252, 0.09), transparent 48%),
+    var(--exp-panel);
+  box-shadow: 0 0 0 1px rgba(61, 169, 252, 0.14), 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.exp-page .experiment-run.selected:hover {
+  border-color: rgba(61, 169, 252, 0.58);
+}
+
+.exp-page .experiment-run.selected::before {
+  background: linear-gradient(180deg, var(--accent), rgba(61, 169, 252, 0.26));
+}
+
+.exp-page .experiment-detail-btn {
+  padding: 3px 10px;
+  border: 1px solid rgba(61, 169, 252, 0.38);
+  background: rgba(61, 169, 252, 0.11);
+  color: #bfe3ff;
+  font-family: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  line-height: 1.55;
+}
+
+.exp-page .experiment-detail-btn:hover {
+  border-color: var(--accent);
+  background: rgba(61, 169, 252, 0.2);
+  color: #e2f3ff;
+}
+
+/* Details is an action, not an artifact: keep it after the file chips so the
+ * "Artifacts" caption keeps describing the downloads. */
+.experiment-artifacts .experiment-detail-btn {
+  order: 1;
+}
+
+.experiment-artifacts:not(:has(> .button[data-artifact]))::before {
+  content: none;
+}
+
+/* Compare bar -------------------------------------------------------------- */
+
+.experiment-compare-bar {
+  position: sticky;
+  top: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 7px 9px 7px 13px;
+  border: 1px solid rgba(61, 169, 252, 0.28);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(20, 32, 45, 0.97), rgba(12, 19, 27, 0.97));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: exp-panel-in 0.18s ease-out;
+}
+
+.experiment-compare-bar .muted {
+  margin-right: auto;
+  font-family: var(--exp-mono);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.experiment-compare-bar:has(#experiment-compare-btn:not(:disabled)) #experiment-selection-count {
+  color: var(--text);
+}
+
+.experiment-compare-bar .button:not(.secondary) {
+  border-color: rgba(61, 169, 252, 0.62);
+  background: linear-gradient(180deg, #53b8ff, #2f9bea);
+  color: #04121f;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 5px 14px rgba(61, 169, 252, 0.2);
+}
+
+.experiment-compare-bar .button:not(.secondary):hover:not(:disabled) {
+  background: linear-gradient(180deg, #6fc5ff, #3da9fc);
+}
+
+.experiment-compare-bar .button:not(.secondary):disabled {
+  border-color: #2a394b;
+  background: #182230;
+  color: var(--muted);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.experiment-compare-bar .button.secondary {
+  border-color: var(--border-subtle);
+  background: #101823;
+  color: var(--muted);
+}
+
+.experiment-compare-bar .button.secondary:hover:not(:disabled) {
+  border-color: #2a394b;
+  background: #162130;
+  color: var(--text);
+}
+
+/* Detail and compare panels ------------------------------------------------ */
+
+.exp-detail-card,
+.exp-compare-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  scroll-margin-top: 18px;
+  animation: exp-panel-in 0.22s ease-out;
+}
+
+.exp-detail-card::before,
+.exp-compare-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), rgba(61, 169, 252, 0) 62%);
+  pointer-events: none;
+}
+
+.exp-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.exp-detail-head > div {
+  min-width: 0;
+}
+
+.exp-detail-head .exp-eyebrow {
+  margin: 0;
+}
+
+.exp-detail-head .card-title {
+  margin: 3px 0 0;
+  color: var(--text);
+  font-size: clamp(1rem, 0.95rem + 0.35vw, 1.16rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+.exp-detail-head .button.secondary {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-left: auto;
+  border-color: var(--border-subtle);
+  background: #101823;
+  color: var(--muted);
+}
+
+.exp-detail-head .button.secondary:hover:not(:disabled) {
+  border-color: #2a394b;
+  background: #162130;
+  color: var(--text);
+}
+
+.exp-detail-sub {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.exp-detail-sub:empty {
+  display: none;
+}
+
+.exp-detail-card > .exp-run-status {
+  font-size: 0.78rem;
+}
+
+.exp-detail-card > .exp-run-status:empty {
+  min-height: 0;
+}
+
+.exp-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(210px, 0.85fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.exp-detail-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.exp-detail-side {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background:
+    radial-gradient(120% 90% at 100% 0, rgba(61, 169, 252, 0.06), transparent 60%),
+    rgba(11, 15, 20, 0.42);
+}
+
+.exp-detail-main .experiment-artifacts {
+  margin-top: 2px;
+}
+
+/* Chart frames own the height; Chart.js sizes the canvas inside them and the
+ * glow keeps an empty frame from reading as a broken panel. */
+.exp-chart-wrap {
+  position: relative;
+  height: 240px;
+  padding: 8px 10px 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(61, 169, 252, 0.07), transparent 62%),
+    var(--exp-panel-deep);
+}
+
+.exp-chart-wrap canvas {
+  display: block;
+  max-width: 100%;
+}
+
+.exp-chart-wide {
+  height: 300px;
+}
+
+.exp-chart-msg {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.exp-chart-msg:empty {
+  display: none;
+}
+
+/* Folds and diff groups share one summary affordance. */
+.exp-detail-fold,
+.exp-diff-block {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--exp-panel-deep);
+}
+
+.exp-detail-fold > summary,
+.exp-diff-block > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  color: #b7c7d8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.4;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.exp-detail-fold > summary::-webkit-details-marker,
+.exp-diff-block > summary::-webkit-details-marker {
+  display: none;
+}
+
+.exp-detail-fold > summary::before,
+.exp-diff-block > summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid currentColor;
+  transition: transform 0.15s ease;
+}
+
+.exp-detail-fold[open] > summary::before,
+.exp-diff-block[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.exp-detail-fold > summary:hover,
+.exp-diff-block > summary:hover,
+.exp-detail-fold[open] > summary,
+.exp-diff-block[open] > summary {
+  color: var(--text);
+}
+
+.exp-detail-fold[open] > summary,
+.exp-diff-block[open] > summary {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.exp-detail-fold > summary:focus-visible,
+.exp-diff-block > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.exp-pre {
+  max-height: 280px;
+  margin: 0;
+  padding: 11px 13px;
+  overflow: auto;
+  color: #c8d7e6;
+  font-family: var(--exp-mono);
+  font-size: 0.72rem;
+  line-height: 1.62;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.exp-pre:empty {
+  display: none;
+}
+
+.exp-detail-fold:has(> .exp-pre:empty) {
+  display: none;
+}
+
+.exp-detail-stats {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.exp-detail-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.exp-detail-stats > :first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.exp-detail-stats dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.exp-detail-stats dd {
+  margin: 0;
+  color: #d3e0ec;
+  font-family: var(--exp-mono);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Fallback for a flat dt/dd list: space consecutive pairs without wrappers. */
+.exp-detail-stats > dd {
+  padding-bottom: 9px;
+}
+
+.exp-detail-stats > dd:last-child {
+  padding-bottom: 0;
+}
+
+.exp-detail-stats > dd + dt {
+  padding-top: 9px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Comparison --------------------------------------------------------------- */
+
+.exp-compare-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+}
+
+.exp-compare-controls .exp-field {
+  flex: 0 1 230px;
+}
+
+.exp-compare-controls select {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px;
+  border-color: #2a394b;
+  background-color: var(--input-bg);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.exp-compare-table {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--exp-panel-deep);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.exp-compare-table:empty {
+  display: none;
+}
+
+.exp-compare-table::-webkit-scrollbar {
+  height: 8px;
+}
+
+.exp-compare-table::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.exp-compare-table::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #2a394b;
+}
+
+.exp-compare-table-el {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.exp-compare-table-el th,
+.exp-compare-table-el td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.exp-compare-table-el thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-width: 104px;
+  border-bottom: 1px solid var(--border);
+  background: #0f1720;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.exp-compare-table-el thead th:first-child {
+  left: 0;
+  z-index: 2;
+  min-width: 128px;
+}
+
+.exp-compare-table-el .exp-compare-run-name {
+  display: block;
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
+.exp-compare-table-el .exp-compare-run-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-family: var(--exp-mono);
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
+.exp-compare-table-el tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--exp-panel-deep);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.exp-compare-table-el td {
+  color: #d3e0ec;
+  font-family: var(--exp-mono);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.exp-compare-table-el tbody tr:hover td {
+  background: rgba(61, 169, 252, 0.05);
+}
+
+.exp-compare-table-el tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+/* The diff renderer emits newline-joined spans inside the pre. Zero the
+ * inherited line height so those separator text nodes take no space; each
+ * span restores its own line height and becomes one full-width diff row. */
+.exp-pre.exp-diff {
+  padding: 8px 0;
+  line-height: 0;
+}
+
+.exp-diff .diff-line {
+  display: block;
+  padding: 0 12px;
+  border-left: 2px solid transparent;
+  font-family: var(--exp-mono);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.exp-diff .diff-add {
+  border-left-color: var(--ok);
+  background: rgba(74, 222, 128, 0.09);
+  color: #a7f3c0;
+}
+
+.exp-diff .diff-remove {
+  border-left-color: var(--bad);
+  background: rgba(248, 113, 113, 0.1);
+  color: #f7b4b4;
+}
+
+.exp-diff .diff-same {
+  color: #93a6ba;
+}
+
+.exp-diff .diff-meta {
+  border-left-color: var(--accent);
+  background: rgba(61, 169, 252, 0.08);
+  color: #bfe3ff;
+  font-weight: 600;
+}
+
+.exp-compare-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.exp-compare-diff:empty {
+  display: none;
+}
+
 @keyframes exp-pulse {
   0%,
   100% {
@@ -748,6 +1389,20 @@
   50% {
     opacity: 0.55;
     box-shadow: 0 0 0 6px rgba(61, 169, 252, 0);
+  }
+}
+
+/* Panels animate when the hidden attribute is removed, so opening detail or
+ * comparison reads as a deliberate reveal rather than a layout jump. */
+@keyframes exp-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -762,6 +1417,10 @@
   .exp-scenario-input {
     min-height: 270px;
   }
+
+  .exp-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 760px) {
@@ -775,6 +1434,10 @@
 
   .experiment-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .exp-chart-wide {
+    height: 260px;
   }
 }
 
@@ -839,12 +1502,57 @@
   .experiment-artifacts .button {
     flex: 0 0 auto;
   }
+
+  .experiment-compare-bar {
+    padding: 8px 10px;
+  }
+
+  .exp-chart-wrap {
+    height: 200px;
+  }
+
+  .exp-chart-wide {
+    height: 240px;
+  }
+
+  .exp-compare-controls .exp-field {
+    flex-basis: 100%;
+  }
+
+  .exp-compare-table-el {
+    min-width: 460px;
+  }
+
+  .exp-compare-table-el th,
+  .exp-compare-table-el td {
+    padding: 6px 10px;
+  }
+
+  .exp-detail-side {
+    padding: 10px 12px;
+  }
+
+  .exp-pre {
+    max-height: 220px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .exp-editor,
-  .experiment-run {
+  .experiment-run,
+  .experiment-select-cell {
     transition: none;
+  }
+
+  .exp-detail-fold > summary::before,
+  .exp-diff-block > summary::before {
+    transition: none;
+  }
+
+  .experiment-compare-bar,
+  .exp-detail-card,
+  .exp-compare-card {
+    animation: none;
   }
 
   .experiment-status[data-status="running"]::before {

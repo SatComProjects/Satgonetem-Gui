@@ -220,6 +220,12 @@ stopped; the GUI reserves the network operation for the duration so project and
 routing controls cannot race the experiment. Concurrent runs are bounded to two,
 with one live run.
 
+The run list opens a detail view with a live metrics chart, report text,
+scenario YAML, and artifact actions. While a run is active the chart refreshes
+from `GET /api/experiments/{id}/metrics?tail=N`; completed runs can be selected
+(two to four) and compared by summary values, an overlaid metric series over
+simulation time, and a line diff of their scenario documents.
+
 Artifacts are downloadable from the run list. Interactive traffic history remains
 browser-local; scenario runs are the server-backed experiment record.
 

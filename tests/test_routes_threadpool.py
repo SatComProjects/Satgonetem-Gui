@@ -33,6 +33,7 @@ BLOCKING_ENDPOINTS = [
     experiments.api_experiment_list,
     experiments.api_experiment_status,
     experiments.api_experiment_artifact,
+    experiments.api_experiment_metrics,
     projects.api_ground_station_presets,
     projects.api_project_create,
     projects.api_project_status,
