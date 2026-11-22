@@ -4,6 +4,7 @@ import {
   DETAIL_TTL_MS,
   cacheEntry,
   isFresh,
+  staleCacheKeys,
 } from "../satgonetem_gui/static/nodes_model.js";
 
 describe("node detail cache", () => {
@@ -23,5 +24,12 @@ describe("node detail cache", () => {
   it("handles missing entries", () => {
     expect(isFresh(null)).toBe(false);
     expect(isFresh(undefined)).toBe(false);
+  });
+
+  it("identifies cache entries for nodes that disappeared", () => {
+    expect(
+      staleCacheKeys(["Sat0", "Sat1", "Station"], ["Sat1", "Station", "Sat2"]),
+    ).toEqual(["Sat0"]);
+    expect(staleCacheKeys(["Sat0"], ["Sat0"])).toEqual([]);
   });
 });
