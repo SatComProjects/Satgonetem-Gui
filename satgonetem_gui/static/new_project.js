@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { normalizeProjectName } from "./new_project_model.js";
 
   var shells = [];
   var grounds = [];
@@ -338,7 +339,12 @@ import { api } from "./api.js";
 
     var fd = new FormData(form);
     var payload = Object.fromEntries(fd.entries());
-    var projectName = payload.name;
+    var projectName = normalizeProjectName(payload.name);
+    payload.name = projectName;
+    if (!projectName) {
+      alert("Project name is required.");
+      return;
+    }
 
     try {
       createBtn.disabled = true;
