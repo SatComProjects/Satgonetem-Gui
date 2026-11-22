@@ -258,6 +258,17 @@ not import those dependency internals.
 - Added the connectivity specification, Vitest matrix formatting, and
   Playwright start/heatmap/export coverage.
 
+## Phase 17 changes
+
+- Added a server-side experiment runner over v0.3.2 `Scenario` and
+  `ExperimentRunner`, with validate-only/offline/live modes and a live network
+  reservation.
+- Persisted scenario, manifest, metrics, flows, errors, summary, report,
+  connectivity, and provenance artifacts under the save root with bounded run
+  capacity and allowlisted downloads.
+- Added the `/experiments` page, experiment specification, Vitest formatting,
+  and Playwright run/artifact coverage.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -281,16 +292,17 @@ not import those dependency internals.
   wrapper, simulation formatting/action rules, addressability summaries/rules,
   experiment-history compaction/export/comparison, forwarding-path formatting,
   link formatting/filtering/width/usage colors, preflight/phase formatting,
-  project-workspace formatting, connectivity matrix formatting, and escaping
-  modules.
+  project-workspace formatting, connectivity matrix formatting, experiment
+  status/summary/artifact formatting, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
   node expansion, dashboard counts, simulation panel accessibility,
   addressability endpoint refresh, history reopen/capture/export/delete/compare,
   forwarding-path rendering, link-inspector rendering, readiness checks,
   blocking creation, indeterminate build progress, workspace list/open/save,
-  connectivity start/heatmap/export, and the WebGL fallback. World View WebGL
-  rendering itself remains a manual desktop check.
+  connectivity start/heatmap/export, experiment start/list/artifact download,
+  and the WebGL fallback. World View WebGL rendering itself remains a manual
+  desktop check.
 
 ## Current measurements
 
@@ -301,11 +313,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **680 passed, 1 skipped** in about 43 s with coverage. Frontend:
-**104 Vitest tests**, **29 Playwright tests**.
+Result: **716 passed, 1 skipped** in about 46 s with coverage. Frontend:
+**108 Vitest tests**, **30 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**89.82%** over 3676 statements.
+**88.83%** over 4181 statements.
 
 ## Tooling decisions
 

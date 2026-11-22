@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .adapters.environment_doctor import LocalEnvironmentDoctor
+from .adapters.experiment_adapter import SatGoNetemExperimentAdapter
 from .adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
 from .config import Settings, load_settings
@@ -21,6 +22,7 @@ from .routes import (
     addressability,
     connectivity,
     diagnostics,
+    experiments,
     pages,
     projects,
     routing,
@@ -32,6 +34,7 @@ from .routes import (
 from .services.addressability_service import AddressabilityService
 from .services.connectivity_service import ConnectivityService
 from .services.container import ApplicationServices
+from .services.experiment_service import ExperimentService
 from .services.preflight_service import PreflightService
 from .services.project_catalog_service import ProjectCatalogService
 from .services.project_service import ProjectService
@@ -163,6 +166,11 @@ def build_services(settings: Settings) -> ApplicationServices:
     traffic = TrafficService(topology, traffic_adapter)
     preflight = PreflightService(LocalEnvironmentDoctor(settings))
     connectivity_service = ConnectivityService(topology, topology_adapter)
+    experiment_service = ExperimentService(
+        settings,
+        topology,
+        SatGoNetemExperimentAdapter(),
+    )
     return ApplicationServices(
         runtime=runtime,
         project=project,
@@ -174,6 +182,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         simulation=simulation,
         preflight=preflight,
         connectivity=connectivity_service,
+        experiments=experiment_service,
     )
 
 
@@ -213,4 +222,5 @@ def create_app(
     app.include_router(traffic.router)
     app.include_router(diagnostics.router)
     app.include_router(connectivity.router)
+    app.include_router(experiments.router)
     return app

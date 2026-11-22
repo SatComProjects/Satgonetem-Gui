@@ -15,6 +15,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Project Workspace** | List, reopen, save in place, duplicate, and delete projects under the configured save root. |
 | **Usage Link Colors** | Opt-in World View link coloring from green (idle) to red (at/above capacity). |
 | **Connectivity Matrix** | Ping every ordered pair of addressable nodes with a loss/RTT heatmap and CSV/JSON export. |
+| **Experiment Runs** | Run v0.3.2 YAML scenarios and keep manifests, metrics, results, and reports on the server. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
 | **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
@@ -110,6 +111,7 @@ package.json            # Frontend test/tooling manifest
 | `/new_project` | New Project — build a constellation from scratch |
 | `/projects` | Projects — list, reopen, save, duplicate, and delete workspace projects |
 | `/connectivity` | Connectivity Matrix — full-mesh loss/RTT heatmap with exports |
+| `/experiments` | Experiments — run scenarios and download server-side artifacts |
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
 | `/docs` | API Documentation — auto-generated Swagger UI |
 
@@ -206,6 +208,20 @@ addressing/routing. Runs are capped at 32 nodes and 2,000 ordered pairs, run in
 the background, and render an N×N heatmap of packet loss and average RTT.
 Completed jobs can be exported as CSV or JSON. The matrix is a snapshot; rerun
 after topology or routing changes.
+
+## Experiment Runs
+
+The Experiments page runs a v0.3.2 YAML scenario in validate-only, offline, or
+live mode. Each run is stored under
+`SATGONETEM_GUI_SAVE_ROOT/.satgonetem/experiments/` with its scenario, manifest,
+metrics (`metrics.jsonl`), flows, errors, summary, report, optional connectivity
+matrix, and a provenance record. Live runs require GoNetEm containers to be
+stopped; the GUI reserves the network operation for the duration so project and
+routing controls cannot race the experiment. Concurrent runs are bounded to two,
+with one live run.
+
+Artifacts are downloadable from the run list. Interactive traffic history remains
+browser-local; scenario runs are the server-backed experiment record.
 
 ## Usage Link Colors
 

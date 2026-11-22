@@ -582,3 +582,49 @@ class ConnectivityExportResponse(BaseModel):
     filename: str
     content: str
     content_type: str = "text/csv"
+
+
+class ExperimentStartRequest(BaseModel):
+    """Submitted scenario YAML and execution mode for a new experiment run."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    scenario_yaml: str = Field(min_length=1, max_length=1_000_000)
+    mode: Literal["dry_run", "offline", "live"] = "offline"
+
+
+class ExperimentStartResponse(BaseModel):
+    """Identifier of the queued experiment run."""
+
+    ok: bool = True
+    run_id: str
+
+
+class ExperimentRunSummary(BaseModel):
+    """One experiment run as exposed by the status and catalog endpoints."""
+
+    run_id: str
+    name: str
+    mode: Literal["dry_run", "offline", "live"]
+    status: Literal["running", "done", "error"]
+    started_at: str
+    finished_at: str | None = None
+    summary: dict[str, Any] | None = None
+    errors: list[str] = Field(default_factory=list)
+    artifacts: list[str] = Field(default_factory=list)
+
+
+class ExperimentRunListResponse(BaseModel):
+    """Experiment catalog, newest run first."""
+
+    ok: bool = True
+    runs: list[ExperimentRunSummary]
+
+
+class ExperimentArtifactResponse(BaseModel):
+    """One stored experiment artifact and its media type."""
+
+    ok: bool = True
+    filename: str
+    content: str
+    content_type: str

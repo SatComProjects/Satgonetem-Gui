@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from ..state import RuntimeState
 from .addressability_service import AddressabilityService
 from .connectivity_service import ConnectivityService
+from .experiment_service import ExperimentService
 from .preflight_service import PreflightService
 from .project_catalog_service import ProjectCatalogService
 from .project_service import ProjectService
@@ -28,3 +29,4 @@ class ApplicationServices:
     simulation: SimulationService
     preflight: PreflightService
     connectivity: ConnectivityService
+    experiments: ExperimentService

@@ -25,6 +25,10 @@ def create_pages_router(templates: Jinja2Templates) -> APIRouter:
     async def connectivity_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "connectivity.html")
 
+    @router.get("/experiments", response_class=HTMLResponse)
+    async def experiments_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "experiments.html")
+
     @router.get("/ground_stations", response_class=HTMLResponse)
     async def ground_stations_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "ground_stations.html")

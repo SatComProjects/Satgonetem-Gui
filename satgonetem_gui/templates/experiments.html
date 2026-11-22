@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/experiments.css">
+{% endblock %}
+
+{% block content %}
+<div class="exp-page">
+
+  <header class="exp-page-head">
+    <div class="exp-heading">
+      <p class="exp-eyebrow">Scenario runner</p>
+      <h2 class="exp-title">Experiments</h2>
+      <p class="muted exp-lede">
+        Run a v0.3.2 YAML scenario and keep its manifest, metrics, results, and report
+        on the server. Every run stays listed below with the artifacts it produced.
+      </p>
+    </div>
+    <div class="exp-stamp" aria-hidden="true">
+      <span class="exp-stamp-label">Core</span>
+      <strong class="exp-stamp-version">v0.3.2</strong>
+      <span class="exp-stamp-note">server archive</span>
+    </div>
+  </header>
+
+  <p class="muted exp-msg" id="experiments-msg" aria-live="polite"></p>
+
+  <section class="card exp-setup-card" aria-labelledby="experiment-setup-title">
+    <div class="exp-card-head">
+      <div>
+        <h3 class="card-title" id="experiment-setup-title">New run</h3>
+        <p class="muted exp-card-hint">
+          Paste a scenario, choose how far to run it, then start. The YAML is validated
+          before anything is launched.
+        </p>
+      </div>
+    </div>
+
+    <div class="exp-workbench">
+      <div class="exp-scenario-field">
+        <label class="exp-field-label" for="experiment-scenario">Scenario YAML</label>
+        <div class="exp-editor">
+          <div class="exp-editor-bar" aria-hidden="true">
+            <span class="exp-editor-file">scenario.yaml</span>
+            <span class="exp-editor-tag">YAML</span>
+          </div>
+          <textarea id="experiment-scenario" name="scenario_yaml" class="exp-scenario-input"
+                    rows="14" spellcheck="false" autocomplete="off"
+                    aria-describedby="experiment-scenario-hint"
+                    placeholder="name: Demo Experiment&#10;duration_s: 30&#10;tick_s: 1&#10;routing: static&#10;metrics_interval_s: 5&#10;connectivity: false&#10;shells:&#10;  - identifier: LEO&#10;    planes: 3&#10;    satellites_per_plane: 4&#10;    inclination_deg: 53&#10;    revs_per_day: 15.5&#10;    pattern: star&#10;ground_stations:&#10;  - name: Berlin&#10;    latitude: 52.52&#10;    longitude: 13.405&#10;    elevation_km: 0.034"></textarea>
+        </div>
+        <p class="muted exp-field-hint" id="experiment-scenario-hint">
+          A Walker constellation and at least one ground station are enough to start.
+        </p>
+      </div>
+
+      <div class="exp-run-panel">
+        <label class="exp-field" for="experiment-mode">
+          <span class="exp-field-label">Mode</span>
+          <select id="experiment-mode" name="mode">
+            <option value="dry_run">Validate only</option>
+            <option value="offline" selected>Build/sample, no containers</option>
+            <option value="live">Start GoNetEm and traffic</option>
+          </select>
+        </label>
+        <p class="muted exp-field-hint">The scenario is validated first in every mode.</p>
+        <button type="button" class="button exp-run-btn" id="experiment-run"
+                aria-describedby="experiment-run-note">Run experiment</button>
+        <p class="muted exp-run-note" id="experiment-run-note">
+          Live mode requires stopped GoNetEm containers.
+        </p>
+        <p class="exp-run-status" id="experiment-start-status" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <div class="exp-keeps">
+      <span class="exp-keeps-label">Run artifacts</span>
+      <ul class="exp-keeps-list" aria-label="Artifacts kept on the server">
+        <li>manifest.yaml</li>
+        <li>summary.json</li>
+        <li>report.md</li>
+        <li>metrics.jsonl</li>
+        <li>connectivity.json</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="card exp-runs-card" aria-labelledby="experiment-runs-title">
+    <div class="exp-runs-head">
+      <div>
+        <h3 class="card-title" id="experiment-runs-title">Runs</h3>
+        <p class="muted exp-runs-hint">
+          Newest first. Artifacts open from the run that produced them.
+        </p>
+      </div>
+    </div>
+    <div class="experiment-list" id="experiments-list"></div>
+    <p class="experiment-empty" id="experiments-empty" hidden>
+      <strong>No runs yet</strong>
+      <span>Start a dry run to validate the scenario, or an offline run to build and sample it.</span>
+    </p>
+  </section>
+
+</div>
+
+<script type="module" src="/static/experiments.js?v=1"></script>
+{% endblock %}
