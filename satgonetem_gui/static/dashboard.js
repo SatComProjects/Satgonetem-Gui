@@ -33,6 +33,9 @@ let lastStatus = null;
 
 /** @type {boolean} */
 let gonetemBusy = false;
+let statusInFlight = false;
+let routingInFlight = false;
+let routingBusy = false;
 
 /**
  * Apply a status snapshot from /api/status to the DOM.
@@ -105,20 +108,42 @@ function showRoutingMsg(text, isError) {
   msg.style.color = isError ? "var(--bad)" : "var(--muted)";
 }
 
+function showDashboardMsg(text, isError) {
+  var msg = el("dashboard-msg");
+  if (!msg) return;
+  msg.textContent = text;
+  msg.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
 async function pollStatus() {
+  if (statusInFlight) return;
+  statusInFlight = true;
   try {
     applyStatus(await api.get("/api/status"));
-  } catch (_) {
-    // Network error - keep last known state visible.
+    showDashboardMsg("");
+  } catch (err) {
+    showDashboardMsg(
+      "Status refresh failed: " + (err.message || "network error"),
+      true,
+    );
+  } finally {
+    statusInFlight = false;
   }
 }
 
 async function pollRoutingStatus() {
+  if (routingInFlight) return;
+  routingInFlight = true;
   try {
     const data = await api.get("/api/routing/status");
     if (data.ok) applyRoutingStatus(data);
-  } catch (_) {
-    // Ignore network errors.
+  } catch (err) {
+    showRoutingMsg(
+      "Routing status refresh failed: " + (err.message || "network error"),
+      true,
+    );
+  } finally {
+    routingInFlight = false;
   }
 }
 
@@ -140,11 +165,21 @@ el("btn-gonetem").addEventListener("click", async function () {
     alert((starting ? "Start" : "Stop") + " failed: " + (err.message || "Unknown error"));
   } finally {
     gonetemBusy = false;
+    btn.textContent = lastStatus?.gonetem_is_on ? "Stop" : "Start";
     await pollStatus();
   }
 });
 
+function setRoutingBusy(busy) {
+  routingBusy = busy;
+  el("btn-apply").disabled = busy;
+  el("btn-delete").disabled = busy;
+  el("routing-method").disabled = busy;
+}
+
 el("btn-apply").addEventListener("click", async function () {
+  if (routingBusy) return;
+  setRoutingBusy(true);
   var method = el("routing-method").value;
   showRoutingMsg("Applying addressing and routing...");
   try {
@@ -152,20 +187,26 @@ el("btn-apply").addEventListener("click", async function () {
     showRoutingMsg("Addressing and routing applied successfully.");
   } catch (err) {
     showRoutingMsg(err.message || "Apply failed.", true);
+  } finally {
+    setRoutingBusy(false);
   }
   await pollRoutingStatus();
 });
 
 el("btn-delete").addEventListener("click", async function () {
+  if (routingBusy) return;
   if (!confirm("Delete all installed routes?")) {
     return;
   }
+  setRoutingBusy(true);
   showRoutingMsg("Deleting routing...");
   try {
     await api.post("/api/routing/delete");
     showRoutingMsg("Routing deleted successfully.");
   } catch (err) {
     showRoutingMsg(err.message || "Delete failed.", true);
+  } finally {
+    setRoutingBusy(false);
   }
   await pollRoutingStatus();
 });

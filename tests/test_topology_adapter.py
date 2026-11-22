@@ -9,6 +9,7 @@ import pytest
 
 from satgonetem_gui.adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from satgonetem_gui.schemas import ProjectCreateRequest
+from satgonetem_gui.services.ports import NetworkOperationError
 from tests.factories import PROJECT_NAME, project_payload
 
 
@@ -120,6 +121,19 @@ def test_adapter_maps_addressing_and_routing_failures(settings) -> None:
         adapter.init_routing(routing, "static")
 
 
+def test_adapter_maps_addressing_exceptions(settings) -> None:
+    """v0.3.1 raises when any node failed; expose it as a network error."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+
+    def fail() -> None:
+        raise RuntimeError("IPv4 assignment failed on 3 node(s)")
+
+    topology = SimpleNamespace(set_ip_addresses=fail)
+
+    with pytest.raises(NetworkOperationError, match="3 node"):
+        adapter.apply_addressing(topology)
+
+
 def test_adapter_delete_and_start_failures(settings) -> None:
     """Delete/start return-code and state failures are mapped."""
     from types import SimpleNamespace
@@ -142,6 +156,43 @@ def test_adapter_delete_and_start_failures(settings) -> None:
         adapter.delete_routing(deleting)
     with pytest.raises(NetworkOperationError):
         adapter.start_gonetem(starting)
+
+
+def test_adapter_start_cleans_up_partial_startup(settings) -> None:
+    """A failed start attempts to stop any containers it already created."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    calls = []
+
+    def fail_start():
+        calls.append("start")
+        raise RuntimeError("launcher failed")
+
+    topology = SimpleNamespace(
+        start_gonetem=fail_start,
+        stop_gonetem=lambda: calls.append("stop"),
+        get_gonetem_status=lambda: False,
+    )
+
+    with pytest.raises(RuntimeError, match="launcher failed"):
+        adapter.start_gonetem(topology)
+
+    assert calls == ["start", "stop"]
+
+
+def test_adapter_start_failure_after_status_check_still_cleans_up(settings) -> None:
+    """A start that reports no running containers also triggers cleanup."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    calls = []
+    topology = SimpleNamespace(
+        start_gonetem=lambda: calls.append("start"),
+        stop_gonetem=lambda: calls.append("stop"),
+        get_gonetem_status=lambda: False,
+    )
+
+    with pytest.raises(NetworkOperationError, match="failed to start"):
+        adapter.start_gonetem(topology)
+
+    assert calls == ["start", "stop"]
 
 
 def test_adapter_delete_is_idempotent_when_not_initialized(settings) -> None:

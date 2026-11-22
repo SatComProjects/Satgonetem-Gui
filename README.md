@@ -129,7 +129,7 @@ placing it behind an authenticating reverse proxy.
 To run the application in development mode with auto-reload:
 
 ```bash
-uvicorn satgonetem_gui.app:app --reload --host 127.0.0.1 --port 8000
+uvicorn "satgonetem_gui.app:create_app" --factory --reload --host 127.0.0.1 --port 8000
 ```
 
 Install the development tools and run the Python suite:

@@ -30,12 +30,20 @@ test("world page shell renders", async ({ page }) => {
 });
 
 
+test("queue header is a keyboard-accessible button", async ({ page }) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: /Job Queue/ }),
+  ).toBeVisible();
+});
+
+
 test("queue items add and remove by stable ID", async ({ page }) => {
   await page.goto("/traffic");
   await page.waitForLoadState("networkidle");
 
   await page.evaluate(async () => {
-    const queue = await import("/static/queue.js?v=5");
+    const queue = await import("/static/queue.js?v=7");
     queue.jqAdd({
       kind: "ping",
       payload: { src: "Sat0", dst: "Sat1" },

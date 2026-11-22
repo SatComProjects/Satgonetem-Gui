@@ -1,4 +1,9 @@
-import { api } from "./api.js";
+import { api, ApiError } from "./api.js";
+import {
+    describeGroundStation,
+    describeSatellite,
+    hasPosition,
+} from "./world_model.js";
 
 const SAT_COLOR = Cesium.Color.fromCssColorString("#3b82f6");
 const GS_CONN_COLOR = Cesium.Color.fromCssColorString("#22c55e");
@@ -241,7 +246,11 @@ function initCesium() {
 function updateSatellites(satellites) {
     const seen = new Set();
     satellites.forEach(sat => {
-        const p = sat.position;
+        const p = sat.position || {};
+        if (!hasPosition(p)) {
+            if (satEntities[sat.name]) satEntities[sat.name].show = false;
+            return;
+        }
         const pos = toCartesian(p.latitude, p.longitude, p.altitude);
         nodePositions.set(sat.name, pos);
         seen.add(sat.name);
@@ -249,6 +258,7 @@ function updateSatellites(satellites) {
         if (satEntities[sat.name]) {
             satEntities[sat.name].position = pos;
             satEntities[sat.name].show = vis.satellites;
+            satEntities[sat.name].description = describeSatellite(sat.name, p);
         } else {
             satEntities[sat.name] = viewer.entities.add({
                 name: sat.name,
@@ -257,7 +267,7 @@ function updateSatellites(satellites) {
                     pixelSize: 5,
                     color: SAT_COLOR,
                 },
-                description: `<b>${sat.name}</b><br>Lat: ${p.latitude.toFixed(2)}<br>Lon: ${p.longitude.toFixed(2)}<br>Alt: ${p.altitude.toFixed(0)} km`,
+                description: describeSatellite(sat.name, p),
                 show: vis.satellites,
             });
         }
@@ -291,19 +301,27 @@ function updateSatellites(satellites) {
 function updateGroundStations(groundStations, connected) {
     const seen = new Set();
     groundStations.forEach(gs => {
-        const p = gs.position;
+        const p = gs.position || {};
+        if (!hasPosition(p)) {
+            if (gsEntities[gs.name]) gsEntities[gs.name].show = false;
+            return;
+        }
         const pos = toCartesian(p.latitude, p.longitude, p.altitude);
         nodePositions.set(gs.name, pos);
         seen.add(gs.name);
 
         const color = connected.has(gs.name) ? GS_CONN_COLOR : GS_DISC_COLOR;
-        const city = gs.city ? ` (${gs.city})` : "";
-        const statusText = connected.has(gs.name) ? "Connected" : "Disconnected";
 
         if (gsEntities[gs.name]) {
             gsEntities[gs.name].position = pos;
             gsEntities[gs.name].point.color = color;
             gsEntities[gs.name].show = vis.groundStations;
+            gsEntities[gs.name].description = describeGroundStation(
+                gs.name,
+                gs.city,
+                p,
+                connected.has(gs.name),
+            );
         } else {
             gsEntities[gs.name] = viewer.entities.add({
                 name: gs.name,
@@ -324,7 +342,12 @@ function updateGroundStations(groundStations, connected) {
                     pixelOffset: new Cesium.Cartesian2(0, -18),
                     show: true,
                 },
-                description: `<b>${gs.name}${city}</b><br>Lat: ${p.latitude.toFixed(2)}<br>Lon: ${p.longitude.toFixed(2)}<br>Status: ${statusText}`,
+                description: describeGroundStation(
+                    gs.name,
+                    gs.city,
+                    p,
+                    connected.has(gs.name),
+                ),
                 show: vis.groundStations,
             });
         }
@@ -368,6 +391,13 @@ function updateLinks(links) {
 /**
  * Fetch satellites, ground stations, and links from the API, then update the view.
  */
+async function showWorldMsg(text, isError = false) {
+    const element = document.getElementById("world-msg");
+    if (!element) return;
+    element.textContent = text;
+    element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
 async function updateWorld() {
     try {
         const [satellites, groundStations, links] = await Promise.all([
@@ -386,8 +416,21 @@ async function updateWorld() {
         updateSatellites(satellites);
         updateGroundStations(groundStations, connected);
         updateLinks(linkArr);
+        showWorldMsg(
+            satellites.length || groundStations.length || linkArr.length
+                ? ""
+                : "No project data is available yet.",
+        );
     } catch (err) {
         console.error("World update error:", err);
+        if (err instanceof ApiError && err.status === 404) {
+            showWorldMsg("No project is loaded.");
+        } else {
+            showWorldMsg(
+                `World view refresh failed: ${err.message || "network error"}`,
+                true,
+            );
+        }
     }
 }
 
@@ -415,6 +458,8 @@ function togglePanel() {
     content.classList.toggle("collapsed", isNowCollapsed);
     toggle.textContent = isNowCollapsed ? "▶" : "◀";
     title.style.visibility = isNowCollapsed ? "hidden" : "visible";
+    const header = document.getElementById("plot-controls-header");
+    if (header) header.setAttribute("aria-expanded", String(!isNowCollapsed));
 }
 
 let pollTimer = null;
@@ -507,7 +552,13 @@ function startWorld() {
         }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    document.getElementById("plot-controls-header").addEventListener("click", togglePanel);
+    const panelHeader = document.getElementById("plot-controls-header");
+    panelHeader.addEventListener("click", togglePanel);
+    panelHeader.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        togglePanel();
+    });
 
     poll();
 }

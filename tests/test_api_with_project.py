@@ -48,6 +48,7 @@ def test_ground_stations_endpoint(project_client) -> None:
     assert len(stations) == 1
     assert stations[0]["name"] == "Gnd100"
     assert stations[0]["city"] == "Berlin"
+    assert stations[0]["position"]["altitude"] == pytest.approx(0.034)
 
 
 def test_links_endpoint(project_client) -> None:
@@ -80,6 +81,15 @@ def test_nodes_and_node_detail(project_client) -> None:
     assert ground_response.status_code == 200
     assert ground_response.json()["node"]["type"] == "ground_station"
     assert ground_response.json()["node"]["city"] == "Berlin"
+
+
+@pytest.mark.parametrize("name", ["Satellite", "Sat", "Gnd", "Gndabc", "Sat-1"])
+def test_malformed_node_names_return_404(project_client, name: str) -> None:
+    """Names the core cannot parse are client errors, not 500s."""
+    response = project_client.get(f"/api/nodes/{name}")
+
+    assert response.status_code == 404
+    assert response.json()["ok"] is False
 
 
 def test_unknown_node_returns_404(project_client) -> None:

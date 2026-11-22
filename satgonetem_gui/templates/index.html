@@ -6,6 +6,7 @@
 
 {% block content %}
 <h2 class="page-title">Dashboard</h2>
+<p class="muted" id="dashboard-msg" aria-live="polite"></p>
 
 <div class="dashboard-grid">
 
@@ -37,7 +38,7 @@
   <section class="card" id="card-gonetem">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <h3 class="card-title" style="margin:0">Docker Containers</h3>
-      <button id="btn-gonetem">Start</button>
+      <button id="btn-gonetem" type="button">Start</button>
     </div>
     <dl class="stat-list">
       <div class="stat-row">
@@ -114,13 +115,13 @@
       </select>
     </div>
     <div class="button-row">
-      <button id="btn-apply">Apply Addressing &amp; Routing</button>
-      <button id="btn-delete">Delete Routing</button>
+      <button id="btn-apply" type="button">Apply Addressing &amp; Routing</button>
+      <button id="btn-delete" type="button">Delete Routing</button>
     </div>
-    <p class="muted" id="routing-msg"></p>
+    <p class="muted" id="routing-msg" aria-live="polite"></p>
   </section>
 
 </div>
 
-<script type="module" src="/static/dashboard.js?v=4"></script>
+<script type="module" src="/static/dashboard.js?v=5"></script>
 {% endblock %}

@@ -22,6 +22,27 @@ def test_every_api_route_declares_a_json_success_schema(client) -> None:
             )
 
 
+def test_shared_error_envelope_is_documented(client) -> None:
+    """Documented errors use ErrorResponse, including the overridden 422."""
+    spec = client.get("/openapi.json").json()
+    schemas = spec.get("components", {}).get("schemas", {})
+    assert "ErrorResponse" in schemas
+
+    create = spec["paths"]["/api/project/create"]["post"]["responses"]
+    assert create["422"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ErrorResponse"
+    }
+    assert create["409"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ErrorResponse"
+    }
+
+    traffic = spec["paths"]["/api/traffic/iperf3"]["post"]["responses"]
+    assert "429" in traffic
+    assert traffic["429"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ErrorResponse"
+    }
+
+
 @pytest.mark.parametrize(
     "path",
     [

@@ -17,6 +17,18 @@ def test_save_path_outside_root_is_rejected(client, settings, tmp_path: Path) ->
     assert client.get("/api/project/status").json()["state"] == "idle"
 
 
+def test_save_path_with_nul_byte_returns_400(client) -> None:
+    """An invalid path character is a client error, not a server crash."""
+    response = client.post(
+        "/api/project/create",
+        json=project_payload("NulPath", save_path="a\x00b.json"),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["ok"] is False
+    assert client.get("/api/project/status").json()["state"] == "idle"
+
+
 def test_save_path_inside_root_writes_the_project(client, settings) -> None:
     """A target inside the allowed root is written and reported in config."""
     target = settings.save_root / "inside.json"

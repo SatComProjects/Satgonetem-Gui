@@ -3,17 +3,22 @@
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from ..config import Settings
 from ..errors import APIError
 from ..ground_stations import parse_ground_station_file
+from ..project_documents import validate_project_create_payload
 from ..schemas import ProjectCreateRequest
 from ..state import RuntimeState
 from ..storage import SavePathError, resolve_save_path
 from .ports import ProjectGateway
 
 logger = logging.getLogger(__name__)
+
+PROJECT_BUILD_TIMEOUT_SECONDS = 600.0
+PROJECT_LOAD_TIMEOUT_SECONDS = 600.0
 
 
 class ProjectService:
@@ -25,11 +30,23 @@ class ProjectService:
         gateway: ProjectGateway,
         settings: Settings,
         resources_dir: Path,
+        network_running: Callable[[], bool] | None = None,
+        load_timeout_seconds: float = PROJECT_LOAD_TIMEOUT_SECONDS,
     ) -> None:
         self.state = state
         self.gateway = gateway
         self.settings = settings
         self.resources_dir = resources_dir
+        self.network_running = network_running
+        self.load_timeout_seconds = load_timeout_seconds
+
+    def _guard_replacement(self) -> None:
+        """Refuse to replace a project while containers are still running."""
+        if self.network_running is not None and self.network_running():
+            raise APIError(
+                409,
+                "GoNetEm is running. Stop it before replacing the project.",
+            )
 
     def presets(self) -> list[dict]:
         """Return the bundled ground-station presets."""
@@ -49,11 +66,24 @@ class ProjectService:
         except SavePathError as exc:
             raise APIError(400, str(exc)) from exc
 
+        try:
+            shells = json.loads(payload.walker_shells_json)
+            grounds = json.loads(payload.ground_objects_properties_json)
+            validate_project_create_payload(shells, grounds)
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise APIError(
+                422,
+                f"Invalid project configuration: {exc}",
+            ) from exc
+
+        self._guard_replacement()
+
         started = self.state.project_tasks.start(
             name=name,
             save_path=str(payload.save_path or "").strip(),
             operation="create",
             runner=lambda: self.gateway.build(payload),
+            timeout_seconds=PROJECT_BUILD_TIMEOUT_SECONDS,
         )
         if not started:
             raise APIError(409, "A project operation is already running.")
@@ -68,12 +98,12 @@ class ProjectService:
 
     def config(self, name: str) -> dict:
         """Return the editable configuration for a loaded project."""
-        topology = self.state.project.get_topology(name)
-        if topology is None:
+        topology, project_name, save_path = self.state.project.context(name)
+        if topology is None or project_name != name:
             raise APIError(404, "Project not found.")
 
         try:
-            return self.gateway.config(topology, self.state.project.save_path)
+            return self.gateway.config(topology, save_path)
         except APIError:
             raise
         except Exception as exc:
@@ -82,31 +112,43 @@ class ProjectService:
 
     async def load(self, content: str) -> str:
         """Load a project from uploaded JSON and return its display name."""
+        self._guard_replacement()
         if not self.state.project.begin(name="", save_path="", operation="load"):
             raise APIError(409, "A project operation is already running.")
+        token = self.state.project.token
 
         try:
-            result = await asyncio.to_thread(self.gateway.load, content)
+            result = await asyncio.wait_for(
+                asyncio.to_thread(self.gateway.load, content),
+                timeout=self.load_timeout_seconds,
+            )
+        except asyncio.CancelledError:
+            self.state.project.fail("Project load cancelled.", token=token)
+            raise
+        except asyncio.TimeoutError as exc:
+            self.state.project.fail("Project load timed out.", token=token)
+            raise APIError(504, "Project load timed out.") from exc
         except (json.JSONDecodeError, ValueError, KeyError) as exc:
             message = str(exc).strip() or exc.__class__.__name__
-            self.state.project.fail(message)
+            self.state.project.fail(message, token=token)
             raise APIError(400, f"Invalid project file: {message}") from exc
         except Exception as exc:
             logger.exception("Project load failed.")
             message = str(exc).strip() or exc.__class__.__name__
-            self.state.project.fail(message)
+            self.state.project.fail(message, token=token)
             raise APIError(500, "Project load failed.") from exc
 
         self.state.project.succeed(
             result.topology_manager,
             result.project_name,
             result.save_path,
+            token=token,
         )
         return result.project_name
 
     async def save(self) -> dict:
         """Serialize the loaded project and return content plus filename."""
-        topology = self.state.project.get_topology()
+        topology, project_name, _save_path = self.state.project.context()
         if topology is None:
             raise APIError(404, "No project is currently loaded.")
 
@@ -116,5 +158,5 @@ class ProjectService:
             logger.exception("Project save failed.")
             raise APIError(500, "Project save failed.") from exc
 
-        name = (self.state.project.project_name or "project").replace(" ", "_")
+        name = (project_name or "project").replace(" ", "_")
         return {"content": content, "filename": f"{name}.json"}

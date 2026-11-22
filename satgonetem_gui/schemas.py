@@ -14,6 +14,11 @@ class ErrorResponse(BaseModel):
     details: Any | None = None
 
 
+def error_responses(*statuses: int) -> dict[int, dict[str, Any]]:
+    """Build OpenAPI response declarations for the shared error envelope."""
+    return {status: {"model": ErrorResponse} for status in statuses}
+
+
 class Position(BaseModel):
     """Geodetic position returned by topology endpoints."""
 
@@ -29,7 +34,7 @@ class GroundStationPoint(BaseModel):
     name: str
     latitude: float
     longitude: float
-    elevation_km: float
+    elevation_m: float
 
 
 class GroundStationPreset(BaseModel):
@@ -181,7 +186,12 @@ class RoutingStatusResponse(BaseModel):
 class RoutingApplyRequest(BaseModel):
     """Requested routing method."""
 
-    method: str = "static"
+    method: Literal[
+        "static",
+        "dynamic-ospf",
+        "dynamic-isis",
+        "sr-mpls",
+    ] = "static"
 
 
 class LoopbackInfo(BaseModel):

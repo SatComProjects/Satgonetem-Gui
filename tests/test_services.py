@@ -1,12 +1,16 @@
 """Unit tests for service orchestration with fake gateways."""
 
 import asyncio
+import threading
+import time
 
 import pytest
 
+from satgonetem_gui.config import Settings
 from satgonetem_gui.errors import APIError
-from satgonetem_gui.schemas import Iperf3Request, PingRequest
+from satgonetem_gui.schemas import Iperf3Request, PingRequest, ProjectCreateRequest
 from satgonetem_gui.services.ports import NetworkOperationError, TrafficPoll
+from satgonetem_gui.services.project_service import ProjectService
 from satgonetem_gui.services.routing_service import RoutingService
 from satgonetem_gui.services.topology_service import TopologyService
 from satgonetem_gui.services.traffic_service import (
@@ -15,7 +19,8 @@ from satgonetem_gui.services.traffic_service import (
     TrafficJob,
     TrafficService,
 )
-from satgonetem_gui.state import ProjectSession
+from satgonetem_gui.state import ProjectSession, ProjectState, RuntimeState
+from tests.factories import project_payload
 
 
 class FakeReader:
@@ -317,7 +322,6 @@ def test_registry_prunes_expired_terminal_jobs() -> None:
     registry = JobRegistry(max_jobs=10, ttl_seconds=10, clock=lambda: now)
     job = registry.create("ping", object(), "a", "b")
     job.transition("done")
-    job.updated_at = 0.0
     now = 100.0
 
     registry.prune()
@@ -384,6 +388,117 @@ def test_status_treats_an_unknown_gateway_state_as_a_terminal_error() -> None:
     assert gateway.poll_calls == 1
 
 
+def test_project_replacement_is_blocked_while_network_runs(tmp_path) -> None:
+    """Replacing a project while containers run would orphan the old network."""
+    service = ProjectService(
+        RuntimeState(),
+        object(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        network_running=lambda: True,
+    )
+
+    with pytest.raises(APIError) as create_error:
+        service.start_create(ProjectCreateRequest(**project_payload("Replacement")))
+    with pytest.raises(APIError) as load_error:
+        asyncio.run(service.load("{}"))
+
+    assert create_error.value.status_code == 409
+    assert load_error.value.status_code == 409
+    assert "Stop it before replacing" in create_error.value.message
+
+
+def test_project_load_timeout_marks_the_session_failed(tmp_path) -> None:
+    """A slow load releases the single-flight slot with an error."""
+
+    class SlowGateway:
+        def load(self, _content):
+            time.sleep(0.2)
+            return None
+
+    service = ProjectService(
+        RuntimeState(),
+        SlowGateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        load_timeout_seconds=0.05,
+    )
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.load("{}"))
+
+    assert error.value.status_code == 504
+    assert service.state.project.state is ProjectState.ERROR
+    assert "timed out" in (service.state.project.error or "")
+    assert service.state.project.token is None
+
+
+def test_project_load_cancellation_marks_the_session_failed(tmp_path) -> None:
+    """Cancelling the request releases the creating state."""
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingGateway:
+        def load(self, _content):
+            started.set()
+            release.wait(timeout=5)
+            return None
+
+    service = ProjectService(
+        RuntimeState(),
+        BlockingGateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    async def scenario() -> None:
+        task = asyncio.create_task(service.load("{}"))
+        await asyncio.to_thread(started.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        release.set()
+
+    asyncio.run(scenario())
+
+    assert service.state.project.state is ProjectState.ERROR
+    assert "cancelled" in (service.state.project.error or "")
+    assert service.state.project.token is None
+
+
+def test_project_save_uses_one_topology_snapshot(tmp_path) -> None:
+    """A concurrent project swap must not change the saved content/filename pair."""
+    runtime = RuntimeState()
+    runtime.project.succeed(object(), "ProjectA", "")
+    started = threading.Event()
+    release = threading.Event()
+
+    class Gateway:
+        def save(self, _topology):
+            started.set()
+            release.wait(timeout=5)
+            return "CONTENT_A"
+
+    service = ProjectService(
+        runtime,
+        Gateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    async def scenario() -> dict:
+        task = asyncio.create_task(service.save())
+        await asyncio.to_thread(started.wait, 2)
+        runtime.project.succeed(object(), "ProjectB", "")
+        release.set()
+        return await task
+
+    assert asyncio.run(scenario()) == {
+        "content": "CONTENT_A",
+        "filename": "ProjectA.json",
+    }
+
+
 def test_registry_running_returns_a_snapshot_of_active_jobs() -> None:
     """Only non-terminal jobs are returned for lazy reclaim."""
     registry = JobRegistry()
@@ -425,6 +540,73 @@ def test_routing_apply_delete_and_stop_track_addressing() -> None:
     topology.set_addressing_applied(True)
     asyncio.run(service.stop_gonetem())
     assert topology.addressing_applied is False
+
+
+def test_routing_apply_does_not_mark_a_replaced_project() -> None:
+    """A project swap during apply must not write state onto the new session."""
+    session = _loaded_session()
+    topology = TopologyService(session, FakeReader(gonetem=True))
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingController(FakeController):
+        def apply_addressing(self, target):
+            started.set()
+            release.wait(timeout=5)
+            super().apply_addressing(target)
+
+    service = RoutingService(topology, BlockingController())
+
+    async def scenario() -> APIError:
+        task = asyncio.create_task(service.apply("static"))
+        await asyncio.to_thread(started.wait, 2)
+        session.succeed(object(), "NewProject", "")
+        release.set()
+        with pytest.raises(APIError) as error:
+            await task
+        return error.value
+
+    error = asyncio.run(scenario())
+
+    assert error.status_code == 409
+    assert "Project changed" in error.message
+    assert session.project_name == "NewProject"
+    assert session.addressing_applied is False
+
+
+def test_routing_mutations_are_serialized() -> None:
+    """Concurrent apply/delete/start/stop calls cannot overlap."""
+    session = _loaded_session()
+    topology = TopologyService(session, FakeReader(gonetem=True))
+    started = threading.Event()
+    release = threading.Event()
+    active = 0
+    max_active = 0
+
+    class SerialController(FakeController):
+        def apply_addressing(self, target):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            started.set()
+            release.wait(timeout=5)
+            super().apply_addressing(target)
+            active -= 1
+
+    service = RoutingService(topology, SerialController())
+
+    async def scenario() -> None:
+        first = asyncio.create_task(service.apply("static"))
+        await asyncio.to_thread(started.wait, 2)
+        second = asyncio.create_task(service.apply("static"))
+        await asyncio.sleep(0.05)
+        assert not second.done()
+        release.set()
+        await asyncio.gather(first, second)
+
+    asyncio.run(scenario())
+
+    assert max_active == 1
 
 
 def test_routing_status_does_not_use_gonetem_as_addressing() -> None:

@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import {
   buildStationMap,
   selectedStations,
+  selectionSummary,
   setPresetSelection,
   stationKey,
 } from "./ground_stations_model.js";
@@ -28,10 +29,26 @@ function updateCount() {
   selectedCount.textContent = `${selectedKeys.size + customStations.length} selected`;
 }
 
+function syncCheckAll() {
+  const summary = selectionSummary(
+    selectedKeys,
+    currentPresetName,
+    currentStations,
+  );
+  checkAllBox.checked = summary === "all";
+  checkAllBox.indeterminate = summary === "some";
+}
+
 function renderTable() {
   tbody.replaceChildren();
   if (currentStations.length === 0) {
     tableEmpty.style.display = "";
+    tableEmpty.textContent =
+      presets.length === 0
+        ? "No ground-station presets available."
+        : "No stations in this file.";
+    updateCount();
+    syncCheckAll();
     return;
   }
   tableEmpty.style.display = "none";
@@ -47,6 +64,7 @@ function renderTable() {
     checkbox.type = "checkbox";
     checkbox.dataset.key = key;
     checkbox.checked = checked;
+    checkbox.setAttribute("aria-label", `${station.name} station`);
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) {
         selectedKeys.add(key);
@@ -56,6 +74,7 @@ function renderTable() {
         row.classList.remove("row-selected");
       }
       updateCount();
+      syncCheckAll();
     });
     checkCell.appendChild(checkbox);
     row.appendChild(checkCell);
@@ -65,7 +84,7 @@ function renderTable() {
       station.name,
       station.latitude,
       station.longitude,
-      station.elevation_km,
+      station.elevation_m,
     ]) {
       const cell = document.createElement("td");
       cell.textContent = value;
@@ -74,6 +93,7 @@ function renderTable() {
     tbody.appendChild(row);
   }
   updateCount();
+  syncCheckAll();
 }
 
 function loadPreset(index) {
@@ -122,7 +142,7 @@ function renderCustomList() {
   for (const [index, station] of customStations.entries()) {
     const item = document.createElement("li");
     const label = document.createElement("span");
-    label.textContent = `${station.name} (${station.latitude}, ${station.longitude}, ${station.elevation_km} km)`;
+    label.textContent = `${station.name} (${station.latitude}, ${station.longitude}, ${station.elevation_m} m)`;
     const remove = document.createElement("button");
     remove.textContent = "Remove";
     remove.type = "button";
@@ -153,7 +173,7 @@ document.getElementById("add_custom_btn").addEventListener("click", () => {
     name,
     latitude,
     longitude,
-    elevation_km: Number.isNaN(elevation) ? 0 : elevation,
+    elevation_m: Number.isNaN(elevation) ? 0 : elevation,
   });
   customNextIdx += 1;
   document.getElementById("c_name").value = "";
@@ -181,9 +201,12 @@ async function loadPresets() {
       presetSelect.appendChild(option);
     }
     if (presets.length > 0) loadPreset(0);
+    else renderTable();
   } catch (error) {
     tableEmpty.style.display = "";
     tableEmpty.textContent = error.message || "Failed to load presets.";
+    checkAllBox.checked = false;
+    checkAllBox.indeterminate = false;
   }
 }
 

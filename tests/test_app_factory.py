@@ -54,3 +54,11 @@ def test_global_app_state_singleton_is_gone() -> None:
     import satgonetem_gui.state as state_module
 
     assert not hasattr(state_module, "app_state")
+
+
+def test_app_module_does_not_build_an_app_at_import_time() -> None:
+    """Importing the module must not read ambient settings or build adapters."""
+    import satgonetem_gui.app as app_module
+
+    assert not hasattr(app_module, "app")
+    assert callable(app_module.create_app)

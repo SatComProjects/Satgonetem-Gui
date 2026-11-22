@@ -1,8 +1,16 @@
 /** Pure traffic-form payload builder. */
 
 function numberOr(value, fallback) {
-  const parsed = Number(value);
+  if (value === null || value === undefined) return fallback;
+  const text = String(value).trim();
+  if (text === "") return fallback;
+  const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function intOr(value, fallback) {
+  const parsed = numberOr(value, fallback);
+  return Number.isInteger(parsed) ? parsed : fallback;
 }
 
 export function buildTrafficPayload(fields) {
@@ -15,10 +23,10 @@ export function buildTrafficPayload(fields) {
 
   if (tool === "iperf3") {
     payload.protocol = fields.protocol || "TCP";
-    payload.duration = numberOr(fields.duration, 10);
-    payload.port = numberOr(fields.port, 5201);
+    payload.duration = intOr(fields.duration, 10);
+    payload.port = intOr(fields.port, 5201);
     payload.bandwidth_mbps = numberOr(fields.bandwidthMbps, 0);
-    payload.parallel = numberOr(fields.parallel, 1);
+    payload.parallel = intOr(fields.parallel, 1);
     payload.interval = numberOr(fields.interval, 1);
     if (payload.protocol === "TCP") {
       payload.congestion_control = fields.congestionControl || "bbr";
@@ -29,16 +37,16 @@ export function buildTrafficPayload(fields) {
     }
     label = `iperf3 ${src} -> ${dst} (${payload.protocol})`;
   } else if (tool === "ping") {
-    payload.count = numberOr(fields.pingCount, 10);
+    payload.count = intOr(fields.pingCount, 10);
     payload.timeout_sec = numberOr(fields.pingTimeout, 1);
     payload.interval_sec = numberOr(fields.pingInterval, 0.2);
-    payload.packet_size = numberOr(fields.pingSize, 56);
+    payload.packet_size = intOr(fields.pingSize, 56);
     label = `ping ${src} -> ${dst} (${payload.count})`;
   } else if (tool === "hping3") {
     payload.proto = fields.hpingProto || "tcp";
-    payload.dport = numberOr(fields.hpingDport, 80);
-    payload.count = numberOr(fields.hpingCount, 100);
-    payload.size = numberOr(fields.hpingSize, 0);
+    payload.dport = intOr(fields.hpingDport, 80);
+    payload.count = intOr(fields.hpingCount, 100);
+    payload.size = intOr(fields.hpingSize, 0);
     payload.rate_type = fields.hpingRate || "interval";
     if (payload.rate_type === "interval") {
       payload.interval = fields.hpingInterval || "";

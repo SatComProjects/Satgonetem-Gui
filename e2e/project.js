@@ -30,7 +30,7 @@ export function projectPayload(name) {
         name: "Berlin",
         latitude: 52.52,
         longitude: 13.405,
-        elevation_km: 0.034,
+        elevation_m: 34.0,
       },
     ],
     type: "ground_station",

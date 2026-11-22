@@ -1,9 +1,10 @@
 /** Node Explorer page controller. */
 import { api } from "./api.js";
 import { escapeHtml } from "./escape.js";
+import { cacheEntry, isFresh } from "./nodes_model.js";
 
 const POLL_INTERVAL_MS = 5000;
-const detailCache = {};
+const detailCache = new Map();
 
 function el(id) {
   return document.getElementById(id);
@@ -93,25 +94,29 @@ async function toggleNode(name) {
   if (!row || !detail) return;
 
   const expanded = detail.style.display === "block";
-  if (!expanded && !detailCache[name]) {
+  const cached = detailCache.get(name);
+  if (!expanded && !isFresh(cached)) {
     detail.innerHTML = '<div class="muted">Loading...</div>';
     detail.style.display = "block";
     row.classList.add("expanded");
+    row.setAttribute("aria-expanded", "true");
     try {
       const data = await api.get(`/api/nodes/${encodeURIComponent(name)}`);
-      detailCache[name] = data.node;
+      detailCache.set(name, cacheEntry(data.node));
       detail.innerHTML = buildDetailPanel(data.node);
     } catch (error) {
+      detailCache.delete(name);
       detail.innerHTML = `<div class="muted" style="color:var(--bad)">Error: ${escapeHtml(error.message || error)}</div>`;
     }
     return;
   }
 
-  if (!expanded && detailCache[name]) {
-    detail.innerHTML = buildDetailPanel(detailCache[name]);
+  if (!expanded && isFresh(cached)) {
+    detail.innerHTML = buildDetailPanel(cached.data);
   }
   detail.style.display = expanded ? "none" : "block";
   row.classList.toggle("expanded", !expanded);
+  row.setAttribute("aria-expanded", String(!expanded));
 }
 
 function buildNodeRow(node) {
@@ -121,7 +126,7 @@ function buildNodeRow(node) {
     label += ` (${escapeHtml(node.city)})`;
   }
   return (
-    `<div class="node-row" id="row-${name}" data-node-name="${name}">` +
+    `<div class="node-row" id="row-${name}" data-node-name="${name}" role="button" tabindex="0" aria-expanded="false" aria-controls="detail-${name}">` +
     '<span class="node-chevron">&#9654;</span>' +
     `<span class="node-label">${label}</span>` +
     "</div>" +
@@ -133,6 +138,13 @@ function initNodeList(container) {
   container.addEventListener("click", (event) => {
     const row = event.target.closest(".node-row");
     if (!row || !container.contains(row)) return;
+    toggleNode(row.dataset.nodeName);
+  });
+  container.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target.closest(".node-row");
+    if (!row || !container.contains(row)) return;
+    event.preventDefault();
     toggleNode(row.dataset.nodeName);
   });
 }

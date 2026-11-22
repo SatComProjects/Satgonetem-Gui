@@ -6,7 +6,9 @@
   <title>SatGoNetem Web Control</title>
   <link rel="stylesheet" href="/static/base.css">
   <link rel="stylesheet" href="/static/queue.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+          integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4"
+          crossorigin="anonymous" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -39,11 +41,11 @@
 <!-- Floating Job Queue -->
 <div id="floating-queue" class="floating-queue collapsed">
   <div class="card">
-    <div class="floating-queue-header" id="jq-toggle">
+    <button type="button" class="floating-queue-header" id="jq-toggle" aria-expanded="false" aria-controls="jq-body">
       <span class="card-title">Job Queue <span id="jq-badge" class="jq-badge">0</span></span>
       <span id="jq-toggle-icon" class="jq-toggle-icon">&#9650;</span>
-    </div>
-    <div class="floating-queue-body">
+    </button>
+    <div class="floating-queue-body" id="jq-body">
       <div class="queue-actions">
         <button type="button" class="button small" id="jq-start-all">Start All</button>
         <button type="button" class="button small secondary" id="jq-clear">Clear</button>
@@ -56,7 +58,7 @@
 </div>
 
 <!-- Results Modal -->
-<div id="results-modal" class="modal" style="display:none;">
+<div id="results-modal" class="modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="results-title">
   <div class="modal-content">
     <div class="modal-header">
       <span id="results-title">Traffic Results</span>
@@ -71,6 +73,6 @@
 </div>
 
 <!-- Keep this queue.js version in sync with the import in static/traffic.js. -->
-<script type="module" src="/static/queue.js?v=5"></script>
+<script type="module" src="/static/queue.js?v=7"></script>
 </body>
 </html>

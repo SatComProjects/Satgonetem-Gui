@@ -18,14 +18,14 @@ STATIONS = [
         "name": "Berlin",
         "latitude": 52.52,
         "longitude": 13.405,
-        "elevation_km": 0.034,
+        "elevation_m": 34.0,
     },
     {
         "index": 1,
         "name": "Paris",
         "latitude": 48.8566,
         "longitude": 2.3522,
-        "elevation_km": 0.035,
+        "elevation_m": 35.0,
     },
 ]
 
@@ -34,7 +34,7 @@ def test_parse_ground_station_file_skips_invalid_rows(tmp_path: Path) -> None:
     """Blank and malformed rows are ignored without failing the whole file."""
     path = tmp_path / "stations.txt"
     path.write_text(
-        "0,Berlin,52.52,13.405,0.034\nnot,a,valid,row\n\n1,Paris,48.8566,2.3522,0.035\n",
+        "0,Berlin,52.52,13.405,34.0\nnot,a,valid,row\n\n1,Paris,48.8566,2.3522,35.0\n",
         encoding="utf-8",
     )
 
@@ -42,7 +42,7 @@ def test_parse_ground_station_file_skips_invalid_rows(tmp_path: Path) -> None:
 
     assert [station["name"] for station in stations] == ["Berlin", "Paris"]
     assert stations[0]["latitude"] == 52.52
-    assert stations[1]["elevation_km"] == 0.035
+    assert stations[1]["elevation_m"] == 35.0
 
 
 def test_parse_ground_station_file_handles_quoted_fields_and_bom(
@@ -52,8 +52,8 @@ def test_parse_ground_station_file_handles_quoted_fields_and_bom(
     path = tmp_path / "quoted.txt"
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow([0, "Berlin, DE", 52.52, 13.405, 0.034])
-        writer.writerow([1, "Paris\nOffice", 48.8566, 2.3522, 0.035])
+        writer.writerow([0, "Berlin, DE", 52.52, 13.405, 34.0])
+        writer.writerow([1, "Paris\nOffice", 48.8566, 2.3522, 35.0])
 
     stations = parse_ground_station_file(path)
 
@@ -111,7 +111,7 @@ def test_write_stations_to_temp_quotes_allowed_special_characters(
 
     path = write_stations_to_temp(stations, directory=tmp_path)
     try:
-        assert path.read_text(encoding="utf-8") == ('0,"Berlin ""Mitte""",52.52,13.405,0.034\n')
+        assert path.read_text(encoding="utf-8") == ('0,"Berlin ""Mitte""",52.52,13.405,34.0\n')
         assert parse_ground_station_file(path)[0]["name"] == 'Berlin "Mitte"'
     finally:
         path.unlink(missing_ok=True)

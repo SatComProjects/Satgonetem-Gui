@@ -1,8 +1,12 @@
 {% extends "base.html" %}
 
 {% block head %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Widgets/widgets.css">
-<script src="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Cesium.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Widgets/widgets.css"
+      integrity="sha384-ghEeMdcWWzRv/BPeUcX835vcKDGrxvROXisl/Btpv3GeekBUXTSPVcFJpI1Tcrgp"
+      crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Cesium.js"
+        integrity="sha384-u6lI9nKeZ0sgcSQty6qC4XQHU/ZG7JJ8PfRvtUQTH83OstsiEivIu3F9k012EB3W"
+        crossorigin="anonymous"></script>
 <style>
   .container { max-width: none; padding: 0 16px; }
 
@@ -97,6 +101,7 @@
     padding-bottom: 0;
     opacity: 0;
     overflow: hidden;
+    visibility: hidden;
   }
 
   .plot-controls-content::-webkit-scrollbar { width: 5px; }
@@ -207,6 +212,7 @@
 
 {% block content %}
 <h2 style="margin-bottom:4px;">World View</h2>
+<p class="muted" id="world-msg" aria-live="polite"></p>
 
 <div id="world-fallback" class="card" style="display:none; margin-top:8px;">
   <h3>3D view unavailable</h3>
@@ -215,7 +221,7 @@
 
 <div id="world">
   <div class="plot-controls collapsed" id="plot-controls">
-    <div class="plot-controls-header" id="plot-controls-header">
+    <div class="plot-controls-header" id="plot-controls-header" role="button" tabindex="0" aria-expanded="false" aria-controls="plot-controls-content">
       <span class="plot-controls-title" id="plot-controls-title">Plot Controls</span>
       <span class="plot-controls-toggle" id="plot-controls-toggle">▶</span>
     </div>
@@ -268,14 +274,14 @@
         </div>
         <div id="coverage-opts">
           <div class="ctrl-slider-group">
-            <div class="ctrl-slider-label">Min. Elevation (deg)</div>
+            <label class="ctrl-slider-label" for="sl-elevation">Min. Elevation (deg)</label>
             <div class="ctrl-slider-row">
               <input type="range" id="sl-elevation" class="ctrl-slider" min="0" max="90" step="1" value="10">
               <span class="ctrl-slider-val" id="sl-elevation-val">10</span>
             </div>
           </div>
           <div class="ctrl-slider-group">
-            <div class="ctrl-slider-label">Opacity</div>
+            <label class="ctrl-slider-label" for="sl-opacity">Opacity</label>
             <div class="ctrl-slider-row">
               <input type="range" id="sl-opacity" class="ctrl-slider" min="0" max="100" step="1" value="40">
               <span class="ctrl-slider-val" id="sl-opacity-val">40%</span>
@@ -288,5 +294,5 @@
   </div>
 </div>
 
-<script type="module" src="/static/world_boot.js?v=1"></script>
+<script type="module" src="/static/world_boot.js?v=4"></script>
 {% endblock %}

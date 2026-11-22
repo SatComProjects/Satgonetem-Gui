@@ -10,6 +10,7 @@ from satgonetem_gui.schemas import (
     Iperf3Request,
     PingRequest,
     ProjectCreateRequest,
+    RoutingApplyRequest,
 )
 
 
@@ -222,3 +223,16 @@ def test_project_create_rejects_out_of_range_values(field: str, value) -> None:
     """Project form fields keep sensible lengths and positive capacities."""
     with pytest.raises(ValidationError):
         ProjectCreateRequest(**_project_payload(**{field: value}))
+
+
+@pytest.mark.parametrize("method", ["bogus", "STATIC", "", "dynamic-bgp"])
+def test_routing_request_rejects_unknown_methods(method: str) -> None:
+    """Only routing methods the UI can apply reach the core."""
+    with pytest.raises(ValidationError):
+        RoutingApplyRequest(method=method)
+
+
+def test_routing_request_accepts_supported_methods() -> None:
+    """All four routing methods offered by the control panel validate."""
+    for method in ("static", "dynamic-ospf", "dynamic-isis", "sr-mpls"):
+        assert RoutingApplyRequest(method=method).method == method

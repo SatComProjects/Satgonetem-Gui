@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildStationMap,
+  mergeStations,
   selectedStations,
+  selectionSummary,
   stationKey,
 } from "../satgonetem_gui/static/ground_stations_model.js";
 
@@ -30,6 +32,30 @@ describe("ground station selection", () => {
       "Berlin",
       "Tokyo",
     ]);
+  });
+
+  it("merges pending stations across picker visits without duplicates", () => {
+    const berlin = { index: 0, name: "Berlin", latitude: 52.5, longitude: 13.4, elevation_m: 34 };
+    const paris = { index: 1, name: "Paris", latitude: 48.8, longitude: 2.3, elevation_m: 35 };
+
+    expect(mergeStations([berlin], [paris])).toEqual([berlin, paris]);
+    expect(mergeStations([berlin], [berlin])).toEqual([berlin]);
+    expect(mergeStations(undefined, [paris])).toEqual([paris]);
+  });
+
+  it("summarizes all, some, and none for the header checkbox", () => {
+    expect(selectionSummary(new Set(), "alpha", presets[0].stations)).toBe("none");
+    expect(
+      selectionSummary(new Set(["alpha:0"]), "alpha", presets[0].stations),
+    ).toBe("some");
+    expect(
+      selectionSummary(
+        new Set(["alpha:0", "alpha:1"]),
+        "alpha",
+        presets[0].stations,
+      ),
+    ).toBe("all");
+    expect(selectionSummary(new Set(), "alpha", [])).toBe("none");
   });
 
   it("ignores stale selection keys", () => {

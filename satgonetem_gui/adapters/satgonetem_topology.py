@@ -389,7 +389,10 @@ class SatGoNetemTopologyAdapter:
 
     def apply_addressing(self, topology: Any) -> None:
         """Apply IP addresses and raise if the dependency reports failure."""
-        result = topology.set_ip_addresses()
+        try:
+            result = topology.set_ip_addresses()
+        except RuntimeError as exc:
+            raise NetworkOperationError(str(exc)) from exc
         if result is not None and result < 0:
             raise NetworkOperationError("IP addressing failed.")
 
@@ -408,10 +411,17 @@ class SatGoNetemTopologyAdapter:
             raise NetworkOperationError("Routing deletion failed.")
 
     def start_gonetem(self, topology: Any) -> None:
-        """Start emulated containers and verify the dependency state."""
-        topology.start_gonetem()
-        if not topology.get_gonetem_status():
-            raise NetworkOperationError("GoNetEm failed to start.")
+        """Start emulated containers and clean up a partial startup on failure."""
+        try:
+            topology.start_gonetem()
+            if not topology.get_gonetem_status():
+                raise NetworkOperationError("GoNetEm failed to start.")
+        except Exception:
+            try:
+                topology.stop_gonetem()
+            except Exception:
+                logger.exception("Failed to clean up a partial GoNetEm startup.")
+            raise
 
     def stop_gonetem(self, topology: Any) -> None:
         """Stop emulated containers without faking the loaded-project status."""

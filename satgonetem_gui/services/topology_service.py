@@ -1,10 +1,18 @@
 """Read-only topology queries."""
 
+import re
 from typing import Any
 
 from ..errors import APIError
 from ..state import ProjectSession
 from .ports import TopologyReader
+
+_NODE_NAME_RE = re.compile(r"^(?:Sat|Gnd)\d+$")
+
+
+def is_node_name(name: str) -> bool:
+    """Return whether a name matches the core's ``Sat<id>``/``Gnd<id>`` form."""
+    return bool(_NODE_NAME_RE.fullmatch(name))
 
 
 class TopologyService:
@@ -57,14 +65,20 @@ class TopologyService:
 
     def node_detail(self, name: str) -> dict:
         """Return one node's details or raise 404."""
-        detail = self.reader.node_detail(self.require_topology(), name)
+        topology = self.require_topology()
+        if not is_node_name(name):
+            raise APIError(404, f"Node not found: {name}")
+        detail = self.reader.node_detail(topology, name)
         if detail is None:
             raise APIError(404, f"Node not found: {name}")
         return detail
 
     def find_node(self, name: str) -> Any | None:
         """Return a concrete node object for traffic setup."""
-        return self.reader.find_node(self.require_topology(), name)
+        topology = self.require_topology()
+        if not is_node_name(name):
+            return None
+        return self.reader.find_node(topology, name)
 
     def traffic_nodes(self) -> list[dict[str, str]]:
         """Return traffic source/destination options."""
@@ -73,6 +87,16 @@ class TopologyService:
     def gonetem_is_on(self) -> bool:
         """Return whether the containers are running."""
         return self.reader.gonetem_is_on(self.require_topology())
+
+    def network_running(self) -> bool:
+        """Return container state without requiring a loaded project."""
+        topology = self.session.get_topology()
+        return False if topology is None else self.reader.gonetem_is_on(topology)
+
+    @property
+    def generation(self) -> int:
+        """Return the current project generation for stale-operation guards."""
+        return self.session.generation
 
     @property
     def addressing_applied(self) -> bool:

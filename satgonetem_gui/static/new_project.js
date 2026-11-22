@@ -1,4 +1,6 @@
 import { api } from "./api.js";
+import { mergeStations } from "./ground_stations_model.js";
+import { normalizeProjectName } from "./new_project_model.js";
 
   var shells = [];
   var grounds = [];
@@ -164,6 +166,7 @@ import { api } from "./api.js";
       fields: Object.fromEntries(fd.entries()),
       shells: shells,
       grounds: grounds,
+      pendingStations: pendingStations.slice(),
       gObj: {
         id: document.getElementById("g_id").value,
         type: document.getElementById("g_type").value,
@@ -188,6 +191,8 @@ import { api } from "./api.js";
 
     shells = backup.shells || [];
     grounds = backup.grounds || [];
+    pendingStations = mergeStations(backup.pendingStations, pendingStations);
+    updateGsLabel();
     renderShells();
     renderGrounds();
 
@@ -338,7 +343,12 @@ import { api } from "./api.js";
 
     var fd = new FormData(form);
     var payload = Object.fromEntries(fd.entries());
-    var projectName = payload.name;
+    var projectName = normalizeProjectName(payload.name);
+    payload.name = projectName;
+    if (!projectName) {
+      alert("Project name is required.");
+      return;
+    }
 
     try {
       createBtn.disabled = true;
