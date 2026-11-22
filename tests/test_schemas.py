@@ -56,6 +56,20 @@ def test_documented_traffic_defaults_validate() -> None:
     assert hping.flags == []
 
 
+def test_project_load_content_is_bounded() -> None:
+    """Uploaded project JSON cannot allocate an unbounded request body."""
+    from satgonetem_gui.schemas import ProjectLoadRequest
+
+    with pytest.raises(ValidationError):
+        ProjectLoadRequest(content="x" * 10_000_001)
+
+
+def test_hidden_project_json_is_bounded() -> None:
+    """The form's hidden JSON fields have a fixed upper bound."""
+    with pytest.raises(ValidationError):
+        ProjectCreateRequest(**_project_payload(walker_shells_json="x" * 2_000_001))
+
+
 def test_project_create_defaults_validate() -> None:
     """The project form defaults remain accepted after adding bounds."""
     request = ProjectCreateRequest(**_project_payload())

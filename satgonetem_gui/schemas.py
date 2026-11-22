@@ -62,8 +62,10 @@ class ProjectCreateRequest(BaseModel):
     isl_capacity: int = Field(default=100000, ge=1)
     gs_capacity: int = Field(default=100000, ge=1)
     save_path: str = Field(default="", max_length=4096)
-    walker_shells_json: str = Field(min_length=1)
-    ground_objects_properties_json: str = Field(min_length=1)
+    walker_shells_json: str = Field(min_length=1, max_length=2_000_000)
+    ground_objects_properties_json: str = Field(
+        min_length=1, max_length=2_000_000
+    )
 
     @field_validator("walker_shells_json", "ground_objects_properties_json")
     @classmethod
@@ -81,7 +83,7 @@ class ProjectCreateRequest(BaseModel):
 class ProjectLoadRequest(BaseModel):
     """Raw saved-project JSON uploaded by the browser."""
 
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=10_000_000)
 
 
 class ProjectStatusResponse(BaseModel):
