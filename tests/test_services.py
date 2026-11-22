@@ -2713,3 +2713,25 @@ def test_experiment_list_skips_symlinked_and_malformed_runs(tmp_path) -> None:
     listing = service.list_runs()
 
     assert [run["run_id"] for run in listing["runs"]] == [run_id]
+
+
+def test_experiment_live_holds_the_network_operation_until_done(tmp_path) -> None:
+    """A live run blocks project/network mutations for its whole duration."""
+    gateway = BlockingExperimentGateway()
+    service = _experiment_service(tmp_path, gateway)
+
+    run_id = service.start(_experiment_payload("live"))
+    assert service.topology.session.network_operation is True
+    try:
+        assert (
+            service.topology.session.begin(
+                "Blocked",
+                operation="create",
+            )
+            is False
+        )
+    finally:
+        gateway.release.set()
+
+    assert _wait_for_experiment(service, run_id)["status"] == "done"
+    assert service.topology.session.network_operation is False
