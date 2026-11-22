@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 STATION_FIELDS = ("index", "name", "latitude", "longitude", "elevation_m")
-_FORBIDDEN_NAME_CHARACTERS = (",", "\r", "\n")
+_FORBIDDEN_NAME_CHARACTERS = (",", '"', "\r", "\n")
 
 
 def parse_ground_station_file(path: Path) -> list[dict[str, Any]]:
@@ -79,7 +79,7 @@ def validate_inline_stations(stations: object) -> list[dict[str, Any]]:
             raise ValueError("Ground station names must be non-empty strings.")
         if any(character in name for character in _FORBIDDEN_NAME_CHARACTERS):
             raise ValueError(
-                "Ground station names must not contain commas or newlines."
+                "Ground station names must not contain commas, quotes, or newlines."
             )
         try:
             index = int(station["index"])
@@ -142,7 +142,7 @@ def validate_ground_station_text(content: str, source: str = "ground file") -> N
             )
         if any(character in parts[1] for character in _FORBIDDEN_NAME_CHARACTERS):
             raise ValueError(
-                "Ground station names must not contain commas or newlines."
+                "Ground station names must not contain commas, quotes, or newlines."
             )
         try:
             int(parts[0])

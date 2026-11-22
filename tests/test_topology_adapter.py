@@ -327,7 +327,7 @@ def test_build_rejects_comma_in_station_name_before_core(settings) -> None:
     grounds[0]["stations"][0]["name"] = "Berlin, DE"
     payload["ground_objects_properties_json"] = json.dumps(grounds)
 
-    with pytest.raises(ValueError, match="must not contain commas or newlines"):
+    with pytest.raises(ValueError, match="must not contain commas, quotes, or newlines"):
         adapter.build(ProjectCreateRequest(**payload))
 
 
