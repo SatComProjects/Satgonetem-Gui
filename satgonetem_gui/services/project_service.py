@@ -17,6 +17,9 @@ from .ports import ProjectGateway
 
 logger = logging.getLogger(__name__)
 
+PROJECT_BUILD_TIMEOUT_SECONDS = 600.0
+PROJECT_LOAD_TIMEOUT_SECONDS = 600.0
+
 
 class ProjectService:
     """Coordinate project creation, loading, saving, and configuration."""
@@ -28,12 +31,14 @@ class ProjectService:
         settings: Settings,
         resources_dir: Path,
         network_running: Callable[[], bool] | None = None,
+        load_timeout_seconds: float = PROJECT_LOAD_TIMEOUT_SECONDS,
     ) -> None:
         self.state = state
         self.gateway = gateway
         self.settings = settings
         self.resources_dir = resources_dir
         self.network_running = network_running
+        self.load_timeout_seconds = load_timeout_seconds
 
     def _guard_replacement(self) -> None:
         """Refuse to replace a project while containers are still running."""
@@ -78,6 +83,7 @@ class ProjectService:
             save_path=str(payload.save_path or "").strip(),
             operation="create",
             runner=lambda: self.gateway.build(payload),
+            timeout_seconds=PROJECT_BUILD_TIMEOUT_SECONDS,
         )
         if not started:
             raise APIError(409, "A project operation is already running.")
@@ -109,23 +115,34 @@ class ProjectService:
         self._guard_replacement()
         if not self.state.project.begin(name="", save_path="", operation="load"):
             raise APIError(409, "A project operation is already running.")
+        token = self.state.project.token
 
         try:
-            result = await asyncio.to_thread(self.gateway.load, content)
+            result = await asyncio.wait_for(
+                asyncio.to_thread(self.gateway.load, content),
+                timeout=self.load_timeout_seconds,
+            )
+        except asyncio.CancelledError:
+            self.state.project.fail("Project load cancelled.", token=token)
+            raise
+        except asyncio.TimeoutError as exc:
+            self.state.project.fail("Project load timed out.", token=token)
+            raise APIError(504, "Project load timed out.") from exc
         except (json.JSONDecodeError, ValueError, KeyError) as exc:
             message = str(exc).strip() or exc.__class__.__name__
-            self.state.project.fail(message)
+            self.state.project.fail(message, token=token)
             raise APIError(400, f"Invalid project file: {message}") from exc
         except Exception as exc:
             logger.exception("Project load failed.")
             message = str(exc).strip() or exc.__class__.__name__
-            self.state.project.fail(message)
+            self.state.project.fail(message, token=token)
             raise APIError(500, "Project load failed.") from exc
 
         self.state.project.succeed(
             result.topology_manager,
             result.project_name,
             result.save_path,
+            token=token,
         )
         return result.project_name
 

@@ -1,8 +1,15 @@
 """Unit tests for the explicit project lifecycle state machine."""
 
+import threading
+import time
 from types import SimpleNamespace
 
-from satgonetem_gui.state import ProjectSession, ProjectState
+from satgonetem_gui.state import (
+    ProjectResult,
+    ProjectSession,
+    ProjectState,
+    ProjectTaskManager,
+)
 
 
 def _fake_manager() -> SimpleNamespace:
@@ -89,6 +96,41 @@ def test_reset_returns_to_idle() -> None:
         "loaded": False,
         "error": None,
     }
+
+
+def test_task_manager_times_out_and_ignores_stale_success() -> None:
+    """A build timeout wins over a runner that completes later."""
+    session = ProjectSession()
+    started = threading.Event()
+    release = threading.Event()
+    manager = ProjectTaskManager(session)
+
+    def runner() -> ProjectResult:
+        started.set()
+        release.wait(timeout=5)
+        return ProjectResult(object(), "LateProject", "")
+
+    assert manager.start(
+        "Slow",
+        "",
+        "create",
+        runner,
+        timeout_seconds=0.05,
+    )
+    assert started.wait(timeout=2)
+
+    deadline = time.monotonic() + 2
+    while session.state is not ProjectState.ERROR and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+    assert session.state is ProjectState.ERROR
+    assert "timed out" in (session.error or "")
+    release.set()
+    thread = manager.thread
+    assert thread is not None
+    thread.join(timeout=2)
+    assert session.state is ProjectState.ERROR
+    assert session.project_name is None
 
 
 def test_new_project_clears_addressing_state() -> None:

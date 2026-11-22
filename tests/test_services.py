@@ -2,6 +2,7 @@
 
 import asyncio
 import threading
+import time
 
 import pytest
 
@@ -18,7 +19,7 @@ from satgonetem_gui.services.traffic_service import (
     TrafficJob,
     TrafficService,
 )
-from satgonetem_gui.state import ProjectSession, RuntimeState
+from satgonetem_gui.state import ProjectSession, ProjectState, RuntimeState
 from tests.factories import project_payload
 
 
@@ -405,6 +406,64 @@ def test_project_replacement_is_blocked_while_network_runs(tmp_path) -> None:
     assert create_error.value.status_code == 409
     assert load_error.value.status_code == 409
     assert "Stop it before replacing" in create_error.value.message
+
+
+def test_project_load_timeout_marks_the_session_failed(tmp_path) -> None:
+    """A slow load releases the single-flight slot with an error."""
+
+    class SlowGateway:
+        def load(self, _content):
+            time.sleep(0.2)
+            return None
+
+    service = ProjectService(
+        RuntimeState(),
+        SlowGateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        load_timeout_seconds=0.05,
+    )
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.load("{}"))
+
+    assert error.value.status_code == 504
+    assert service.state.project.state is ProjectState.ERROR
+    assert "timed out" in (service.state.project.error or "")
+    assert service.state.project.token is None
+
+
+def test_project_load_cancellation_marks_the_session_failed(tmp_path) -> None:
+    """Cancelling the request releases the creating state."""
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingGateway:
+        def load(self, _content):
+            started.set()
+            release.wait(timeout=5)
+            return None
+
+    service = ProjectService(
+        RuntimeState(),
+        BlockingGateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    async def scenario() -> None:
+        task = asyncio.create_task(service.load("{}"))
+        await asyncio.to_thread(started.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        release.set()
+
+    asyncio.run(scenario())
+
+    assert service.state.project.state is ProjectState.ERROR
+    assert "cancelled" in (service.state.project.error or "")
+    assert service.state.project.token is None
 
 
 def test_project_save_uses_one_topology_snapshot(tmp_path) -> None:

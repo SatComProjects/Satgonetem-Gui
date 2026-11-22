@@ -51,6 +51,8 @@ class ProjectSession:
     error: Optional[str] = None
     addressing_applied: bool = False
     _generation: int = 0
+    _operation_token: int = 0
+    _active_token: Optional[int] = None
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @property
@@ -71,6 +73,12 @@ class ProjectSession:
         with self._lock:
             return self._generation
 
+    @property
+    def token(self) -> Optional[int]:
+        """Return the active operation token, if any."""
+        with self._lock:
+            return self._active_token
+
     def begin(
         self,
         name: str,
@@ -85,6 +93,8 @@ class ProjectSession:
             self.operation = operation
             self.pending_name = name
             self.error = None
+            self._operation_token += 1
+            self._active_token = self._operation_token
             return True
 
     def succeed(
@@ -92,9 +102,16 @@ class ProjectSession:
         topology_manager: Any,
         project_name: str,
         save_path: str = "",
-    ) -> None:
+        *,
+        token: Optional[int] = None,
+    ) -> bool:
         """Mark an operation successful and install its topology."""
         with self._lock:
+            if token is not None and (
+                token != self._active_token
+                or self.state is not ProjectState.CREATING
+            ):
+                return False
             self.topology_manager = topology_manager
             self.project_name = project_name
             self.save_path = save_path
@@ -102,14 +119,23 @@ class ProjectSession:
             self.pending_name = None
             self.error = None
             self.addressing_applied = False
+            self._active_token = None
             self._generation += 1
+            return True
 
-    def fail(self, error: str) -> None:
+    def fail(self, error: str, *, token: Optional[int] = None) -> bool:
         """Mark an operation failed while preserving any previously loaded project."""
         with self._lock:
+            if token is not None and (
+                token != self._active_token
+                or self.state is not ProjectState.CREATING
+            ):
+                return False
             self.state = ProjectState.ERROR
             self.error = error or "Project operation failed."
             self.pending_name = None
+            self._active_token = None
+            return True
 
     def exists(self, name: str) -> bool:
         """Return True when the named project is loaded and no build is running."""
@@ -166,6 +192,7 @@ class ProjectSession:
             self.pending_name = None
             self.error = None
             self.addressing_applied = False
+            self._active_token = None
             self._generation += 1
 
 
@@ -189,14 +216,26 @@ class ProjectTaskManager:
         save_path: str,
         operation: str,
         runner: Callable[[], ProjectResult],
+        *,
+        timeout_seconds: float | None = None,
     ) -> bool:
         """Reserve the session and run the build in a background thread."""
         if not self.session.begin(name, save_path=save_path, operation=operation):
             return False
+        token = self.session.token
+
+        timer = None
+        if timeout_seconds is not None:
+            timer = threading.Timer(
+                timeout_seconds,
+                self._timeout,
+                args=(token,),
+            )
+            timer.daemon = True
 
         thread = threading.Thread(
             target=self._run,
-            args=(operation, runner),
+            args=(operation, runner, token, timer),
             name=f"project-{operation}",
             daemon=True,
         )
@@ -204,24 +243,44 @@ class ProjectTaskManager:
             self._thread = thread
         try:
             thread.start()
+            if timer is not None:
+                timer.start()
         except Exception as exc:
+            if timer is not None:
+                timer.cancel()
             logger.exception("Could not start the project %s thread.", operation)
-            self.session.fail(_format_exception(exc))
+            self.session.fail(_format_exception(exc), token=token)
             raise
         return True
 
-    def _run(self, operation: str, runner: Callable[[], ProjectResult]) -> None:
+    def _timeout(self, token: Optional[int]) -> None:
+        """Fail a build that has exceeded its timeout."""
+        if self.session.fail("Project build timed out.", token=token):
+            logger.error("Project build timed out.")
+
+    def _run(
+        self,
+        operation: str,
+        runner: Callable[[], ProjectResult],
+        token: Optional[int],
+        timer: Optional[threading.Timer],
+    ) -> None:
         try:
-            result = runner()
-        except Exception as exc:
-            logger.exception("Project %s failed.", operation)
-            self.session.fail(_format_exception(exc))
-        else:
-            self.session.succeed(
-                result.topology_manager,
-                result.project_name,
-                result.save_path,
-            )
+            try:
+                result = runner()
+            except Exception as exc:
+                logger.exception("Project %s failed.", operation)
+                self.session.fail(_format_exception(exc), token=token)
+            else:
+                self.session.succeed(
+                    result.topology_manager,
+                    result.project_name,
+                    result.save_path,
+                    token=token,
+                )
+        finally:
+            if timer is not None:
+                timer.cancel()
 
     @property
     def thread(self) -> Optional[threading.Thread]:
