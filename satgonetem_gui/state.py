@@ -8,11 +8,18 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_timestamp() -> str:
+    """Return the current UTC time as an ISO-8601 string."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 class ProjectState(str, Enum):
@@ -49,11 +56,17 @@ class ProjectSession:
     operation: Optional[str] = None
     pending_name: Optional[str] = None
     error: Optional[str] = None
+    phase: str = "idle"
+    progress: Optional[int] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
     addressing_applied: bool = False
     _generation: int = 0
     _operation_token: int = 0
     _active_token: Optional[int] = None
     _network_operation: bool = False
+    _started_monotonic: Optional[float] = field(default=None, repr=False)
+    _finished_monotonic: Optional[float] = field(default=None, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @property
@@ -110,8 +123,34 @@ class ProjectSession:
             self.operation = operation
             self.pending_name = name
             self.error = None
+            self.phase = "validating"
+            self.progress = 0
+            self.started_at = _utc_timestamp()
+            self.finished_at = None
+            self._started_monotonic = time.monotonic()
+            self._finished_monotonic = None
             self._operation_token += 1
             self._active_token = self._operation_token
+            return True
+
+    def set_phase(
+        self,
+        phase: str,
+        progress: Optional[int] = None,
+        token: Optional[int] = None,
+    ) -> bool:
+        """Advance the phase of the active create/load operation only.
+
+        A late phase update from a superseded or timed-out operation is
+        rejected instead of overwriting the terminal state.
+        """
+        with self._lock:
+            if self.state is not ProjectState.CREATING:
+                return False
+            if token is not None and token != self._active_token:
+                return False
+            self.phase = phase
+            self.progress = progress
             return True
 
     def begin_network_operation(self) -> bool:
@@ -152,6 +191,10 @@ class ProjectSession:
             self.project_name = project_name
             self.save_path = save_path
             self.state = ProjectState.LOADED
+            self.phase = "ready"
+            self.progress = 100
+            self.finished_at = _utc_timestamp()
+            self._finished_monotonic = time.monotonic()
             self.pending_name = None
             self.error = None
             self.addressing_applied = False
@@ -169,6 +212,10 @@ class ProjectSession:
                 return False
             self.state = ProjectState.ERROR
             self.error = error or "Project operation failed."
+            self.phase = "error"
+            self.progress = 100
+            self.finished_at = _utc_timestamp()
+            self._finished_monotonic = time.monotonic()
             self.pending_name = None
             self._active_token = None
             return True
@@ -203,6 +250,12 @@ class ProjectSession:
     def snapshot(self) -> Dict[str, Any]:
         """Return a JSON-serializable snapshot for the project status endpoint."""
         with self._lock:
+            elapsed_ms: Optional[int] = None
+            if self._started_monotonic is not None:
+                finished = self._finished_monotonic
+                if finished is None:
+                    finished = time.monotonic()
+                elapsed_ms = max(0, int((finished - self._started_monotonic) * 1000))
             return {
                 "state": self.state.value,
                 "operation": self.operation,
@@ -210,6 +263,11 @@ class ProjectSession:
                 "pending_name": self.pending_name,
                 "loaded": self.topology_manager is not None,
                 "error": self.error,
+                "phase": self.phase,
+                "progress": self.progress,
+                "started_at": self.started_at,
+                "finished_at": self.finished_at,
+                "elapsed_ms": elapsed_ms,
             }
 
     def set_addressing_applied(self, applied: bool) -> None:
@@ -227,6 +285,12 @@ class ProjectSession:
             self.operation = None
             self.pending_name = None
             self.error = None
+            self.phase = "idle"
+            self.progress = None
+            self.started_at = None
+            self.finished_at = None
+            self._started_monotonic = None
+            self._finished_monotonic = None
             self.addressing_applied = False
             self._active_token = None
             self._network_operation = False
@@ -320,6 +384,7 @@ class ProjectTaskManager:
                 logger.exception("Project %s failed.", operation)
                 self.session.fail(_format_exception(exc), token=token)
             else:
+                self.session.set_phase("finalizing", 95, token=token)
                 try:
                     installed = self.session.succeed(
                         result.topology_manager,

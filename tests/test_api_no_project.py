@@ -105,6 +105,11 @@ def test_project_status_is_idle_without_project(client) -> None:
         "pending_name": None,
         "loaded": False,
         "error": None,
+        "phase": "idle",
+        "progress": None,
+        "started_at": None,
+        "finished_at": None,
+        "elapsed_ms": None,
     }
 
 

@@ -119,6 +119,7 @@ class ProjectService:
 
         def runner() -> ProjectResult:
             self._stop_simulation_before_replacement()
+            self.state.project.set_phase("building")
             return self.gateway.build(payload)
 
         started = self.state.project_tasks.start(
@@ -179,6 +180,7 @@ class ProjectService:
 
         def load_project() -> ProjectResult:
             self._stop_simulation_before_replacement()
+            self.state.project.set_phase("loading", token=token)
             return self.gateway.load(content)
 
         worker = asyncio.create_task(asyncio.to_thread(load_project))

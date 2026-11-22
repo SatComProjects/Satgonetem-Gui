@@ -10,10 +10,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-or-later"
 dependencies = [
+    "docker>=7.0",
     "fastapi>=0.110.0",
     "jinja2>=3.1.0",
     "pydantic>=2.0",
     "python-multipart>=0.0.9",
+    "pyyaml>=6.0",
     "satgonetem @ git+https://github.com/satcomprojects/satgonetem@v0.3.1",
     "uvicorn[standard]>=0.29.0",
 ]

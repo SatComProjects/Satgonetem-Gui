@@ -87,7 +87,7 @@ class ProjectLoadRequest(BaseModel):
 
 
 class ProjectStatusResponse(BaseModel):
-    """Explicit project lifecycle snapshot."""
+    """Explicit project lifecycle snapshot with honest phase progress."""
 
     state: str
     operation: str | None = None
@@ -95,6 +95,11 @@ class ProjectStatusResponse(BaseModel):
     pending_name: str | None = None
     loaded: bool
     error: str | None = None
+    phase: str | None = None
+    progress: int | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    elapsed_ms: int | None = None
 
 
 class ProjectExistsResponse(BaseModel):
@@ -404,3 +409,44 @@ class Hping3Request(BaseModel):
     rate_type: Literal["interval", "fast", "faster"] = "interval"
     interval: str = Field(default="", pattern=r"^(?:u?\d+)?$")
     flags: list[str] = Field(default_factory=list, max_length=6)
+
+
+class PreflightRequest(BaseModel):
+    """Optional project configuration to estimate before building."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    walker_shells_json: str | None = Field(default=None, max_length=2_000_000)
+    ground_objects_properties_json: str | None = Field(
+        default=None, max_length=2_000_000
+    )
+
+
+class PreflightCheck(BaseModel):
+    """One environment check reported by the preflight doctor."""
+
+    id: str
+    label: str
+    status: Literal["ok", "warning", "error", "unknown"]
+    message: str
+    hint: str | None = None
+
+
+class ProjectEstimate(BaseModel):
+    """Rough container and memory estimate for a submitted project."""
+
+    satellites: int
+    ground_stations: int
+    containers: int
+    estimated_memory_mb: int
+    note: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PreflightResponse(BaseModel):
+    """Environment readiness and an optional project size estimate."""
+
+    ok: bool
+    blocking: bool
+    checks: list[PreflightCheck]
+    estimate: ProjectEstimate | None = None

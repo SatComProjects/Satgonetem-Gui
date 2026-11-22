@@ -13,3 +13,4 @@ def package_path(*parts: str) -> Path:
 
 
 GROUND_STATIONS_DIR = package_path("data", "ground_stations")
+GONETEM_CONFIG_PATH = package_path("data", "gonetem_config", "config.yaml")
