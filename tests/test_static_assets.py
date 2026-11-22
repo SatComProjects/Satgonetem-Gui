@@ -25,6 +25,8 @@ PROJECTS_MODULE = PACKAGE / "static" / "projects.js"
 PROJECTS_MODEL_IMPORT = "./projects_model.js?v=1"
 CONNECTIVITY_MODULE = PACKAGE / "static" / "connectivity.js"
 CONNECTIVITY_MODEL_IMPORT = "./connectivity_model.js?v=1"
+EXPERIMENTS_MODULE = PACKAGE / "static" / "experiments.js"
+EXPERIMENTS_MODEL_IMPORT = "./experiments_model.js?v=1"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
 WORLD_MODULE = PACKAGE / "static" / "world.js"
 
@@ -39,6 +41,11 @@ def test_link_controllers_import_the_versioned_model() -> None:
     """Node Explorer and World View share one cache-busted link model."""
     for path in (NODES_MODULE, WORLD_MODULE):
         assert f'"{LINKS_MODEL_IMPORT}"' in path.read_text(encoding="utf-8")
+
+
+def test_experiments_page_imports_the_versioned_model() -> None:
+    """The experiment page uses one cache-busted formatting model."""
+    assert f'"{EXPERIMENTS_MODEL_IMPORT}"' in EXPERIMENTS_MODULE.read_text(encoding="utf-8")
 
 
 def test_connectivity_page_imports_the_versioned_model() -> None:
