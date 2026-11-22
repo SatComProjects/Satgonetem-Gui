@@ -1,4 +1,5 @@
 import { api, ApiError } from "./api.js?v=4";
+import { initSimulationControls } from "./simulation_controls.js?v=1";
 import {
     describeGroundStation,
     describeSatellite,
@@ -492,6 +493,7 @@ function poll() {
 
 function startWorld() {
     initCesium();
+    initSimulationControls({ poll: true });
 
     const cbMap = [
         ["cb-satellites", "satellites"],

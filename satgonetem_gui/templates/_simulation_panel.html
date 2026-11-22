@@ -1,0 +1,58 @@
+{# Shared simulation transport controls. The host page supplies the heading and
+   the card/overlay wrapper; this fragment owns only the controls and readouts. #}
+<div class="sim-panel">
+  <div class="sim-status">
+    <span class="status-dot" id="dot-running" aria-hidden="true"></span>
+    <span id="label-running">Idle</span>
+  </div>
+
+  <div class="sim-progress" id="sim-progress" role="progressbar"
+       aria-label="Simulation progress" aria-valuemin="0" aria-valuemax="100"
+       aria-valuenow="0">
+    <div class="sim-progress-bar" id="sim-progress-bar"></div>
+  </div>
+
+  <dl class="stat-list sim-stats">
+    <div class="stat-row">
+      <dt>Step</dt>
+      <dd>
+        <span id="val-step">0</span>
+        <span class="sim-stat-sep">/</span>
+        <span id="val-total-steps">0</span>
+      </dd>
+    </div>
+    <div class="stat-row">
+      <dt>Time</dt>
+      <dd><span id="val-time">-</span></dd>
+    </div>
+    <div class="stat-row">
+      <dt>Speed</dt>
+      <dd><span id="val-sim-rate">1&times;</span></dd>
+    </div>
+  </dl>
+
+  <div class="sim-transport" role="group" aria-label="Simulation transport">
+    <button type="button" class="sim-btn sim-btn-primary" id="sim-start" disabled>Start</button>
+    <button type="button" class="sim-btn" id="sim-step" disabled>Step</button>
+    <button type="button" class="sim-btn" id="sim-reset" disabled>Reset</button>
+    <div class="sim-speed-pair" role="group" aria-label="Simulation speed">
+      <button type="button" class="sim-btn sim-btn-icon" id="sim-slower"
+              aria-label="Slower simulation speed" title="Slower" disabled>&minus;</button>
+      <button type="button" class="sim-btn sim-btn-icon" id="sim-faster"
+              aria-label="Faster simulation speed" title="Faster" disabled>+</button>
+    </div>
+  </div>
+
+  <form class="sim-seek" id="sim-seek-form">
+    <label class="sim-seek-label" for="sim-seek-step">Go to step</label>
+    <div class="sim-seek-row">
+      <input type="number" id="sim-seek-step" name="step" min="0" step="1"
+             inputmode="numeric" autocomplete="off" placeholder="Step number" disabled>
+      <button type="submit" class="sim-btn" id="sim-seek-submit" disabled>Go</button>
+    </div>
+  </form>
+
+  <p class="sim-source-note muted" id="sim-source-note">Start GoNetEm to exercise routing and traffic.</p>
+  <p class="sim-msg muted" id="sim-msg" aria-live="polite"></p>
+  <p class="sim-error" id="sim-error" aria-live="polite"></p>
+</div>

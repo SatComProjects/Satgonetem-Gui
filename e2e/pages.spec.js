@@ -38,6 +38,20 @@ test("queue header is a keyboard-accessible button", async ({ page }) => {
 });
 
 
+test("dashboard exposes accessible simulation transport controls", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.locator("#sim-start")).toBeVisible();
+  await expect(page.locator("#sim-step")).toBeVisible();
+  await expect(page.locator("#sim-reset")).toBeVisible();
+  await expect(page.locator("#sim-seek-step")).toBeVisible();
+  await expect(page.locator("#sim-progress")).toHaveAttribute(
+    "role",
+    "progressbar",
+  );
+});
+
+
 test("queue items add and remove by stable ID", async ({ page }) => {
   await page.goto("/traffic");
   await page.waitForLoadState("networkidle");

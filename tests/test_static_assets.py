@@ -9,6 +9,15 @@ TRAFFIC_MODULE = PACKAGE / "static" / "traffic.js"
 QUEUE_SCRIPT = "/static/queue.js?v=22"
 QUEUE_IMPORT = "./queue.js?v=22"
 WORLD_TEMPLATE = PACKAGE / "templates" / "world.html"
+SIMULATION_CONTROLS = PACKAGE / "static" / "simulation_controls.js"
+SIMULATION_MODEL_IMPORT = "./simulation_model.js?v=1"
+
+
+def test_simulation_controls_imports_the_versioned_model() -> None:
+    """The transport page controllers share one cache-busted model URL."""
+    content = SIMULATION_CONTROLS.read_text(encoding="utf-8")
+
+    assert f'from "{SIMULATION_MODEL_IMPORT}"' in content
 
 
 def test_base_template_loads_the_versioned_queue_module() -> None:

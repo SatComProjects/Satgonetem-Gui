@@ -6,8 +6,10 @@
  * GoNetem and to apply or delete addressing and routing.
  */
 import { api } from "./api.js?v=4";
+import { initSimulationControls } from "./simulation_controls.js?v=1";
 
 const POLL_INTERVAL_MS = 2000;
+const simulation = initSimulationControls({ poll: false });
 
 /**
  * @param {string} id - Element id.
@@ -67,11 +69,7 @@ function applyStatus(data) {
     el("btn-gonetem").textContent = data.gonetem_is_on ? "Stop" : "Start";
   }
 
-  setDot(el("dot-running"), data.simulation_updating);
-  el("label-running").textContent = data.simulation_updating ? "Updating" : "Idle";
-
-  el("val-step").textContent = data.current_step !== null ? data.current_step : "-";
-  el("val-time").textContent = data.current_time !== null ? data.current_time : "-";
+  simulation.apply(data);
 }
 
 /**
