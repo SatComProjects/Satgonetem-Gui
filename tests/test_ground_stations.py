@@ -84,6 +84,23 @@ def test_validate_inline_stations_requires_fields_and_numeric_coordinates() -> N
         validate_inline_stations([station])
 
 
+def test_validate_inline_stations_rejects_out_of_range_coordinates() -> None:
+    """Latitude, longitude, elevation, and index stay in their valid ranges."""
+    cases = [
+        ({"latitude": 91}, "latitude"),
+        ({"latitude": -91}, "latitude"),
+        ({"longitude": 181}, "longitude"),
+        ({"longitude": -181}, "longitude"),
+        ({"elevation_m": -1}, "elevation"),
+        ({"elevation_m": float("nan")}, "finite"),
+        ({"index": -1}, "index"),
+    ]
+    for changes, message in cases:
+        station = dict(STATIONS[0], **changes)
+        with pytest.raises(ValueError, match=message):
+            validate_inline_stations([station])
+
+
 def test_write_stations_to_temp_uses_unique_files(tmp_path: Path) -> None:
     """Inline station data is written to unique files in the chosen directory."""
     first = write_stations_to_temp(STATIONS, directory=tmp_path)
