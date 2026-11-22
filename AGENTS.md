@@ -9,8 +9,12 @@ Vitest, and Playwright, and targets the `develop` branch.
 
 This guide adapts the SatGoNetem development guide to this repository. It is the
 working agreement for humans and AI agents and applies to every change,
-including refactors. The GUI consumes SatGoNetem as a pinned Git dependency;
-work that needs new core capability follows the cross-repository rules below.
+including refactors. Phased specifications live in
+[docs/specs/](docs/specs/README.md), architecture decisions are recorded in
+[docs/adr/](docs/adr/README.md), and the current structure and test baseline are
+documented in [docs/architecture.md](docs/architecture.md). The GUI consumes
+SatGoNetem as a pinned Git dependency; work that needs new core capability
+follows the cross-repository rules below.
 
 ## Non-negotiables
 
@@ -81,6 +85,9 @@ work that needs new core capability follows the cross-repository rules below.
   without a demonstrated need.
 - For cross-module, public-API, or page-behavior changes, discuss alternatives
   and the tradeoff before implementation.
+- Write a specification in `docs/specs/` when the work spans phases or changes
+  a public contract, and an ADR in `docs/adr/` when a decision is costly to
+  reverse or chooses between credible alternatives.
 
 ### 3. Test (RED)
 
@@ -123,6 +130,58 @@ work that needs new core capability follows the cross-repository rules below.
 - Inspect the complete `git diff`, including generated or untracked files.
 - Report: commands run, exit statuses, architectural tradeoffs, and anything
   unverified.
+
+## Design principles
+
+These are requirements, not preferences. Each principle names how it is
+enforced; when a change cannot satisfy one, the specification or ADR must say
+why and the deviation is reviewed explicitly.
+
+1. **Boundaries before convenience.** A route translates HTTP, a service
+   orchestrates one use case, and an adapter owns the external dependency.
+   Never reach across a boundary to save a call, share a mutable object, or
+   import core types into routes or services. Enforced in part by
+   `tests/test_architecture.py`; the rest by review.
+2. **One composition root.** `create_app()` builds a fresh runtime state,
+   service container, and adapter graph for each application instance. Do not
+   add module-level mutable state, hidden caches, or global singletons.
+   Enforced by `tests/test_app_factory.py` and the isolated-app test rule.
+3. **Explicit state over inferred state.** Model lifecycle with explicit states
+   and legal transitions (`ProjectSession`, `ProjectTaskManager`, the job
+   registry) instead of booleans derived from unrelated values. Pages mirror
+   the same states: loading, empty, success, and error. Enforced by the
+   lifecycle and job-registry tests.
+4. **Depend on narrow protocols and inject the boundary.** Services depend on
+   `services/ports.py`; tests inject fakes rather than patching private
+   internals. A new external capability enters through a protocol and an
+   adapter, never as a direct call from a service or route. Enforced by the
+   structural tests and the fake-based service tests.
+5. **Extend by registration, not by branching.** A new traffic kind is a typed
+   request schema, a strategy, and an adapter operation registered with the
+   existing registry; a new routing method belongs in the core daemon contract
+   behind the adapter. Do not add `if`/`elif` chains over kinds or methods in
+   callers, adapters, or templates. Enforced by the strategy-registry tests
+   and review.
+6. **Fail at the boundary with one error shape.** Validate input with Pydantic
+   models, raise the shared exceptions in `errors.py`, and return the common
+   error envelope. Never invent an ad hoc JSON error, return a bare string for
+   failure, or leak a traceback to the browser. Enforced by the API, error,
+   and OpenAPI contract tests.
+7. **Separate pure logic from effects.** Parsing, selection, queue transitions,
+   and payload shaping live in pure, testable modules (`*_model.js`,
+   `serializers.py`, `ground_stations.py`). HTTP, DOM, filesystem, and core
+   calls stay at the edges. Enforced by Vitest and pytest unit tests.
+8. **Secure by default within the trust boundary.** Bind to `127.0.0.1`, keep
+   project paths inside `SATGONETEM_GUI_SAVE_ROOT`, treat project JSON,
+   ground-station CSV files, and traffic output as untrusted input, and escape
+   before rendering. Enforced by the save-path, storage, and API tests.
+9. **Degrade gracefully and surface failure.** A missing browser capability
+   must not break the page (World View falls back when WebGL is absent), and a
+   failed request must produce a visible message rather than a silent console
+   error. Enforced by the Playwright fallback test and `ApiError` handling.
+10. **Rule of three before abstraction.** Do not add a layer, factory, plugin
+    system, framework, or build step without a concrete second use case and a
+    specification. Prefer deleting code to generalizing it; review-only.
 
 ## Architecture rules
 
@@ -256,6 +315,81 @@ cycles.
   `adapters/` and are covered by contract tests.
 - Report the core version and commit that were actually tested.
 
+## Coding practices
+
+### Python
+
+- Annotate public functions, service methods, and adapter boundaries with type
+  hints; use built-in generics (`list[str]`, `dict[str, Any]`) because the
+  package targets Python 3.10+.
+- Use Pydantic models at the HTTP edge (`schemas.py`). Do not pass raw request
+  dictionaries through routes or services when a schema exists.
+- Inject dependencies through `ApplicationServices` and the protocols in
+  `services/ports.py`. Do not create module-level clients, reach into
+  `app.state` outside `dependencies.py`, or monkeypatch core internals.
+- Do not block the event loop. Run synchronous core, Docker, or gRPC work
+  through `asyncio.to_thread` in services, and long project builds through
+  `ProjectTaskManager`.
+- Catch the narrowest exception that can occur, convert it to the shared API
+  error at the boundary, and log with `logger.exception`. Never swallow an
+  exception with a bare `except` or `except Exception: pass`.
+- Use `pathlib.Path`; resolve every project save/load path through
+  `storage.py`, and create temporary files with `tempfile` and clean them up.
+- Load bundled resources through `resources.py` and `importlib.resources`, not
+  through `__file__` arithmetic.
+- Use `logging.getLogger(__name__)` per module. Do not `print` from library
+  code, log secrets or environment dumps, or interpolate user input into shell
+  commands.
+
+### Browser JavaScript
+
+- Use browser-native ES modules. One concern per module: `api.js` owns HTTP,
+  `escape.js` owns escaping, `*_model.js` owns pure state and transforms, and
+  page modules wire events to them. No build step, framework, or global
+  namespace.
+- Route every request through `api.js` and handle `ApiError`; show the failure
+  in the relevant status region and leave the page usable.
+- Write text with `textContent`. When markup is unavoidable, build it with
+  `escapeHtml()`; never interpolate untrusted values into an HTML string.
+- Wire events with `addEventListener`; never add inline handlers or inline
+  scripts. Give non-submit buttons an explicit `type="button"`.
+- Keep item identity stable and clean up. Removing or clearing a queue item
+  cancels its timers and listeners; no interval, timeout, or listener may
+  outlive its element or page.
+- Model every async view explicitly: loading, empty, success, and error. Do not
+  leave a spinner running, hide a failure, or show stale success data.
+- Prefer classes in `base.css` or the page stylesheet over new inline styles.
+- Bump the template's `?v=` query parameter when a static asset changes.
+
+### Templates
+
+- Extend `base.html` and keep markup, not behavior, in templates.
+- Do not use `|safe` on project data, request values, or traffic output. Jinja
+  autoescaping stays enabled.
+- Keep controls accessible: semantic elements, associated labels, keyboard
+  reachability, and visible focus where the page overrides browser defaults.
+
+### Tests
+
+- Follow the testing rules below. Name each test for the behavior it protects,
+  arrange data with the shared fixtures or factories, and keep tests
+  deterministic: no real sleeps, network calls, or container starts in the
+  default suite.
+- Change a structural test only when the architectural contract changes on
+  purpose, and record the reason in the specification or ADR.
+
+### Documentation and commits
+
+- Update `docs/architecture.md` when module boundaries, the dependency
+  direction, or measured baselines change.
+- Write a specification in `docs/specs/` for phased or public-contract work and
+  an ADR in `docs/adr/` for a decision that is costly to reverse or trades off
+  alternatives.
+- Update `README.md` for user-facing behavior, requirements, or configuration,
+  and keep this guide current when a rule changes.
+- Write imperative, scoped commit subjects (`routes: validate save paths`) and
+  one concern per commit. PR descriptions follow the branch policy above.
+
 ## Testing rules
 
 - Python tests live under `tests/` and are named for the module or feature they
@@ -329,6 +463,9 @@ Notes:
 ## Definition of done
 
 - [ ] Specification and acceptance criteria are stated.
+- [ ] A specification or ADR was added or updated when the change spans
+      phases, changes a public contract, or records a costly-to-reverse
+      decision.
 - [ ] For behavior changes, a RED test was added and observed failing for the
       expected reason (pytest, Vitest, or Playwright as appropriate);
       manual-only checks are identified.
@@ -345,5 +482,7 @@ Notes:
       are consistent.
 - [ ] Documentation is updated for public API, configuration, or behavior
       changes.
+- [ ] The change satisfies the design principles and coding practices above,
+      or the deviation is justified in the specification or ADR.
 - [ ] The complete diff was reviewed; unrelated changes were removed.
 - [ ] Architecture tradeoffs and unverified assumptions are reported.
