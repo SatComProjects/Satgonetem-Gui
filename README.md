@@ -19,7 +19,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Topology Export & Health** | Structural graph checks plus JSON, DOT, and GraphML exports. |
 | **Experiment Runs** | Run v0.3.2 YAML scenarios and keep manifests, metrics, results, and reports on the server. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
-| **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
+| **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows with saved presets, endpoint swap, clone, replay, and a queued job system. |
 | **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
 | **Routing Control** | Apply Static/Dijkstra, OSPF, IS-IS, or SR-MPLS routing across the emulated topology. |
 | **GoNetem Integration** | Start and stop Dockerised network nodes directly from the web UI. |
@@ -109,7 +109,7 @@ package.json            # Frontend test/tooling manifest
 | `/` | Dashboard — constellation statistics, simulation playback, GoNetem status, routing controls |
 | `/world` | 3D Globe — real-time satellite and ground station visualisation with simulation playback and path highlighting |
 | `/nodes` | Node Explorer — list, inspect, trace paths, check graph health, and export |
-| `/traffic` | Traffic Generator — create and queue traffic jobs, review history and comparisons |
+| `/traffic` | Traffic Generator — presets, endpoint swap, queued jobs, history, and replay |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/projects` | Projects — list, reopen, save, duplicate, and delete workspace projects |
 | `/connectivity` | Connectivity Matrix — full-mesh loss/RTT heatmap with exports |
@@ -137,6 +137,15 @@ v0.3.2 persists the addressable flag only in runtime-state projects. Re-enable
 it after loading or replacing a Walker project. If addressing and routing are
 already applied, re-apply them before running traffic so the new endpoints
 receive routes.
+
+## Traffic Presets and Replay
+
+The Traffic form can save the current tool, endpoints, and options as a named
+preset in browser-local storage (up to 20, case-insensitive names). Presets can
+be applied, overwritten, or deleted, and a Swap control exchanges source and
+destination. Queue items can be cloned as fresh queued jobs, and completed
+browser-local history rows can be replayed into the queue. Clones and replays
+never copy a job ID or start automatically.
 
 ## Experiment History
 
