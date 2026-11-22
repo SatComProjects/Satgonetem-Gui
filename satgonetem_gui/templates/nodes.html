@@ -64,6 +64,28 @@
   <p class="muted" id="topology-health-empty" hidden>No structural findings.</p>
 </section>
 
+<div class="node-toolbar" id="node-toolbar" role="group" aria-label="Filter nodes">
+  <label class="node-search-field" for="node-search">Search
+    <input type="search" id="node-search" placeholder="Name or city" autocomplete="off">
+  </label>
+  <label for="node-type-filter">Type
+    <select id="node-type-filter">
+      <option value="all">All nodes</option>
+      <option value="satellite">Satellites</option>
+      <option value="ground_station">Ground stations</option>
+    </select>
+  </label>
+  <label for="node-sort">Sort
+    <select id="node-sort">
+      <option value="name">Name</option>
+      <option value="city">City</option>
+      <option value="type">Type</option>
+    </select>
+  </label>
+  <label class="node-fav-filter"><input type="checkbox" id="node-favorites-only"> Favorites only</label>
+  <span class="muted node-count" id="node-count" aria-live="polite"></span>
+</div>
+
 <div class="nodes-grid">
 
   <section class="card" id="card-satellites">
@@ -82,6 +104,6 @@
 
 </div>
 
-<script type="module" src="/static/nodes.js?v=13"></script>
+<script type="module" src="/static/nodes.js?v=14"></script>
 <script type="module" src="/static/topology_health.js?v=1"></script>
 {% endblock %}

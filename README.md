@@ -108,7 +108,7 @@ package.json            # Frontend test/tooling manifest
 |------|------|
 | `/` | Dashboard — constellation statistics, simulation playback, GoNetem status, routing controls |
 | `/world` | 3D Globe — real-time satellite and ground station visualisation with simulation playback and path highlighting |
-| `/nodes` | Node Explorer — list, inspect, trace paths, check graph health, and export |
+| `/nodes` | Node Explorer — search, filter, sort, favorite, inspect, trace paths, check health, and export |
 | `/traffic` | Traffic Generator — presets, endpoint swap, queued jobs, history, and replay |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/projects` | Projects — list, reopen, save, duplicate, and delete workspace projects |
@@ -231,6 +231,14 @@ at 100,000,000 satellite-cells and 1,200,000 grid cells; a finer grid over a
 large constellation is rejected with a request to use a coarser resolution.
 Results are cached per project generation, simulation step, elevation,
 resolution, and section toggles.
+
+## Node Explorer
+
+The Nodes page filters the full node list by name, city, or type, sorts by name,
+city, or type, and supports a favorites-only view. Favorite node names are kept
+in browser-local storage and survive reloads. Filtering and sorting do not
+change the five-second poll, path tracing, addressability controls, detail
+expansion, or topology health card.
 
 ## Topology Export and Health
 
