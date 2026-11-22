@@ -9,6 +9,7 @@ import {
   linkTypeLabel,
   linkWidth,
   linksForNode,
+  usageColor,
 } from "../satgonetem_gui/static/links_model.js";
 
 const links = [
@@ -86,5 +87,25 @@ describe("link width", () => {
     expect(linkWidth(1_000_000)).toBe(3.5);
     expect(linkWidth(null)).toBe(1);
     expect(linkWidth(100_000, true)).toBe(4);
+  });
+});
+
+describe("usage color", () => {
+  it("maps no usage to green, half to amber, and full to red", () => {
+    expect(usageColor(0)).toBe("rgb(34, 197, 94)");
+    expect(usageColor(0.5)).toBe("rgb(234, 179, 8)");
+    expect(usageColor(1)).toBe("rgb(239, 68, 68)");
+    expect(usageColor(1.4)).toBe("rgb(239, 68, 68)");
+  });
+
+  it("interpolates between stops", () => {
+    expect(usageColor(0.25)).toBe("rgb(134, 188, 51)");
+    expect(usageColor(0.75)).toBe("rgb(237, 124, 38)");
+  });
+
+  it("uses a neutral color for unknown usage", () => {
+    expect(usageColor(null)).toBe("rgb(100, 116, 139)");
+    expect(usageColor(undefined)).toBe("rgb(100, 116, 139)");
+    expect(usageColor("not-a-number")).toBe("rgb(100, 116, 139)");
   });
 });

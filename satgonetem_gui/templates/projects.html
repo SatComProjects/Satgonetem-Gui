@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/projects.css">
+{% endblock %}
+
+{% block content %}
+<div class="projects-page">
+
+  <header class="projects-page-head">
+    <div class="projects-heading">
+      <h2>Projects</h2>
+      <p class="muted">Save the current project to the workspace, then reopen or copy it later.</p>
+    </div>
+    <div class="projects-toolbar" role="group" aria-label="Project workspace actions">
+      <button type="button" class="button small secondary" id="projects-refresh">Refresh</button>
+      <a class="button small projects-new-link" href="/new_project">New project</a>
+    </div>
+  </header>
+
+  <p class="muted projects-msg" id="projects-msg" aria-live="polite"></p>
+
+  <section class="card projects-save-card" aria-labelledby="save-current-title">
+    <div class="projects-section-head">
+      <h3 class="card-title" id="save-current-title">Save current project</h3>
+      <p class="muted projects-hint">Saving in place updates the workspace file this project came from.</p>
+    </div>
+    <div class="projects-save-form">
+      <div class="projects-field">
+        <label for="save-current-name">Workspace name</label>
+        <input type="text" id="save-current-name" name="workspace_name"
+               placeholder="e.g. Walker Demo" autocomplete="off" spellcheck="false">
+      </div>
+      <label class="projects-check" for="save-current-overwrite">
+        <input type="checkbox" id="save-current-overwrite">
+        <span>Overwrite if it exists</span>
+      </label>
+      <div class="projects-save-actions">
+        <button type="button" class="button small" id="save-current-btn">Save to workspace</button>
+        <button type="button" class="button small secondary" id="save-in-place-btn">Save in place</button>
+      </div>
+    </div>
+    <p class="muted projects-msg" id="save-current-msg" aria-live="polite"></p>
+  </section>
+
+  <section class="card projects-list-card" aria-labelledby="projects-list-title">
+    <div class="projects-section-head">
+      <h3 class="card-title" id="projects-list-title">Saved projects</h3>
+    </div>
+    <div id="projects-list" class="projects-list"></div>
+    <p id="projects-empty" class="projects-empty muted" hidden>No saved workspace projects yet.</p>
+  </section>
+
+</div>
+
+<script type="module" src="/static/projects.js?v=1"></script>
+{% endblock %}

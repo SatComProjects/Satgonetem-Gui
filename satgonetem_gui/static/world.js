@@ -1,6 +1,6 @@
 import { api, ApiError } from "./api.js?v=4";
 import { initSimulationControls } from "./simulation_controls.js?v=1";
-import { linkWidth } from "./links_model.js?v=1";
+import { linkWidth, usageColor } from "./links_model.js?v=1";
 import {
     linkKey,
     pathLinkKeys,
@@ -54,6 +54,11 @@ const coverage = {
 let pathKeys = new Set();
 let lastLinks = [];
 let worldPathBusy = false;
+let usageEnabled = false;
+let usageAvailable = false;
+let usageByLink = new Map();
+let usageTimer = null;
+let usageInFlight = false;
 
 /**
  * Convert geographic coordinates to a Cesium Cartesian3 position.
@@ -412,10 +417,21 @@ function updateLinks(links) {
         const dst = nodePositions.get(lk.dst);
         if (!src || !dst) return;
 
-        const onPath = hasPath && pathKeys.has(linkKey(lk.src, lk.dst));
+        const key = linkKey(lk.src, lk.dst);
+        const onPath = hasPath && pathKeys.has(key);
         const dim = hasPath && !onPath;
         const inactive = lk.is_active === false;
-        const baseColor = inactive ? INACTIVE_LINK_COLOR : LINK_COLORS[ltype];
+        let baseColor;
+        if (inactive) {
+            baseColor = INACTIVE_LINK_COLOR;
+        } else if (usageEnabled) {
+            const ratio = usageAvailable
+                ? (usageByLink.has(key) ? usageByLink.get(key) : 0)
+                : null;
+            baseColor = Cesium.Color.fromCssColorString(usageColor(ratio));
+        } else {
+            baseColor = LINK_COLORS[ltype];
+        }
         const alpha = dim ? 0.10 : onPath ? 1.0 : inactive ? 0.55 : 0.75;
         col.add({
             positions: [src, dst],
@@ -649,6 +665,73 @@ function clearWorldPath() {
     else viewer?.scene.requestRender();
 }
 
+function setUsageMessage(text, isError = false) {
+    const element = document.getElementById("world-usage-msg");
+    if (!element) return;
+    element.textContent = text;
+    element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function rerenderLinks() {
+    if (lastLinks.length) updateLinks(lastLinks);
+    else viewer?.scene.requestRender();
+}
+
+async function refreshUsage() {
+    if (!usageEnabled || usageInFlight) return;
+    usageInFlight = true;
+    try {
+        const data = await api.get("/api/links/usage");
+        if (!usageEnabled) return;
+        usageAvailable = Boolean(data.available);
+        usageByLink = new Map(
+            (Array.isArray(data.links) ? data.links : [])
+                .filter(entry => entry && entry.src && entry.dst)
+                .map(entry => [linkKey(entry.src, entry.dst), entry.utilization]),
+        );
+        setUsageMessage(
+            data.available ? "" : (data.note || "Link usage is unavailable."),
+        );
+    } catch (error) {
+        usageAvailable = false;
+        usageByLink.clear();
+        setUsageMessage(
+            "Link usage refresh failed: " + (error.message || "network error"),
+            true,
+        );
+    } finally {
+        usageInFlight = false;
+    }
+    rerenderLinks();
+}
+
+function setUsageEnabled(enabled) {
+    usageEnabled = Boolean(enabled);
+    if (usageTimer !== null) {
+        clearInterval(usageTimer);
+        usageTimer = null;
+    }
+    if (usageEnabled) {
+        refreshUsage();
+        usageTimer = setInterval(refreshUsage, 5000);
+    } else {
+        usageByLink.clear();
+        usageAvailable = false;
+        setUsageMessage("");
+        rerenderLinks();
+    }
+}
+
+function bindUsageControl() {
+    const checkbox = document.getElementById("cb-link-usage");
+    if (!checkbox) return;
+    checkbox.addEventListener("change", () => setUsageEnabled(checkbox.checked));
+    window.addEventListener("pagehide", () => {
+        if (usageTimer !== null) clearInterval(usageTimer);
+        usageTimer = null;
+    }, { once: true });
+}
+
 function bindWorldPathControls() {
     document
         .getElementById("world-path-trace")
@@ -670,6 +753,7 @@ function startWorld() {
     initCesium();
     initSimulationControls({ poll: true });
     bindWorldPathControls();
+    bindUsageControl();
     loadWorldPathNodes();
 
     const cbMap = [

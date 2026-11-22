@@ -156,6 +156,11 @@
     flex-shrink: 0;
   }
 
+  .usage-gradient {
+    background: linear-gradient(90deg, #22c55e 0%, #eab308 50%, #ef4444 100%);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+  }
+
   .ctrl-label { cursor: pointer; flex: 1; }
 
   .legend-note {
@@ -166,6 +171,25 @@
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+
+  .usage-legend {
+    display: block;
+    color: #7f90a6;
+    line-height: 1.35;
+    margin-bottom: 0;
+  }
+
+  #world-usage-msg {
+    display: block;
+    color: #94a3b8;
+    margin: 4px 0 0 22px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  #world-usage-msg:empty {
+    display: none;
   }
 
   #coverage-opts {
@@ -371,6 +395,15 @@
           <span class="ctrl-dot" style="background:#dc2626;"></span>
           <label class="ctrl-label" for="cb-adjacent">Adjacent ISL</label>
         </div>
+        <div class="ctrl-row">
+          <input type="checkbox" id="cb-link-usage">
+          <span class="ctrl-dot usage-gradient"></span>
+          <label class="ctrl-label" for="cb-link-usage">Color links by usage</label>
+        </div>
+        <div class="legend-note usage-legend">
+          Green = no usage · red = at/above capacity
+        </div>
+        <p class="legend-note" id="world-usage-msg" aria-live="polite"></p>
         <div class="legend-note">
           Inactive links are red; line width scales with capacity.
         </div>

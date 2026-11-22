@@ -21,6 +21,8 @@ PREFLIGHT_MODEL_IMPORT = "./preflight_model.js?v=1"
 PREFLIGHT_UI_IMPORT = "./preflight_ui.js?v=1"
 DASHBOARD_MODULE = PACKAGE / "static" / "dashboard.js"
 NEW_PROJECT_MODULE = PACKAGE / "static" / "new_project.js"
+PROJECTS_MODULE = PACKAGE / "static" / "projects.js"
+PROJECTS_MODEL_IMPORT = "./projects_model.js?v=1"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
 WORLD_MODULE = PACKAGE / "static" / "world.js"
 
@@ -35,6 +37,11 @@ def test_link_controllers_import_the_versioned_model() -> None:
     """Node Explorer and World View share one cache-busted link model."""
     for path in (NODES_MODULE, WORLD_MODULE):
         assert f'"{LINKS_MODEL_IMPORT}"' in path.read_text(encoding="utf-8")
+
+
+def test_projects_page_imports_the_versioned_model() -> None:
+    """The workspace page shares one cache-busted formatting model."""
+    assert f'"{PROJECTS_MODEL_IMPORT}"' in PROJECTS_MODULE.read_text(encoding="utf-8")
 
 
 def test_preflight_pages_import_the_versioned_ui_and_model() -> None:

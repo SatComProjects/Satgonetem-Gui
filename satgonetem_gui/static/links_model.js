@@ -103,3 +103,26 @@ export function linkWidth(capacityKbps, onPath = false) {
   const scaled = 1 + Math.log10(value / 1_000);
   return Math.max(1.0, Math.min(3.5, Number(scaled.toFixed(2))));
 }
+
+/**
+ * Interpolate a usage ratio from green (no usage) through amber (half) to red
+ * (at or above capacity). Unknown capacity/usage is a neutral slate.
+ *
+ * @param {number|null|undefined} ratio
+ * @returns {string} CSS rgb() color.
+ */
+export function usageColor(ratio) {
+  if (ratio === null || ratio === undefined || ratio === "") {
+    return "rgb(100, 116, 139)";
+  }
+  const value = Number(ratio);
+  if (!Number.isFinite(value)) return "rgb(100, 116, 139)";
+  const clamped = Math.max(0, Math.min(1, value));
+  const start = clamped <= 0.5 ? [34, 197, 94] : [234, 179, 8];
+  const end = clamped <= 0.5 ? [234, 179, 8] : [239, 68, 68];
+  const t = clamped <= 0.5 ? clamped / 0.5 : (clamped - 0.5) / 0.5;
+  const channels = start.map((from, index) =>
+    Math.round(from + (end[index] - from) * t),
+  );
+  return `rgb(${channels[0]}, ${channels[1]}, ${channels[2]})`;
+}
