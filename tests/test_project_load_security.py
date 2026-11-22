@@ -106,9 +106,7 @@ def test_project_load_rejects_malformed_embedded_station_rows(client) -> None:
 def test_project_load_rejects_relative_data_files(client) -> None:
     """Relative paths would be read from the process CWD, not the checked root."""
     document = {
-        "simulation_property": {
-            "ground_objects_properties": [{"data_file": "stations.csv"}]
-        }
+        "simulation_property": {"ground_objects_properties": [{"data_file": "stations.csv"}]}
     }
 
     response = _post_load(client, document)
