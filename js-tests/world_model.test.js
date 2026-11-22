@@ -5,6 +5,7 @@ import {
   describeSatellite,
   formatCoordinate,
   hasPosition,
+  retainedSelection,
 } from "../satgonetem_gui/static/world_model.js";
 
 describe("world entity descriptions", () => {
@@ -39,5 +40,11 @@ describe("world entity descriptions", () => {
     expect(describeGroundStation("Gnd0", null, {}, false)).toContain(
       "Status: Disconnected",
     );
+  });
+
+  it("retains a coverage selection only while the satellite exists", () => {
+    expect(retainedSelection("Sat0", new Set(["Sat0", "Sat1"]))).toBe("Sat0");
+    expect(retainedSelection("Sat0", new Set(["Sat1"]))).toBeNull();
+    expect(retainedSelection(null, ["Sat0"])).toBeNull();
   });
 });

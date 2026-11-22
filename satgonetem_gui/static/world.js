@@ -3,7 +3,8 @@ import {
     describeGroundStation,
     describeSatellite,
     hasPosition,
-} from "./world_model.js";
+    retainedSelection,
+} from "./world_model.js?v=2";
 
 const SAT_COLOR = Cesium.Color.fromCssColorString("#3b82f6");
 const GS_CONN_COLOR = Cesium.Color.fromCssColorString("#22c55e");
@@ -298,6 +299,12 @@ function updateSatellites(satellites) {
             }
         }
     });
+
+    const retained = retainedSelection(coverage.selectedSat, seen);
+    if (retained !== coverage.selectedSat) {
+        coverage.selectedSat = retained;
+        if (coverage.enabled) applyCoverageOpacity();
+    }
 }
 
 /**
