@@ -293,7 +293,7 @@ class Iperf3Request(BaseModel):
     duration: int = Field(default=10, ge=1, le=3600)
     bandwidth_mbps: float = Field(default=0.0, ge=0)
     parallel: int = Field(default=1, ge=1, le=64)
-    interval: float = Field(default=1.0, gt=0, le=60)
+    interval: float = Field(default=1.0, ge=0.1, le=60)
     port: int = Field(default=5201, ge=1, le=65535)
     congestion_control: str = Field(default="bbr", pattern=r"^[a-z0-9_-]{0,32}$")
     window_size: str | None = Field(default=None, pattern=r"^(?:\d+[KMG]?)?$")
@@ -307,7 +307,7 @@ class PingRequest(BaseModel):
 
     src: str = Field(min_length=1)
     dst: str = Field(min_length=1)
-    count: int = Field(default=5, ge=1)
+    count: int = Field(default=5, ge=1, le=10000)
     timeout_sec: float = Field(default=0.5, gt=0, le=60)
     interval_sec: float = Field(default=0.2, gt=0.002, le=60)
     packet_size: int = Field(default=56, ge=1, le=65500)
@@ -322,7 +322,7 @@ class Hping3Request(BaseModel):
     dst: str = Field(min_length=1)
     proto: Literal["tcp", "udp", "icmp"] = "tcp"
     dport: int = Field(default=0, ge=0, le=65535)
-    count: int = Field(default=100, ge=1)
+    count: int = Field(default=100, ge=1, le=10000)
     size: int = Field(default=0, ge=0, le=65500)
     rate_type: Literal["interval", "fast", "faster"] = "interval"
     interval: str = Field(default="", pattern=r"^(?:u?\d+)?$")
