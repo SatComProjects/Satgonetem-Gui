@@ -124,7 +124,11 @@ class SatGoNetemTrafficAdapter:
                     raise RuntimeError(
                         "Unsupported Iperf3Results shape: missing interval data."
                     )
-                intervals = raw.get("intervals", [])
+                intervals = raw.get("intervals")
+                if not isinstance(intervals, list):
+                    raise RuntimeError(
+                        "Unsupported Iperf3Results shape: missing interval data."
+                    )
                 return TrafficPoll(
                     "done",
                     results=serialize_iperf3_results(result, intervals),

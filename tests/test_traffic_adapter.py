@@ -185,6 +185,19 @@ def test_poll_done_missing_interval_data_returns_error() -> None:
     assert "interval data" in poll.error
 
 
+def test_poll_done_renamed_interval_key_returns_error() -> None:
+    """A renamed intervals key is a shape change even when _data is a dict."""
+    result = SimpleNamespace(protocol="TCP", _data={"interval_data": []})
+    flow = object.__new__(Iperf3Flow)
+    flow.status = lambda: FlowStatus.DONE
+    flow.results = lambda: result
+
+    poll = SatGoNetemTrafficAdapter().poll("iperf3", flow)
+
+    assert poll.status == "error"
+    assert "interval data" in poll.error
+
+
 @pytest.mark.parametrize(
     ("kind", "flow_class", "status"),
     [
