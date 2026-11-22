@@ -6,8 +6,8 @@ PACKAGE = Path(__file__).resolve().parent.parent / "satgonetem_gui"
 BASE_TEMPLATE = PACKAGE / "templates" / "base.html"
 TRAFFIC_MODULE = PACKAGE / "static" / "traffic.js"
 
-QUEUE_SCRIPT = "/static/queue.js?v=21"
-QUEUE_IMPORT = "./queue.js?v=21"
+QUEUE_SCRIPT = "/static/queue.js?v=22"
+QUEUE_IMPORT = "./queue.js?v=22"
 WORLD_TEMPLATE = PACKAGE / "templates" / "world.html"
 
 

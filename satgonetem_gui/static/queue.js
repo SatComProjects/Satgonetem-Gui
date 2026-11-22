@@ -7,11 +7,12 @@ import {
   findItem,
   isTerminal,
   normalizeStoredItems,
+  pollRetryDelay,
   remainingDelay,
   removeItem,
   startableItems,
   updateItem,
-} from "./queue_model.js";
+} from "./queue_model.js?v=2";
 
 const JQ_KEY = "sgnt_traffic_queue";
 const MAX_POLL_FAILURES = 5;
@@ -427,9 +428,13 @@ async function jqTrack(id) {
       jqRender();
       return;
     }
-    if (current.poll_failures) {
-      jq.items = updateItem(jq.items, id, { poll_failures: 0 });
+    if (current.poll_failures || current.error) {
+      jq.items = updateItem(jq.items, id, {
+        poll_failures: 0,
+        error: null,
+      });
       jqSave();
+      jqRender();
     }
     schedule(id, 1000, () => jqTrack(id));
   } catch (error) {
@@ -445,19 +450,16 @@ async function jqTrack(id) {
       return;
     }
     const failures = (current.poll_failures || 0) + 1;
-    if (failures >= MAX_POLL_FAILURES) {
-      jq.items = updateItem(jq.items, id, {
-        status: "error",
-        poll_failures: failures,
-        error: `Status check failed ${failures} times: ${error.message || "network error"}`,
-      });
-      jqSave();
-      jqRender();
-      return;
-    }
-    jq.items = updateItem(jq.items, id, { poll_failures: failures });
+    jq.items = updateItem(jq.items, id, {
+      poll_failures: failures,
+      error:
+        failures >= MAX_POLL_FAILURES
+          ? `Status check failed ${failures} times; retrying: ${error.message || "network error"}`
+          : current.error,
+    });
     jqSave();
-    schedule(id, 1500, () => jqTrack(id));
+    jqRender();
+    schedule(id, pollRetryDelay(failures), () => jqTrack(id));
   }
 }
 
