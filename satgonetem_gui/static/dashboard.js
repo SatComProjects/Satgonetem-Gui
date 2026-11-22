@@ -160,7 +160,7 @@ el("btn-gonetem").addEventListener("click", async function () {
   gonetemBusy = true;
   btn.textContent = starting ? "Starting..." : "Stopping...";
   try {
-    await api.post(endpoint);
+    await api.post(endpoint, undefined, { timeout: 600000 });
   } catch (err) {
     alert((starting ? "Start" : "Stop") + " failed: " + (err.message || "Unknown error"));
   } finally {
@@ -183,7 +183,7 @@ el("btn-apply").addEventListener("click", async function () {
   var method = el("routing-method").value;
   showRoutingMsg("Applying addressing and routing...");
   try {
-    await api.post("/api/routing/apply", { method });
+    await api.post("/api/routing/apply", { method }, { timeout: 600000 });
     showRoutingMsg("Addressing and routing applied successfully.");
   } catch (err) {
     showRoutingMsg(err.message || "Apply failed.", true);
@@ -201,7 +201,7 @@ el("btn-delete").addEventListener("click", async function () {
   setRoutingBusy(true);
   showRoutingMsg("Deleting routing...");
   try {
-    await api.post("/api/routing/delete");
+    await api.post("/api/routing/delete", undefined, { timeout: 600000 });
     showRoutingMsg("Routing deleted successfully.");
   } catch (err) {
     showRoutingMsg(err.message || "Delete failed.", true);

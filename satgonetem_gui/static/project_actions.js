@@ -19,7 +19,7 @@ function initLoad() {
     try {
       const text = await file.text();
       JSON.parse(text);
-      await api.post("/api/project/load", { content: text });
+      await api.post("/api/project/load", { content: text }, { timeout: 600000 });
       window.location.href = "/";
     } catch (error) {
       alert(`Failed to load project: ${error.message || error}`);
@@ -39,7 +39,7 @@ function initSave() {
     const originalText = link.textContent;
     link.textContent = "Saving…";
     try {
-      const data = await api.get("/api/project/save");
+      const data = await api.get("/api/project/save", { timeout: 600000 });
       const blob = new Blob([data.content], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
