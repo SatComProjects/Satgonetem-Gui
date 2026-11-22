@@ -51,6 +51,10 @@ export function mergeStations(existing, incoming) {
   return [...merged.values()];
 }
 
+export function removeStationAt(stations, index) {
+  return (stations || []).filter((_station, position) => position !== index);
+}
+
 export function selectionSummary(selectedKeys, presetName, stations) {
   if (stations.length === 0) return "none";
   let selected = 0;

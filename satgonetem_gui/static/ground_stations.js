@@ -7,7 +7,7 @@ import {
   setPresetSelection,
   stationKey,
   validateStationName,
-} from "./ground_stations_model.js";
+} from "./ground_stations_model.js?v=2";
 
 const presetSelect = document.getElementById("preset_select");
 const tbody = document.getElementById("station_tbody");

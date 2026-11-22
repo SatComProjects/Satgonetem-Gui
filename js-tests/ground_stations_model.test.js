@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildStationMap,
   mergeStations,
+  removeStationAt,
   selectedStations,
   selectionSummary,
   stationKey,
@@ -74,5 +75,16 @@ describe("ground station selection", () => {
     expect(selectedStations(selected, map)).toEqual([
       { index: 0, name: "Berlin" },
     ]);
+  });
+
+  it("removes exactly the selected pending station", () => {
+    const stations = [{ name: "Berlin" }, { name: "Paris" }, { name: "Rome" }];
+
+    expect(removeStationAt(stations, 1)).toEqual([
+      { name: "Berlin" },
+      { name: "Rome" },
+    ]);
+    expect(removeStationAt(stations, 5)).toEqual(stations);
+    expect(stations).toHaveLength(3);
   });
 });

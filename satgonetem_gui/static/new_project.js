@@ -1,5 +1,5 @@
 import { api } from "./api.js?v=4";
-import { mergeStations } from "./ground_stations_model.js";
+import { mergeStations, removeStationAt } from "./ground_stations_model.js?v=2";
 import {
   normalizeProjectName,
   validateGroundNumbers,
@@ -23,6 +23,35 @@ import {
   var progLabel = document.getElementById("create-progress-label");
   var msgEl = document.getElementById("create-msg");
   var gsCountLabel = document.getElementById("gs_count_label");
+  var pendingList = document.getElementById("gs_pending_list");
+
+  function renderPendingStations() {
+    if (!pendingList) return;
+    pendingList.innerHTML = "";
+    pendingStations.forEach(function (station, idx) {
+      var li = document.createElement("li");
+      var label = document.createElement("span");
+      var name = station.name || "Station " + (station.index ?? idx + 1);
+      label.textContent =
+        name +
+        " (" +
+        station.latitude +
+        ", " +
+        station.longitude +
+        ")";
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "button";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", function () {
+        pendingStations = removeStationAt(pendingStations, idx);
+        updateGsLabel();
+      });
+      li.appendChild(label);
+      li.appendChild(remove);
+      pendingList.appendChild(li);
+    });
+  }
 
   function updateGsLabel() {
     if (pendingStations.length === 0) {
@@ -30,6 +59,7 @@ import {
     } else {
       gsCountLabel.textContent = pendingStations.length + " station(s) selected";
     }
+    renderPendingStations();
   }
 
   function renderShells() {
