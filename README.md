@@ -25,7 +25,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 
 - Python >= 3.10 (CI runs 3.12)
 - Node >= 24 for the frontend tooling and test suites
-- SatGoNetEm **v0.3.1** (pinned Git tag)
+- SatGoNetEm **v0.3.2** (pinned Git tag)
 - A modern web browser with WebGL support (for the 3D globe; unsupported
   browsers get a fallback message)
 
@@ -38,7 +38,7 @@ the committed lock file:
 uv sync --locked --extra dev
 ```
 
-SatGoNetEm enters through a PEP 508 direct URL pinned to the `v0.3.1` tag in
+SatGoNetEm enters through a PEP 508 direct URL pinned to the `v0.3.2` tag in
 `pyproject.toml`; `uv.lock` records the resolved commit.
 
 For a plain virtual environment, `pip` resolves the same direct Git URL, which
@@ -125,10 +125,11 @@ is shown in the panel without stopping the loop.
 Satellites are not traffic endpoints by default. On the Traffic page, enable
 **Include satellites as traffic endpoints** to expose every satellite as a
 source or destination; the Nodes page can toggle one satellite at a time. The
-setting is session-scoped because SatGoNetEm v0.3.1 does not serialize the
-addressable flag, so re-enable it after loading or replacing a project. If
-addressing and routing are already applied, re-apply them before running
-traffic so the new endpoints receive routes.
+setting is session-scoped for normal Walker projects because SatGoNetEm
+v0.3.2 persists the addressable flag only in runtime-state projects. Re-enable
+it after loading or replacing a Walker project. If addressing and routing are
+already applied, re-apply them before running traffic so the new endpoints
+receive routes.
 
 ## Experiment History
 

@@ -76,7 +76,7 @@ jobs:
               )
 
           requirements = metadata.get_all("Requires-Dist", [])
-          expected_url = "git+https://github.com/satcomprojects/satgonetem@v0.3.1"
+          expected_url = "git+https://github.com/satcomprojects/satgonetem@v0.3.2"
           pins = [req for req in requirements if req.startswith("satgonetem @ ")]
           if len(pins) != 1 or expected_url not in pins[0]:
               raise SystemExit(

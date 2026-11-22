@@ -16,7 +16,7 @@ dependencies = [
     "pydantic>=2.0",
     "python-multipart>=0.0.9",
     "pyyaml>=6.0",
-    "satgonetem @ git+https://github.com/satcomprojects/satgonetem@v0.3.1",
+    "satgonetem @ git+https://github.com/satcomprojects/satgonetem@v0.3.2",
     "uvicorn[standard]>=0.29.0",
 ]
 
@@ -35,7 +35,7 @@ include = ["satgonetem_gui*"]
 satgonetem_gui = ["static/**/*", "templates/**/*", "data/**/*"]
 
 [tool.uv.sources]
-satgonetem = { git = "https://github.com/satcomprojects/satgonetem", tag = "v0.3.1" }
+satgonetem = { git = "https://github.com/satcomprojects/satgonetem", tag = "v0.3.2" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

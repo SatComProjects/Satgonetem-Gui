@@ -123,7 +123,7 @@ def test_adapter_maps_addressing_and_routing_failures(settings) -> None:
 
 
 def test_adapter_maps_addressing_exceptions(settings) -> None:
-    """v0.3.1 raises when any node failed; expose it as a network error."""
+    """v0.3.2 raises when any node failed; expose it as a network error."""
     adapter = SatGoNetemTopologyAdapter(settings)
 
     def fail() -> None:

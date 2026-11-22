@@ -8,7 +8,7 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10 gets tomli via pyt
     import tomli as tomllib
 
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
-PINNED_TAG = "v0.3.1"
+PINNED_TAG = "v0.3.2"
 PINNED_URL = f"git+https://github.com/satcomprojects/satgonetem@{PINNED_TAG}"
 
 

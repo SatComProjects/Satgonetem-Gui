@@ -54,7 +54,7 @@ dependency.
   documented accessor and would violate the private-hook rule.
 - **Compute the path purely in the browser.** Rejected: the browser does not
   have the core graph or authoritative link state.
-- **Add a preference setter now.** Deferred: v0.3.1 has no public setter; the
+- **Add a preference setter now.** Deferred: v0.3.2 has no public setter; the
   response exposes the current preference instead.
 - **Persist path history.** Deferred: paths are cheap to recompute and the
   existing history ledger is result-oriented.
