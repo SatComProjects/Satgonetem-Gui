@@ -146,6 +146,35 @@ def test_poll_rejects_unknown_kinds() -> None:
         SatGoNetemTrafficAdapter().poll("unknown", object())
 
 
+def test_release_discards_the_core_result() -> None:
+    """Finished flows release the raw core result object."""
+
+    class Flow:
+        def __init__(self):
+            self.discarded = 0
+
+        def discard_result(self):
+            self.discarded += 1
+
+    flow = Flow()
+    SatGoNetemTrafficAdapter().release(flow)
+
+    assert flow.discarded == 1
+
+
+def test_register_flow_joins_the_topology_active_list() -> None:
+    """A GUI flow is visible to the core's container-stop cleanup."""
+    topology = SimpleNamespace(_active_flows=[])
+    flow = SimpleNamespace(discard_result=lambda: None)
+    adapter = SatGoNetemTrafficAdapter()
+
+    adapter.register_flow(topology, flow)
+    assert topology._active_flows == [flow]
+
+    adapter.release(flow)
+    assert topology._active_flows == []
+
+
 def test_poll_unknown_flow_state_maps_to_a_terminal_error() -> None:
     """Unrecognized core states never leak as a non-terminal 'unknown'."""
     adapter = SatGoNetemTrafficAdapter()
@@ -175,6 +204,19 @@ def test_poll_done_result_failure_returns_error(kind, flow_class, status) -> Non
 def test_poll_done_missing_interval_data_returns_error() -> None:
     """A core result shape change is reported, not silently charted as empty."""
     result = SimpleNamespace(protocol="TCP")
+    flow = object.__new__(Iperf3Flow)
+    flow.status = lambda: FlowStatus.DONE
+    flow.results = lambda: result
+
+    poll = SatGoNetemTrafficAdapter().poll("iperf3", flow)
+
+    assert poll.status == "error"
+    assert "interval data" in poll.error
+
+
+def test_poll_done_renamed_interval_key_returns_error() -> None:
+    """A renamed intervals key is a shape change even when _data is a dict."""
+    result = SimpleNamespace(protocol="TCP", _data={"interval_data": []})
     flow = object.__new__(Iperf3Flow)
     flow.status = lambda: FlowStatus.DONE
     flow.results = lambda: result

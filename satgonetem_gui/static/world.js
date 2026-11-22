@@ -1,9 +1,10 @@
-import { api, ApiError } from "./api.js";
+import { api, ApiError } from "./api.js?v=4";
 import {
     describeGroundStation,
     describeSatellite,
     hasPosition,
-} from "./world_model.js";
+    retainedSelection,
+} from "./world_model.js?v=2";
 
 const SAT_COLOR = Cesium.Color.fromCssColorString("#3b82f6");
 const GS_CONN_COLOR = Cesium.Color.fromCssColorString("#22c55e");
@@ -298,6 +299,12 @@ function updateSatellites(satellites) {
             }
         }
     });
+
+    const retained = retainedSelection(coverage.selectedSat, seen);
+    if (retained !== coverage.selectedSat) {
+        coverage.selectedSat = retained;
+        if (coverage.enabled) applyCoverageOpacity();
+    }
 }
 
 /**
@@ -414,9 +421,9 @@ async function showWorldMsg(text, isError = false) {
 async function updateWorld() {
     try {
         const [satellites, groundStations, links] = await Promise.all([
-            api.get("/api/satellites"),
-            api.get("/api/ground_stations"),
-            api.get("/api/links"),
+            api.getAll("/api/satellites"),
+            api.getAll("/api/ground_stations"),
+            api.getAll("/api/links"),
         ]);
 
         if (!Array.isArray(satellites) || !Array.isArray(groundStations)) return;

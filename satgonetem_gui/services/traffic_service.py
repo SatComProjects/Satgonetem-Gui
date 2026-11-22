@@ -44,8 +44,12 @@ class TrafficJob:
     error: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
+    generation: int = 0
     clock: Callable[[], float] = field(default=time.time, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    _terminal: threading.Event = field(
+        default_factory=threading.Event, repr=False, compare=False
+    )
 
     @property
     def lock(self) -> threading.RLock:
@@ -54,9 +58,8 @@ class TrafficJob:
 
     @property
     def terminal(self) -> bool:
-        """Return True once the job reached a terminal state."""
-        with self._lock:
-            return self.status in TERMINAL_STATUSES
+        """Return True once the job reached a terminal state without blocking."""
+        return self._terminal.is_set()
 
     def transition(
         self,
@@ -67,7 +70,7 @@ class TrafficJob:
     ) -> bool:
         """Move a running job to a terminal state; terminal jobs are immutable."""
         with self._lock:
-            if self.status in TERMINAL_STATUSES:
+            if self._terminal.is_set():
                 return False
             self.status = status
             if results is not None:
@@ -75,6 +78,7 @@ class TrafficJob:
             if error is not None:
                 self.error = error
             self.updated_at = self.clock()
+            self._terminal.set()
             return True
 
     def snapshot(self) -> dict[str, Any]:
@@ -108,7 +112,14 @@ class JobRegistry:
         with self._lock:
             return len(self._jobs)
 
-    def create(self, kind: str, flow: Any, src: str, dst: str) -> TrafficJob:
+    def create(
+        self,
+        kind: str,
+        flow: Any,
+        src: str,
+        dst: str,
+        generation: int = 0,
+    ) -> TrafficJob:
         """Create a running job, pruning expired/finished entries if needed."""
         with self._lock:
             self._prune_locked(self.clock())
@@ -125,6 +136,7 @@ class JobRegistry:
                 dst=dst,
                 created_at=now,
                 updated_at=now,
+                generation=generation,
                 clock=self.clock,
             )
             self._jobs[job.job_id] = job
@@ -194,9 +206,11 @@ class TrafficService:
         if not isinstance(request, strategy.request_type):
             raise APIError(422, f"Invalid request for {kind}.")
 
-        self.topology.require_topology()
+        topology = self.topology.require_topology()
         if not self.topology.gonetem_is_on():
             raise APIError(409, "GoNetEm is not running.")
+        if not self.topology.addressing_applied:
+            raise APIError(409, "Apply addressing before starting traffic.")
 
         source = self.topology.find_node(request.src)
         destination = self.topology.find_node(request.dst)
@@ -210,22 +224,65 @@ class TrafficService:
             raise APIError(500, f"Failed to start {kind} flow.") from exc
 
         try:
+            self.gateway.register_flow(topology, flow)
+        except Exception as exc:
+            self._stop_flow(flow)
+            logger.exception("Failed to register %s flow with the topology.", kind)
+            raise APIError(500, f"Failed to start {kind} flow.") from exc
+
+        try:
             job = self._create_job(kind, flow, request)
         except JobCapacityError as exc:
-            try:
-                self.gateway.stop(flow)
-            except Exception:
-                logger.exception("Failed to stop a rejected traffic flow.")
+            self._stop_flow(flow)
             raise APIError(429, str(exc)) from exc
+        except Exception as exc:
+            self._stop_flow(flow)
+            logger.exception("Failed to register a %s traffic job.", kind)
+            raise APIError(500, "Failed to register traffic job.") from exc
         return job.job_id
+
+    def _stop_flow(self, flow: Any) -> None:
+        """Stop and release a flow that never became a tracked job."""
+        try:
+            self.gateway.stop(flow)
+        except Exception:
+            logger.exception("Failed to stop an untracked traffic flow.")
+        try:
+            self.gateway.release(flow)
+        except Exception:
+            logger.exception("Failed to release an untracked traffic flow.")
 
     def _create_job(self, kind: str, flow: Any, request: Any) -> TrafficJob:
         """Create a job, reclaiming finished jobs once when the registry is full."""
+        generation = self.topology.generation
         try:
-            return self.jobs.create(kind, flow, request.src, request.dst)
+            return self.jobs.create(
+                kind,
+                flow,
+                request.src,
+                request.dst,
+                generation=generation,
+            )
         except JobCapacityError:
             self._poll_running_jobs()
-            return self.jobs.create(kind, flow, request.src, request.dst)
+            return self.jobs.create(
+                kind,
+                flow,
+                request.src,
+                request.dst,
+                generation=generation,
+            )
+
+    def _release_job(self, job: TrafficJob) -> None:
+        """Drop the flow reference and let the core release its raw result."""
+        flow = job.flow
+        job.flow = None
+        if flow is None:
+            return
+        try:
+            self.gateway.release(flow)
+        except Exception:
+            logger.exception("Failed to release a finished traffic flow.")
 
     def _poll_running_jobs(self) -> None:
         """Poll every running job once so unpolled finished jobs become evictable."""
@@ -241,6 +298,16 @@ class TrafficService:
         job = self.jobs.get(job_id)
         if job is None:
             raise APIError(404, "Job not found.")
+
+        if job.generation and job.generation != self.topology.generation:
+            with job.lock:
+                job.results = None
+                job.transition(
+                    "error",
+                    error="Project changed; traffic results are no longer available.",
+                )
+                self._release_job(job)
+            return job.snapshot()
 
         with job.lock:
             if job.status in TERMINAL_STATUSES:
@@ -260,6 +327,7 @@ class TrafficService:
                 )
             else:
                 job.transition("error", error="Unknown flow state.")
+            self._release_job(job)
             return job.snapshot()
 
     def cancel(self, job_id: str) -> None:
@@ -291,6 +359,7 @@ class TrafficService:
                     )
                 else:
                     job.transition("error", error="Unknown flow state.")
+                self._release_job(job)
                 raise APIError(409, "Job is already finished.")
             try:
                 self.gateway.stop(job.flow)
@@ -298,3 +367,4 @@ class TrafficService:
                 logger.exception("Failed to stop traffic flow.")
                 raise APIError(500, "Failed to stop traffic flow.") from exc
             job.transition("cancelled")
+            self._release_job(job)

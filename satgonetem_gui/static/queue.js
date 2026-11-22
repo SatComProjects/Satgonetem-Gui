@@ -1,5 +1,5 @@
 /** Shared traffic job queue, persistence, polling, and result charts. */
-import { api, ApiError } from "./api.js";
+import { api, ApiError } from "./api.js?v=4";
 import { escapeHtml } from "./escape.js";
 import {
   addItem,
@@ -7,11 +7,12 @@ import {
   findItem,
   isTerminal,
   normalizeStoredItems,
+  pollRetryDelay,
   remainingDelay,
   removeItem,
   startableItems,
   updateItem,
-} from "./queue_model.js";
+} from "./queue_model.js?v=2";
 
 const JQ_KEY = "sgnt_traffic_queue";
 const MAX_POLL_FAILURES = 5;
@@ -19,6 +20,9 @@ const MAX_POLL_FAILURES = 5;
 const jq = { items: [], timers: {} };
 let lastFocused = null;
 const activeCharts = [];
+let plotGeneration = 0;
+let storageSync = false;
+const TAB_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 function createChart(canvas, config) {
   const chart = new Chart(canvas, config);
@@ -27,6 +31,7 @@ function createChart(canvas, config) {
 }
 
 function destroyCharts() {
+  plotGeneration += 1;
   for (const chart of activeCharts.splice(0)) {
     try {
       chart.destroy();
@@ -41,6 +46,7 @@ function byId(id) {
 }
 
 function jqSave() {
+  if (storageSync) return;
   const message = byId("jq-storage-msg");
   try {
     const items = jq.items.map(({ results: _results, ...rest }) => rest);
@@ -72,10 +78,39 @@ function cancelJob(jobId) {
   api.post("/api/traffic/cancel", { job_id: jobId }).catch(() => {});
 }
 
+function claimStart(id) {
+  const key = `sgnt_traffic_start_${id}`;
+  const now = Date.now();
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const claim = JSON.parse(raw);
+      if (claim.owner !== TAB_ID && Number(claim.until) > now) {
+        return false;
+      }
+    }
+    localStorage.setItem(
+      key,
+      JSON.stringify({ owner: TAB_ID, until: now + 15_000 }),
+    );
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 function queueInit() {
   jqLoad();
   jqRender();
   bindStaticControls();
+  window.addEventListener("storage", (event) => {
+    if (event.key !== JQ_KEY) return;
+    storageSync = true;
+    for (const id of Object.keys(jq.timers)) clearTimer(id);
+    jqLoad();
+    jqRender();
+    storageSync = false;
+  });
 }
 
 function bindStaticControls() {
@@ -86,8 +121,27 @@ function bindStaticControls() {
   byId("results-backdrop")?.addEventListener("click", closeResults);
   document.addEventListener("keydown", (event) => {
     const modal = byId("results-modal");
-    if (event.key === "Escape" && modal && modal.style.display !== "none") {
+    if (!modal || modal.style.display === "none") return;
+    if (event.key === "Escape") {
       closeResults();
+      return;
+    }
+    if (event.key === "Tab") {
+      const focusable = Array.from(
+        modal.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.disabled);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
   });
 }
@@ -168,6 +222,9 @@ function jqRender() {
     .map((item) => {
       const id = escapeHtml(item.id);
       const canStart = item.status === "queued" || item.status === "scheduled";
+      const canRetry = item.status === "error" || item.status === "cancelled";
+      const canCancel =
+        item.status === "running" || item.status === "scheduled";
       return `
         <div class="queue-item">
           <div class="queue-item-header">
@@ -179,7 +236,8 @@ function jqRender() {
           <div class="queue-item-actions">
             ${item.status === "done" ? `<button type="button" class="button small secondary" data-action="plot" data-id="${id}">Plot</button>` : ""}
             ${canStart ? `<button type="button" class="button small" data-action="start" data-id="${id}">Start</button>` : ""}
-            ${item.status === "running" ? `<button type="button" class="button small secondary" data-action="cancel" data-id="${id}">Cancel</button>` : ""}
+            ${canRetry ? `<button type="button" class="button small" data-action="start" data-id="${id}">Retry</button>` : ""}
+            ${canCancel ? `<button type="button" class="button small secondary" data-action="cancel" data-id="${id}">Cancel</button>` : ""}
             <button type="button" class="button small secondary" data-action="remove" data-id="${id}">Remove</button>
           </div>
         </div>`;
@@ -251,6 +309,18 @@ function jqStartAll() {
 function jqStartOne(id) {
   const item = findItem(jq.items, id);
   if (!item || item.status === "running" || item.status === "starting") return;
+  if (item.status === "scheduled") {
+    clearTimer(id);
+    jq.items = updateItem(jq.items, id, {
+      status: "starting",
+      start_at: null,
+      error: null,
+    });
+    jqSave();
+    jqRender();
+    schedule(id, 0, () => jqStartNow(id));
+    return;
+  }
   const delayMs = Math.max(0, (Number(item.delay) || 0) * 1000);
   jq.items = updateItem(jq.items, id, {
     status: delayMs > 0 ? "scheduled" : "starting",
@@ -266,6 +336,7 @@ async function jqStartNow(id) {
   clearTimer(id);
   const item = findItem(jq.items, id);
   if (!item) return false;
+  if (!claimStart(id)) return false;
   jq.items = updateItem(jq.items, id, {
     status: "starting",
     start_at: null,
@@ -357,9 +428,13 @@ async function jqTrack(id) {
       jqRender();
       return;
     }
-    if (current.poll_failures) {
-      jq.items = updateItem(jq.items, id, { poll_failures: 0 });
+    if (current.poll_failures || current.error) {
+      jq.items = updateItem(jq.items, id, {
+        poll_failures: 0,
+        error: null,
+      });
       jqSave();
+      jqRender();
     }
     schedule(id, 1000, () => jqTrack(id));
   } catch (error) {
@@ -375,19 +450,16 @@ async function jqTrack(id) {
       return;
     }
     const failures = (current.poll_failures || 0) + 1;
-    if (failures >= MAX_POLL_FAILURES) {
-      jq.items = updateItem(jq.items, id, {
-        status: "error",
-        poll_failures: failures,
-        error: `Status check failed ${failures} times: ${error.message || "network error"}`,
-      });
-      jqSave();
-      jqRender();
-      return;
-    }
-    jq.items = updateItem(jq.items, id, { poll_failures: failures });
+    jq.items = updateItem(jq.items, id, {
+      poll_failures: failures,
+      error:
+        failures >= MAX_POLL_FAILURES
+          ? `Status check failed ${failures} times; retrying: ${error.message || "network error"}`
+          : current.error,
+    });
     jqSave();
-    schedule(id, 1500, () => jqTrack(id));
+    jqRender();
+    schedule(id, pollRetryDelay(failures), () => jqTrack(id));
   }
 }
 
@@ -412,6 +484,9 @@ async function jqCancel(id) {
         });
         jqSave();
         jqRender();
+        if (current.job_id) {
+          schedule(id, 1500, () => jqTrack(id));
+        }
       }
       return;
     }
@@ -423,12 +498,67 @@ async function jqCancel(id) {
   jqRender();
 }
 
-function jqPlot(id) {
-  const item = findItem(jq.items, id);
-  if (!item || !item.results) return;
+async function jqPlot(id) {
+  let item = findItem(jq.items, id);
+  if (!item) return;
+
+  if (!item.results && item.job_id) {
+    try {
+      const status = await api.get(
+        `/api/traffic/status?job_id=${encodeURIComponent(item.job_id)}`,
+      );
+      if (status.status === "done" && status.results) {
+        jq.items = updateItem(jq.items, id, {
+          status: "done",
+          results: status.results,
+          poll_failures: 0,
+        });
+        jqSave();
+        jqRender();
+        item = findItem(jq.items, id);
+      }
+    } catch (error) {
+      jq.items = updateItem(jq.items, id, {
+        error: error.message || "Could not load results",
+      });
+      jqSave();
+      jqRender();
+      return;
+    }
+  }
+
+  if (!item || !item.results) {
+    if (item) {
+      jq.items = updateItem(jq.items, id, {
+        error: "Results are not available for this job.",
+      });
+      jqSave();
+      jqRender();
+    }
+    return;
+  }
   if (item.kind === "iperf3") plotIperf3(item);
   else if (item.kind === "ping") plotPing(item);
   else if (item.kind === "hping3") plotHping3(item);
+}
+
+const modalBackground = [];
+
+function setModalBackgroundInert(inert) {
+  if (inert) {
+    modalBackground.length = 0;
+    for (const child of document.body.children) {
+      if (child.id === "results-modal" || child.tagName === "SCRIPT") continue;
+      if (!child.inert) {
+        child.inert = true;
+        modalBackground.push(child);
+      }
+    }
+    return;
+  }
+  for (const child of modalBackground.splice(0)) {
+    child.inert = false;
+  }
 }
 
 function openModal(title, body) {
@@ -441,6 +571,7 @@ function openModal(title, body) {
   if (modal) {
     lastFocused = document.activeElement;
     modal.style.display = "flex";
+    setModalBackgroundInert(true);
     byId("results-close")?.focus();
   }
 }
@@ -448,9 +579,12 @@ function openModal(title, body) {
 function closeResults() {
   const modal = byId("results-modal");
   if (modal) modal.style.display = "none";
+  setModalBackgroundInert(false);
   destroyCharts();
-  if (lastFocused && typeof lastFocused.focus === "function") {
+  if (lastFocused && lastFocused.isConnected && typeof lastFocused.focus === "function") {
     lastFocused.focus();
+  } else {
+    byId("jq-toggle")?.focus();
   }
   lastFocused = null;
 }
@@ -504,7 +638,9 @@ function plotIperf3(item) {
     metricsHtml + chartsHtml,
   );
 
+  const generation = plotGeneration;
   requestAnimationFrame(() => {
+    if (generation !== plotGeneration) return;
     const intervals = Array.isArray(result.intervals) ? result.intervals : [];
     const streamCount = intervals.reduce(
       (max, entry) =>
@@ -918,7 +1054,9 @@ function plotHping3(item) {
     metricsHtml + chartsHtml,
   );
 
+  const generation = plotGeneration;
   requestAnimationFrame(() => {
+    if (generation !== plotGeneration) return;
     const labels = (result.seq || []).map(String);
     newChart("chart-hping-rtt", "line", labels, [
       {

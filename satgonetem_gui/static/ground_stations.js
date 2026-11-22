@@ -1,12 +1,13 @@
 /** Ground-station preset selection page. */
-import { api } from "./api.js";
+import { api } from "./api.js?v=4";
 import {
   buildStationMap,
   selectedStations,
   selectionSummary,
   setPresetSelection,
   stationKey,
-} from "./ground_stations_model.js";
+  validateStationName,
+} from "./ground_stations_model.js?v=3";
 
 const presetSelect = document.getElementById("preset_select");
 const tbody = document.getElementById("station_tbody");
@@ -164,6 +165,11 @@ document.getElementById("add_custom_btn").addEventListener("click", () => {
   const latitude = parseFloat(document.getElementById("c_lat").value);
   const longitude = parseFloat(document.getElementById("c_lon").value);
   const elevation = parseFloat(document.getElementById("c_elev").value || "0");
+  const nameError = validateStationName(name);
+  if (nameError) {
+    alert(nameError);
+    return;
+  }
   if (!name || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     alert("Name, latitude, and longitude are required.");
     return;
@@ -176,8 +182,8 @@ document.getElementById("add_custom_btn").addEventListener("click", () => {
     alert("Longitude must be between -180 and 180.");
     return;
   }
-  if (!Number.isFinite(elevation) || elevation < 0) {
-    alert("Elevation must be a non-negative number of metres.");
+  if (!Number.isFinite(elevation) || elevation < -1000) {
+    alert("Elevation must be at least -1000 metres.");
     return;
   }
   customStations.push({

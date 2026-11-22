@@ -19,7 +19,7 @@ from satgonetem_gui.services.traffic_service import (
     TrafficJob,
     TrafficService,
 )
-from satgonetem_gui.state import ProjectSession, ProjectState, RuntimeState
+from satgonetem_gui.state import ProjectResult, ProjectSession, ProjectState, RuntimeState
 from tests.factories import project_payload
 
 
@@ -93,6 +93,8 @@ class FakeTraffic:
     def __init__(self, poll_status: str = "done") -> None:
         self.poll_status = poll_status
         self.stopped = []
+        self.released = []
+        self.registered = []
         self.poll_calls = 0
 
     def start_iperf3(self, source, destination, request):
@@ -113,11 +115,24 @@ class FakeTraffic:
     def stop(self, flow):
         self.stopped.append(flow)
 
+    def release(self, flow):
+        self.released.append(flow)
+
+    def register_flow(self, topology, flow):
+        self.registered.append(flow)
+
 
 def _loaded_session() -> ProjectSession:
     session = ProjectSession()
     session.succeed(object(), "Project", "")
     return session
+
+
+def _ready_topology() -> TopologyService:
+    """Return a loaded topology with addressing applied for traffic tests."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology.set_addressing_applied(True)
+    return topology
 
 
 def test_topology_status_is_empty_without_a_project() -> None:
@@ -126,6 +141,17 @@ def test_topology_status_is_empty_without_a_project() -> None:
 
     assert service.status()["constellation_loaded"] is False
     assert service.status()["satellites"] == 0
+
+
+def test_topology_context_returns_the_topology_and_generation_together() -> None:
+    """Routing reads both values from one session snapshot."""
+    session = _loaded_session()
+    service = TopologyService(session, FakeReader())
+
+    topology, generation = service.context()
+
+    assert topology is session.get_topology()
+    assert generation == session.generation
 
 
 def test_topology_queries_require_a_project() -> None:
@@ -172,9 +198,21 @@ def test_traffic_requires_gonetem() -> None:
     assert error.value.status_code == 409
 
 
+def test_traffic_requires_addressing() -> None:
+    """Traffic cannot start before container interfaces are addressed."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    service = TrafficService(topology, FakeTraffic())
+
+    with pytest.raises(APIError) as error:
+        service.start("iperf3", Iperf3Request(src="Sat0", dst="Sat0"))
+
+    assert error.value.status_code == 409
+    assert "addressing" in error.value.message.lower()
+
+
 def test_traffic_rejects_unknown_kind() -> None:
     """Only registered flow strategies can be started."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = TrafficService(topology, FakeTraffic())
 
     with pytest.raises(APIError) as error:
@@ -185,30 +223,56 @@ def test_traffic_rejects_unknown_kind() -> None:
 
 def test_traffic_start_and_status() -> None:
     """A started job is polled through the one status path."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic()
     service = TrafficService(topology, gateway)
 
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+    job = service.jobs.get(job_id)
+    flow = job.flow
 
     assert job_id.startswith("j")
+    assert gateway.registered == [flow]
     assert service.status(job_id) == {"status": "done", "results": {"ok": True}}
     assert gateway.poll_calls == 1
+    assert job.flow is None
+    assert gateway.released == [flow]
 
 
-def test_traffic_cancel_stops_flow_and_stays_cancelled() -> None:
-    """Cancel polls once, calls stop, and avoids future polling."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+def test_job_is_discarded_when_the_project_is_replaced() -> None:
+    """A job from the old topology cannot keep polling or showing results."""
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="running")
     service = TrafficService(topology, gateway)
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
     job = service.jobs.get(job_id)
+    flow = job.flow
+    topology.session.succeed(object(), "NewProject", "")
+
+    result = service.status(job_id)
+
+    assert result["status"] == "error"
+    assert "Project changed" in result["error"]
+    assert job.flow is None
+    assert gateway.released == [flow]
+
+
+def test_traffic_cancel_stops_flow_and_stays_cancelled() -> None:
+    """Cancel polls once, calls stop, and avoids future polling."""
+    topology = _ready_topology()
+    gateway = FakeTraffic(poll_status="running")
+    service = TrafficService(topology, gateway)
+    job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+    job = service.jobs.get(job_id)
+    flow = job.flow
 
     service.cancel(job_id)
 
     assert job is not None
     assert job.status == "cancelled"
-    assert gateway.stopped == [job.flow]
+    assert gateway.stopped == [flow]
+    assert gateway.released == [flow]
+    assert job.flow is None
     assert gateway.poll_calls == 1
     assert service.status(job_id) == {"status": "cancelled"}
     assert gateway.poll_calls == 1
@@ -216,7 +280,7 @@ def test_traffic_cancel_stops_flow_and_stays_cancelled() -> None:
 
 def test_cancel_before_poll_preserves_completed_results() -> None:
     """Cancel polls first so a finished flow keeps its results."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="done")
     service = TrafficService(topology, gateway)
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
@@ -236,7 +300,7 @@ def test_cancel_before_poll_preserves_completed_results() -> None:
 
 def test_cancel_poll_failure_does_not_discard_an_unverified_job() -> None:
     """If the state cannot be verified, leave the job running for a retry."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="running")
 
     def fail_poll(_kind, _flow):
@@ -259,7 +323,7 @@ def test_cancel_poll_failure_does_not_discard_an_unverified_job() -> None:
 
 def test_traffic_cancel_failure_keeps_job_running() -> None:
     """A failed stop is reported and does not fake a cancellation."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="running")
 
     def fail(_flow):
@@ -278,7 +342,7 @@ def test_traffic_cancel_failure_keeps_job_running() -> None:
 
 def test_cancel_finished_job_returns_conflict() -> None:
     """Finished jobs are terminal and cannot be cancelled."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = TrafficService(topology, FakeTraffic())
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
     service.status(job_id)
@@ -296,6 +360,26 @@ def test_job_terminal_transitions_are_immutable() -> None:
     assert job.transition("done", results={"ok": True}) is True
     assert job.transition("error", error="late") is False
     assert job.snapshot() == {"status": "done", "results": {"ok": True}}
+
+
+def test_registry_prune_does_not_wait_for_a_job_lock() -> None:
+    """A slow status/cancel call must not stall unrelated registry work."""
+    registry = JobRegistry()
+    job = registry.create("ping", object(), "a", "b")
+    job.lock.acquire()
+    completed = threading.Event()
+
+    def prune() -> None:
+        registry.prune()
+        completed.set()
+
+    thread = threading.Thread(target=prune)
+    try:
+        thread.start()
+        assert completed.wait(1.0)
+    finally:
+        job.lock.release()
+        thread.join(timeout=2)
 
 
 def test_registry_enforces_max_jobs() -> None:
@@ -334,7 +418,7 @@ def test_registry_prunes_expired_terminal_jobs() -> None:
 
 def test_capacity_rejection_stops_the_unregistered_flow() -> None:
     """A running job keeps its slot, so the unregistered flow is stopped."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="running")
     jobs = JobRegistry(max_jobs=1)
     jobs.create("ping", object(), "a", "b")
@@ -348,9 +432,30 @@ def test_capacity_rejection_stops_the_unregistered_flow() -> None:
     assert len(gateway.stopped) == 1
 
 
+def test_registration_failure_stops_the_unregistered_flow() -> None:
+    """Any registry failure, not only capacity, cleans up the started flow."""
+
+    class BrokenRegistry:
+        def create(self, *_args, **_kwargs):
+            raise RuntimeError("registry unavailable")
+
+        def running(self):
+            return []
+
+    topology = _ready_topology()
+    gateway = FakeTraffic()
+    service = TrafficService(topology, gateway, BrokenRegistry())
+
+    with pytest.raises(APIError) as error:
+        service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+
+    assert error.value.status_code == 500
+    assert len(gateway.stopped) == 1
+
+
 def test_lazy_reclaim_polls_finished_jobs_when_the_registry_is_full() -> None:
     """A full registry polls running jobs once and retries job creation."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="done")
     registry = JobRegistry(max_jobs=1)
     service = TrafficService(topology, gateway, registry)
@@ -367,7 +472,7 @@ def test_lazy_reclaim_polls_finished_jobs_when_the_registry_is_full() -> None:
 
 def test_traffic_service_preserves_an_injected_empty_registry() -> None:
     """An empty registry is falsy but must not be replaced by the service."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     registry = JobRegistry(max_jobs=1)
 
     service = TrafficService(topology, FakeTraffic(), registry)
@@ -378,7 +483,7 @@ def test_traffic_service_preserves_an_injected_empty_registry() -> None:
 
 def test_status_treats_an_unknown_gateway_state_as_a_terminal_error() -> None:
     """An unrecognized poll state becomes a terminal error, not 'unknown'."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     gateway = FakeTraffic(poll_status="unknown")
     service = TrafficService(topology, gateway)
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
@@ -434,6 +539,92 @@ def test_project_load_timeout_marks_the_session_failed(tmp_path) -> None:
     assert service.state.project.state is ProjectState.ERROR
     assert "timed out" in (service.state.project.error or "")
     assert service.state.project.token is None
+
+
+def test_project_load_retry_is_blocked_while_the_worker_runs(tmp_path) -> None:
+    """A timed-out load worker keeps a guard so a retry cannot overlap it."""
+
+    class SlowGateway:
+        def load(self, _content):
+            time.sleep(0.2)
+            return None
+
+    service = ProjectService(
+        RuntimeState(),
+        SlowGateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        load_timeout_seconds=0.05,
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(APIError) as error:
+            await service.load("{}")
+        assert error.value.status_code == 504
+
+        with pytest.raises(APIError) as conflict:
+            await service.load("{}")
+        assert conflict.value.status_code == 409
+
+    asyncio.run(scenario())
+
+
+def test_project_load_is_blocked_while_a_build_thread_runs(tmp_path) -> None:
+    """A load cannot start while a timed-out build is still running."""
+    state = RuntimeState()
+    started = threading.Event()
+    release = threading.Event()
+    service = ProjectService(
+        state,
+        object(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    def runner():
+        started.set()
+        release.wait(timeout=5)
+        return ProjectResult(object(), "LateProject", "")
+
+    assert state.project_tasks.start("Slow", "", "create", runner, timeout_seconds=5)
+    assert started.wait(timeout=2)
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.load("{}"))
+
+    assert error.value.status_code == 409
+    release.set()
+    thread = state.project_tasks.thread
+    assert thread is not None
+    thread.join(timeout=2)
+
+
+def test_project_create_is_blocked_while_a_load_worker_runs(tmp_path) -> None:
+    """A create cannot start while a timed-out load worker is still running."""
+
+    class SlowGateway:
+        def load(self, _content):
+            time.sleep(0.2)
+            return None
+
+    service = ProjectService(
+        RuntimeState(),
+        SlowGateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        load_timeout_seconds=0.05,
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(APIError) as timeout:
+            await service.load("{}")
+        assert timeout.value.status_code == 504
+
+        with pytest.raises(APIError) as conflict:
+            service.start_create(ProjectCreateRequest(**project_payload("New")))
+        assert conflict.value.status_code == 409
+
+    asyncio.run(scenario())
 
 
 def test_project_load_cancellation_marks_the_session_failed(tmp_path) -> None:
@@ -516,7 +707,7 @@ def test_strategy_registry_covers_all_tools() -> None:
     """The registry exposes exactly the typed traffic strategies."""
     from satgonetem_gui.schemas import Hping3Request
 
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = TrafficService(topology, FakeTraffic())
 
     assert set(service.strategies) == {"iperf3", "ping", "hping3"}
@@ -527,7 +718,7 @@ def test_strategy_registry_covers_all_tools() -> None:
 
 def test_routing_apply_delete_and_stop_track_addressing() -> None:
     """Addressing is set only after apply and cleared by delete/stop."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     controller = FakeController()
     service = RoutingService(topology, controller)
 
@@ -612,6 +803,112 @@ def test_routing_mutations_are_serialized() -> None:
     assert max_active == 1
 
 
+def test_cancelled_routing_operation_keeps_the_lock_until_the_worker_ends() -> None:
+    """Cancellation must not let a second controller call overlap the worker."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    started = threading.Event()
+    release = threading.Event()
+    active = 0
+    max_active = 0
+
+    class BlockingController(FakeController):
+        def apply_addressing(self, target):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            started.set()
+            release.wait(timeout=5)
+            super().apply_addressing(target)
+            active -= 1
+
+    service = RoutingService(topology, BlockingController())
+
+    async def scenario() -> None:
+        first = asyncio.create_task(service.apply("static"))
+        await asyncio.to_thread(started.wait, 2)
+        first.cancel()
+        await asyncio.sleep(0.05)
+        second = asyncio.create_task(service.apply("static"))
+        await asyncio.sleep(0.1)
+        assert not second.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        await second
+
+    asyncio.run(scenario())
+
+    assert max_active == 1
+
+
+def test_routing_timeout_blocks_overlapping_operations_until_the_worker_ends() -> None:
+    """A timed-out worker keeps its guard so a retry cannot overlap it."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    release = threading.Event()
+
+    class BlockingController(FakeController):
+        def apply_addressing(self, target):
+            release.wait(timeout=5)
+            super().apply_addressing(target)
+
+    service = RoutingService(
+        topology,
+        BlockingController(),
+        operation_timeout_seconds=0.05,
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(APIError) as error:
+            await service.apply("static")
+        assert error.value.status_code == 504
+
+        with pytest.raises(APIError) as conflict:
+            await service.apply("static")
+        assert conflict.value.status_code == 409
+
+        release.set()
+        await asyncio.sleep(0.1)
+        await service.apply("static")
+
+    asyncio.run(scenario())
+
+
+def test_routing_start_is_blocked_while_a_project_operation_is_active() -> None:
+    """Starting containers during a build cannot target the old topology."""
+    session = _loaded_session()
+    topology = TopologyService(session, FakeReader(gonetem=True))
+    controller = FakeController()
+    service = RoutingService(topology, controller)
+    assert session.begin("NewProject", operation="create") is True
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.start_gonetem())
+
+    assert error.value.status_code == 409
+    assert "project operation" in error.value.message.lower()
+    assert "start_gonetem" not in controller.calls
+
+
+def test_project_replacement_is_blocked_while_a_network_operation_is_active(
+    tmp_path,
+) -> None:
+    """A build cannot start while a routing/container mutation is in flight."""
+    state = RuntimeState()
+    assert state.project.begin_network_operation() is True
+    service = ProjectService(
+        state,
+        object(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    with pytest.raises(APIError) as error:
+        service.start_create(ProjectCreateRequest(**project_payload("Replacement")))
+
+    assert error.value.status_code == 409
+    state.project.end_network_operation()
+
+
 def test_routing_status_does_not_use_gonetem_as_addressing() -> None:
     """A running container network does not imply addressing was applied."""
     topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
@@ -623,7 +920,7 @@ def test_routing_status_does_not_use_gonetem_as_addressing() -> None:
 
 def test_routing_init_failure_keeps_addressing_state_truthful() -> None:
     """Addressing can succeed before routing initialization fails."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = RoutingService(topology, FakeController(fail_init=True))
 
     with pytest.raises(APIError) as error:
@@ -690,7 +987,7 @@ def test_routing_addressing_failure_maps_500() -> None:
 
 def test_routing_delete_failure_maps_500() -> None:
     """A failed delete is reported and leaves address state unchanged."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     topology.set_addressing_applied(True)
     service = RoutingService(topology, FailingController("delete"))
 
@@ -703,7 +1000,7 @@ def test_routing_delete_failure_maps_500() -> None:
 
 def test_routing_start_failure_maps_500() -> None:
     """A failed container start is reported."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     service = RoutingService(topology, FailingController("start"))
 
     with pytest.raises(APIError) as error:
@@ -714,7 +1011,7 @@ def test_routing_start_failure_maps_500() -> None:
 
 def test_routing_stop_failure_keeps_addressing() -> None:
     """A failed stop is reported and does not clear address state."""
-    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    topology = _ready_topology()
     topology.set_addressing_applied(True)
     service = RoutingService(topology, FailingController("stop"))
 

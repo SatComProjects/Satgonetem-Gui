@@ -58,6 +58,22 @@ def test_resolve_data_file_requires_a_regular_file(tmp_path: Path) -> None:
         resolve_data_file("missing.txt", search)
 
 
+def test_safe_project_filename_keeps_distinct_names_distinct() -> None:
+    """Names that sanitize to the same text still produce different files."""
+    names = ["東京", "***", "!!!", "___", "My Project", "my project"]
+    filenames = [safe_project_filename(name) for name in names]
+
+    assert len(set(filenames)) == len(names)
+    assert all(filenames)
+
+
+def test_safe_project_filename_does_not_reuse_a_generated_name() -> None:
+    """A literal name matching another name's generated filename is hashed."""
+    generated = safe_project_filename("My Project")
+
+    assert safe_project_filename(generated) != generated
+
+
 def test_resolve_save_path_accepts_a_file_inside_the_root(tmp_path: Path) -> None:
     """A save file under the configured root is allowed."""
     root = tmp_path / "projects"
@@ -103,3 +119,15 @@ def test_resolve_save_path_treats_a_new_directory_name_as_a_directory(tmp_path: 
     path = resolve_save_path(str(root / "new-shell"), "My Project", root)
 
     assert path == root / "new-shell" / f"{safe_project_filename('My Project')}.json"
+
+
+def test_resolve_save_path_keeps_an_existing_suffixless_file(tmp_path: Path) -> None:
+    """An existing file without a suffix is a save target, not a directory."""
+    root = tmp_path / "projects"
+    root.mkdir()
+    target = root / "constellation"
+    target.write_text("{}", encoding="utf-8")
+
+    path = resolve_save_path(str(target), "Constellation", root)
+
+    assert path == target

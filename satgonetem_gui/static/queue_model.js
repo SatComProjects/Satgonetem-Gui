@@ -57,6 +57,11 @@ export function remainingDelay(item, now = Date.now()) {
   return Math.max(0, item.start_at - now);
 }
 
+export function pollRetryDelay(failures) {
+  if (failures < 5) return 1500;
+  return Math.min(30000, 2000 * 2 ** (failures - 5));
+}
+
 export function normalizeStoredItems(raw) {
   if (!Array.isArray(raw)) return [];
   return raw

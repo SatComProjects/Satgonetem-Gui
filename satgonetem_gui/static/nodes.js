@@ -1,7 +1,7 @@
 /** Node Explorer page controller. */
-import { api } from "./api.js";
+import { api } from "./api.js?v=4";
 import { escapeHtml } from "./escape.js";
-import { cacheEntry, isFresh } from "./nodes_model.js";
+import { cacheEntry, isFresh, staleCacheKeys } from "./nodes_model.js?v=2";
 
 const POLL_INTERVAL_MS = 5000;
 const detailCache = new Map();
@@ -207,13 +207,19 @@ function renderNodes(nodes) {
     if (node.type === "satellite") satellites.push(node);
     else stations.push(node);
   }
+  for (const name of staleCacheKeys(
+    detailCache.keys(),
+    nodes.map((node) => node.name),
+  )) {
+    detailCache.delete(name);
+  }
   syncNodeList(el("satellites-list"), satellites, "No satellites.");
   syncNodeList(el("ground-stations-list"), stations, "No ground stations.");
 }
 
 async function loadNodes() {
   try {
-    const nodes = await api.get("/api/nodes");
+    const nodes = await api.getAll("/api/nodes");
     showMsg("");
     renderNodes(Array.isArray(nodes) ? nodes : []);
   } catch (error) {

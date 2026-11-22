@@ -11,8 +11,8 @@ from ..errors import APIError
 from ..ground_stations import parse_ground_station_file
 from ..project_documents import validate_project_create_payload
 from ..schemas import ProjectCreateRequest
-from ..state import RuntimeState
-from ..storage import SavePathError, resolve_save_path
+from ..state import ProjectResult, RuntimeState
+from ..storage import SavePathError, resolve_save_path, safe_project_filename
 from .ports import ProjectGateway
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ class ProjectService:
         self.resources_dir = resources_dir
         self.network_running = network_running
         self.load_timeout_seconds = load_timeout_seconds
+        self._load_worker: asyncio.Task | None = None
 
     def _guard_replacement(self) -> None:
         """Refuse to replace a project while containers are still running."""
@@ -47,6 +48,26 @@ class ProjectService:
                 409,
                 "GoNetEm is running. Stop it before replacing the project.",
             )
+
+    def _network_is_stopped(self) -> bool:
+        """Return whether a replacement may start, checked under the session lock."""
+        return self.network_running is None or not self.network_running()
+
+    def _load_is_running(self) -> bool:
+        """Return whether a previous load worker is still running."""
+        return self._load_worker is not None and not self._load_worker.done()
+
+    def _build_is_running(self) -> bool:
+        """Return whether a previous build thread is still running."""
+        thread = self.state.project_tasks.thread
+        return thread is not None and thread.is_alive()
+
+    def _cleanup_ground_files(self, result: ProjectResult) -> None:
+        """Delete managed station files the installed topology no longer uses."""
+        try:
+            self.gateway.cleanup_ground_files(result.topology_manager)
+        except Exception:
+            logger.exception("Could not clean up stale ground-station files.")
 
     def presets(self) -> list[dict]:
         """Return the bundled ground-station presets."""
@@ -57,6 +78,11 @@ class ProjectService:
 
     def start_create(self, payload: ProjectCreateRequest) -> None:
         """Validate and dispatch a background project build."""
+        if self._load_is_running():
+            raise APIError(
+                409,
+                "A previous project load is still running in the background.",
+            )
         name = payload.name.strip()
         if not name:
             raise APIError(400, "Project name is required.")
@@ -69,7 +95,12 @@ class ProjectService:
         try:
             shells = json.loads(payload.walker_shells_json)
             grounds = json.loads(payload.ground_objects_properties_json)
-            validate_project_create_payload(shells, grounds)
+            validate_project_create_payload(
+                shells,
+                grounds,
+                data_search_dir=self.resources_dir,
+                allowed_roots=(self.settings.save_root,),
+            )
         except (json.JSONDecodeError, ValueError) as exc:
             raise APIError(
                 422,
@@ -84,6 +115,8 @@ class ProjectService:
             operation="create",
             runner=lambda: self.gateway.build(payload),
             timeout_seconds=PROJECT_BUILD_TIMEOUT_SECONDS,
+            precondition=self._network_is_stopped,
+            on_success=self._cleanup_ground_files,
         )
         if not started:
             raise APIError(409, "A project operation is already running.")
@@ -112,14 +145,41 @@ class ProjectService:
 
     async def load(self, content: str) -> str:
         """Load a project from uploaded JSON and return its display name."""
+        if self._build_is_running():
+            raise APIError(
+                409,
+                "A previous project build is still running in the background.",
+            )
+        if self._load_is_running():
+            raise APIError(
+                409,
+                "A previous project load is still running in the background.",
+            )
         self._guard_replacement()
-        if not self.state.project.begin(name="", save_path="", operation="load"):
+        if not self.state.project.begin(
+            name="",
+            save_path="",
+            operation="load",
+            precondition=self._network_is_stopped,
+        ):
             raise APIError(409, "A project operation is already running.")
         token = self.state.project.token
 
+        worker = asyncio.create_task(
+            asyncio.to_thread(self.gateway.load, content)
+        )
+        self._load_worker = worker
+
+        def clear(_task: asyncio.Task) -> None:
+            if self._load_worker is worker:
+                self._load_worker = None
+            if not worker.cancelled():
+                worker.exception()
+
+        worker.add_done_callback(clear)
         try:
             result = await asyncio.wait_for(
-                asyncio.to_thread(self.gateway.load, content),
+                asyncio.shield(worker),
                 timeout=self.load_timeout_seconds,
             )
         except asyncio.CancelledError:
@@ -138,12 +198,22 @@ class ProjectService:
             self.state.project.fail(message, token=token)
             raise APIError(500, "Project load failed.") from exc
 
-        self.state.project.succeed(
-            result.topology_manager,
-            result.project_name,
-            result.save_path,
-            token=token,
-        )
+        try:
+            installed = self.state.project.succeed(
+                result.topology_manager,
+                result.project_name,
+                result.save_path,
+                token=token,
+            )
+        except Exception as exc:
+            logger.exception("Project load returned an invalid result.")
+            self.state.project.fail(
+                str(exc).strip() or exc.__class__.__name__, token=token
+            )
+            raise APIError(500, "Project load failed.") from exc
+        if not installed:
+            raise APIError(409, "Project load was superseded.")
+        self._cleanup_ground_files(result)
         return result.project_name
 
     async def save(self) -> dict:
@@ -158,5 +228,7 @@ class ProjectService:
             logger.exception("Project save failed.")
             raise APIError(500, "Project save failed.") from exc
 
-        name = (project_name or "project").replace(" ", "_")
-        return {"content": content, "filename": f"{name}.json"}
+        return {
+            "content": content,
+            "filename": f"{safe_project_filename(project_name or 'project')}.json",
+        }

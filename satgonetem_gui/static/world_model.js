@@ -16,6 +16,12 @@ export function hasPosition(position) {
   );
 }
 
+export function retainedSelection(selected, names) {
+  if (selected === null || selected === undefined) return null;
+  const present = names instanceof Set ? names : new Set(names);
+  return present.has(selected) ? selected : null;
+}
+
 export function formatCoordinate(value, digits = 2) {
   if (value === null || value === undefined) return "-";
   const text = String(value).trim();

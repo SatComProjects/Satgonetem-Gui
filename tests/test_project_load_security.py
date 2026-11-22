@@ -103,6 +103,56 @@ def test_project_load_rejects_malformed_embedded_station_rows(client) -> None:
     assert "five comma-separated columns" in response.json()["error"]
 
 
+def test_project_load_rejects_non_dict_network_config(client) -> None:
+    """A malformed network_config section is a 400, not a core TypeError."""
+    document = {
+        "network_config": [],
+        "simulation_property": {},
+    }
+
+    response = _post_load(client, document)
+
+    assert response.status_code == 400
+    assert "network_config" in response.json()["error"]
+
+
+def test_project_load_rejects_duplicate_ground_file_basenames(client) -> None:
+    """Two embedded files cannot restore to the same basename."""
+    document = {
+        "simulation_property": {},
+        "ground_files": {
+            "first": {
+                "basename": "stations.csv",
+                "content": "0,Berlin,52.52,13.405,0.034\n",
+            },
+            "second": {
+                "basename": "stations.csv",
+                "content": "0,Paris,48.8566,2.3522,0.035\n",
+            },
+        },
+    }
+
+    response = _post_load(client, document)
+
+    assert response.status_code == 400
+    assert "unique" in response.json()["error"]
+
+
+def test_project_load_rejects_non_regular_data_file(client, settings) -> None:
+    """A directory inside the save root is not a readable station file."""
+    settings.save_root.mkdir(parents=True, exist_ok=True)
+    directory = settings.save_root / "stations"
+    directory.mkdir()
+    document = {
+        "simulation_property": {"ground_objects_properties": [{"data_file": str(directory)}]}
+    }
+
+    response = _post_load(client, document)
+
+    assert response.status_code == 400
+    assert "outside the allowed directories" in response.json()["error"]
+
+
 def test_project_load_rejects_relative_data_files(client) -> None:
     """Relative paths would be read from the process CWD, not the checked root."""
     document = {

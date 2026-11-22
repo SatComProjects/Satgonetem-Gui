@@ -5,7 +5,7 @@
  * /api/routing/status for routing state. Allows the user to start/stop
  * GoNetem and to apply or delete addressing and routing.
  */
-import { api } from "./api.js";
+import { api } from "./api.js?v=4";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -131,13 +131,20 @@ async function pollStatus() {
   }
 }
 
+let routingRefreshFailed = false;
+
 async function pollRoutingStatus() {
   if (routingInFlight) return;
   routingInFlight = true;
   try {
     const data = await api.get("/api/routing/status");
     if (data.ok) applyRoutingStatus(data);
+    if (routingRefreshFailed) {
+      routingRefreshFailed = false;
+      showRoutingMsg("");
+    }
   } catch (err) {
+    routingRefreshFailed = true;
     showRoutingMsg(
       "Routing status refresh failed: " + (err.message || "network error"),
       true,
@@ -160,7 +167,7 @@ el("btn-gonetem").addEventListener("click", async function () {
   gonetemBusy = true;
   btn.textContent = starting ? "Starting..." : "Stopping...";
   try {
-    await api.post(endpoint);
+    await api.post(endpoint, undefined, { timeout: 600000 });
   } catch (err) {
     alert((starting ? "Start" : "Stop") + " failed: " + (err.message || "Unknown error"));
   } finally {
@@ -183,7 +190,7 @@ el("btn-apply").addEventListener("click", async function () {
   var method = el("routing-method").value;
   showRoutingMsg("Applying addressing and routing...");
   try {
-    await api.post("/api/routing/apply", { method });
+    await api.post("/api/routing/apply", { method }, { timeout: 600000 });
     showRoutingMsg("Addressing and routing applied successfully.");
   } catch (err) {
     showRoutingMsg(err.message || "Apply failed.", true);
@@ -201,7 +208,7 @@ el("btn-delete").addEventListener("click", async function () {
   setRoutingBusy(true);
   showRoutingMsg("Deleting routing...");
   try {
-    await api.post("/api/routing/delete");
+    await api.post("/api/routing/delete", undefined, { timeout: 600000 });
     showRoutingMsg("Routing deleted successfully.");
   } catch (err) {
     showRoutingMsg(err.message || "Delete failed.", true);

@@ -6,6 +6,7 @@ import {
   findItem,
   isTerminal,
   normalizeStoredItems,
+  pollRetryDelay,
   remainingDelay,
   removeItem,
   startableItems,
@@ -89,5 +90,13 @@ describe("queue model", () => {
     expect(items[0].poll_failures).toBe(0);
     expect(items[1].poll_failures).toBe(3);
     expect(items[2].poll_failures).toBe(0);
+  });
+
+  it("backs off status polling instead of abandoning the job", () => {
+    expect(pollRetryDelay(1)).toBe(1500);
+    expect(pollRetryDelay(5)).toBe(2000);
+    expect(pollRetryDelay(6)).toBe(4000);
+    expect(pollRetryDelay(9)).toBe(30000);
+    expect(pollRetryDelay(20)).toBe(30000);
   });
 });

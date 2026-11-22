@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from satgonetem_gui.schemas import (
+    GroundStationPoint,
     Hping3Request,
     Iperf3Request,
     PingRequest,
@@ -54,6 +55,60 @@ def test_documented_traffic_defaults_validate() -> None:
     assert hping.rate_type == "interval"
     assert hping.interval == ""
     assert hping.flags == []
+
+
+def test_hping_interval_requires_a_value_after_the_unit() -> None:
+    """A bare microsecond marker is rejected; empty, digits, and u<digits> pass."""
+    assert Hping3Request(src="a", dst="b", interval="").interval == ""
+    assert Hping3Request(src="a", dst="b", interval="1000").interval == "1000"
+    assert Hping3Request(src="a", dst="b", interval="u1000").interval == "u1000"
+
+    with pytest.raises(ValidationError):
+        Hping3Request(src="a", dst="b", interval="u")
+
+
+@pytest.mark.parametrize("count", [0, 10_001])
+def test_ping_and_hping_counts_are_bounded(count: int) -> None:
+    """A single request cannot create essentially unbounded flow duration."""
+    with pytest.raises(ValidationError):
+        PingRequest(src="a", dst="b", count=count)
+    with pytest.raises(ValidationError):
+        Hping3Request(src="a", dst="b", count=count)
+
+
+def test_iperf_interval_has_a_practical_minimum() -> None:
+    """Sub-100 ms intervals would retain millions of samples per flow."""
+    assert Iperf3Request(src="a", dst="b", interval=0.1).interval == 0.1
+
+    with pytest.raises(ValidationError):
+        Iperf3Request(src="a", dst="b", interval=0.001)
+
+
+@pytest.mark.parametrize(
+    "point",
+    [
+        {"latitude": 91},
+        {"latitude": float("nan")},
+        {"longitude": -181},
+        {"longitude": float("inf")},
+        {"elevation_m": -1001},
+        {"elevation_m": float("inf")},
+        {"index": -1},
+    ],
+)
+def test_ground_station_point_rejects_out_of_range_values(point: dict) -> None:
+    """Preset response rows enforce the same bounds as inline stations."""
+    base = {
+        "index": 0,
+        "name": "Berlin",
+        "latitude": 52.52,
+        "longitude": 13.405,
+        "elevation_m": 34.0,
+    }
+    base.update(point)
+
+    with pytest.raises(ValidationError):
+        GroundStationPoint(**base)
 
 
 def test_project_load_content_is_bounded() -> None:

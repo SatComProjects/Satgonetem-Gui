@@ -53,6 +53,7 @@ class ProjectSession:
     _generation: int = 0
     _operation_token: int = 0
     _active_token: Optional[int] = None
+    _network_operation: bool = False
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @property
@@ -79,15 +80,31 @@ class ProjectSession:
         with self._lock:
             return self._active_token
 
+    def topology_snapshot(self) -> tuple[Any, int]:
+        """Return the installed topology and its generation atomically."""
+        with self._lock:
+            return self.topology_manager, self._generation
+
     def begin(
         self,
         name: str,
         save_path: str = "",
         operation: str = "create",
+        precondition: Optional[Callable[[], bool]] = None,
     ) -> bool:
-        """Reserve the single build slot for a new operation."""
+        """Reserve the single build slot for a new operation.
+
+        Args:
+            name: Pending project name.
+            save_path: Requested save target.
+            operation: ``create`` or ``load``.
+            precondition: Checked under the session lock before reserving, so a
+                network operation cannot start between the check and ``begin``.
+        """
         with self._lock:
-            if self.state is ProjectState.CREATING:
+            if self.state is ProjectState.CREATING or self._network_operation:
+                return False
+            if precondition is not None and not precondition():
                 return False
             self.state = ProjectState.CREATING
             self.operation = operation
@@ -96,6 +113,25 @@ class ProjectSession:
             self._operation_token += 1
             self._active_token = self._operation_token
             return True
+
+    def begin_network_operation(self) -> bool:
+        """Reserve the network lifecycle unless a project operation is active."""
+        with self._lock:
+            if self.state is ProjectState.CREATING or self._network_operation:
+                return False
+            self._network_operation = True
+            return True
+
+    def end_network_operation(self) -> None:
+        """Release the network lifecycle reservation."""
+        with self._lock:
+            self._network_operation = False
+
+    @property
+    def network_operation(self) -> bool:
+        """Return True while a routing/container mutation is in flight."""
+        with self._lock:
+            return self._network_operation
 
     def succeed(
         self,
@@ -193,6 +229,7 @@ class ProjectSession:
             self.error = None
             self.addressing_applied = False
             self._active_token = None
+            self._network_operation = False
             self._generation += 1
 
 
@@ -218,9 +255,19 @@ class ProjectTaskManager:
         runner: Callable[[], ProjectResult],
         *,
         timeout_seconds: float | None = None,
+        precondition: Callable[[], bool] | None = None,
+        on_success: Callable[[ProjectResult], None] | None = None,
     ) -> bool:
         """Reserve the session and run the build in a background thread."""
-        if not self.session.begin(name, save_path=save_path, operation=operation):
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                return False
+        if not self.session.begin(
+            name,
+            save_path=save_path,
+            operation=operation,
+            precondition=precondition,
+        ):
             return False
         token = self.session.token
 
@@ -235,7 +282,7 @@ class ProjectTaskManager:
 
         thread = threading.Thread(
             target=self._run,
-            args=(operation, runner, token, timer),
+            args=(operation, runner, token, timer, on_success),
             name=f"project-{operation}",
             daemon=True,
         )
@@ -264,6 +311,7 @@ class ProjectTaskManager:
         runner: Callable[[], ProjectResult],
         token: Optional[int],
         timer: Optional[threading.Timer],
+        on_success: Callable[[ProjectResult], None] | None = None,
     ) -> None:
         try:
             try:
@@ -272,12 +320,30 @@ class ProjectTaskManager:
                 logger.exception("Project %s failed.", operation)
                 self.session.fail(_format_exception(exc), token=token)
             else:
-                self.session.succeed(
-                    result.topology_manager,
-                    result.project_name,
-                    result.save_path,
-                    token=token,
-                )
+                try:
+                    installed = self.session.succeed(
+                        result.topology_manager,
+                        result.project_name,
+                        result.save_path,
+                        token=token,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "Project %s returned an invalid result.", operation
+                    )
+                    self.session.fail(_format_exception(exc), token=token)
+                else:
+                    if installed and on_success is not None:
+                        try:
+                            on_success(result)
+                        except Exception:
+                            logger.exception(
+                                "Post-success cleanup failed for project %s.",
+                                operation,
+                            )
+        except BaseException as exc:
+            logger.exception("Project %s crashed unexpectedly.", operation)
+            self.session.fail(_format_exception(exc), token=token)
         finally:
             if timer is not None:
                 timer.cancel()

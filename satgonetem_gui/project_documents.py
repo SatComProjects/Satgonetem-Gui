@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .ground_stations import validate_ground_station_text, validate_inline_stations
+from .storage import resolve_data_file
 
 
 class ProjectDocumentError(ValueError):
@@ -61,7 +62,7 @@ def _data_file_is_allowed(data_file: str, roots: list[Path]) -> bool:
             resolved = candidate.resolve()
         except (OSError, RuntimeError):
             continue
-        if _is_within(resolved, roots):
+        if _is_within(resolved, roots) and resolved.is_file():
             return True
     return False
 
@@ -69,12 +70,21 @@ def _data_file_is_allowed(data_file: str, roots: list[Path]) -> bool:
 def validate_project_create_payload(
     shells: object,
     grounds: object,
+    data_search_dir: Path | None = None,
+    allowed_roots: Iterable[Path] = (),
 ) -> None:
     """Validate the nested shapes accepted by the project-create form.
 
     The request schema validates that the hidden fields contain JSON arrays;
     this function validates their elements before a background build starts, so
     malformed input is a 422 instead of a late project-state error.
+
+    Args:
+        shells: Parsed orbit-shell objects.
+        grounds: Parsed ground-object objects.
+        data_search_dir: Directory used to resolve relative ``data_file``
+            values. When omitted, referenced files are not checked.
+        allowed_roots: Additional directories where data files may live.
     """
     if not isinstance(shells, list) or not shells:
         raise ValueError("At least one orbit shell is required.")
@@ -93,6 +103,50 @@ def validate_project_create_payload(
             raise ValueError("Orbit shell type must be a string.")
         if not isinstance(shell["constellation_property"], dict):
             raise ValueError("Orbit shell constellation_property must be an object.")
+        constellation = shell["constellation_property"]
+        identifier = constellation.get("identifier")
+        if not isinstance(identifier, str) or not identifier.strip():
+            raise ValueError("Orbit shell identifier must be a non-empty string.")
+        planes = constellation.get("amount_of_orbit_plane")
+        satellites = constellation.get("amount_of_satellite_per_orbit_plane")
+        if (
+            not isinstance(planes, int)
+            or isinstance(planes, bool)
+            or not 1 <= planes <= 1000
+        ):
+            raise ValueError(
+                "Orbit shell amount_of_orbit_plane must be an integer between "
+                "1 and 1000."
+            )
+        if (
+            not isinstance(satellites, int)
+            or isinstance(satellites, bool)
+            or not 1 <= satellites <= 1000
+        ):
+            raise ValueError(
+                "Orbit shell amount_of_satellite_per_orbit_plane must be an "
+                "integer between 1 and 1000."
+            )
+        if planes * satellites > 10_000:
+            raise ValueError("An orbit shell cannot exceed 10000 satellites.")
+        inclination = constellation.get("inclination")
+        if (
+            not isinstance(inclination, (int, float))
+            or isinstance(inclination, bool)
+            or not 0 <= inclination <= 180
+        ):
+            raise ValueError(
+                "Orbit shell inclination must be between 0 and 180 degrees."
+            )
+        revolutions = constellation.get("mean_revolution_per_day")
+        if (
+            not isinstance(revolutions, (int, float))
+            or isinstance(revolutions, bool)
+            or not 0 <= revolutions <= 100
+        ):
+            raise ValueError(
+                "Orbit shell mean_revolution_per_day must be between 0 and 100."
+            )
         if not isinstance(shell["orbital_connectivity_property"], dict):
             raise ValueError(
                 "Orbit shell orbital_connectivity_property must be an object."
@@ -120,6 +174,18 @@ def validate_project_create_payload(
             validate_inline_stations(stations)
         elif not isinstance(data_file, str) or not data_file.strip():
             raise ValueError("Ground object has no stations or data_file.")
+        elif data_search_dir is not None:
+            try:
+                resolve_data_file(
+                    data_file,
+                    data_search_dir,
+                    allowed_roots=allowed_roots,
+                )
+            except (OSError, ValueError) as exc:
+                raise ValueError(
+                    "Ground object data_file is not a readable station file: "
+                    f"{data_file!r}"
+                ) from exc
 
 
 def validate_project_document(
@@ -154,6 +220,7 @@ def validate_project_document(
     ground_files = document.get("ground_files", {})
     if not isinstance(ground_files, dict):
         raise ProjectDocumentError("Project file has an invalid ground_files section.")
+    basenames: set[str] = set()
     for original_path, file_info in ground_files.items():
         if not isinstance(original_path, str) or not original_path:
             raise ProjectDocumentError(
@@ -169,6 +236,12 @@ def validate_project_document(
                 "Project ground file basename is not a plain file name: "
                 f"{basename!r}"
             )
+        if basename in basenames:
+            raise ProjectDocumentError(
+                "Project ground file basenames must be unique: "
+                f"{basename!r}"
+            )
+        basenames.add(basename)
         file_content = file_info.get("content")
         if not isinstance(file_content, str):
             raise ProjectDocumentError(
@@ -179,6 +252,11 @@ def validate_project_document(
         except ValueError as exc:
             raise ProjectDocumentError(str(exc)) from exc
 
+    network_config = document.get("network_config")
+    if network_config is not None and not isinstance(network_config, dict):
+        raise ProjectDocumentError(
+            "Project file has an invalid network_config section."
+        )
     simulation_property = document.get("simulation_property")
     if simulation_property is None:
         return document

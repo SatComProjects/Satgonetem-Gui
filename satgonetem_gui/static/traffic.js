@@ -1,7 +1,7 @@
 /** Traffic Generator UI controller. */
-import { api } from "./api.js";
+import { api } from "./api.js?v=4";
 // Keep this queue.js version in sync with the script tag in templates/base.html.
-import { jqAdd, jqStartNow, jqStartOne } from "./queue.js?v=12";
+import { jqAdd, jqStartNow, jqStartOne } from "./queue.js?v=22";
 import { buildTrafficPayload } from "./traffic_model.js";
 
 function byId(id) {
@@ -98,17 +98,28 @@ function addToQueue() {
   setMsg("Added to queue.");
 }
 
+let runNowBusy = false;
+
 async function runNow() {
+  if (runNowBusy) return;
   const item = buildTrafficPayload(formFields());
   if (!item.payload.src || !item.payload.dst) {
     setMsg("Select source and destination.", true);
     return;
   }
-  item.delay = 0;
-  const id = jqAdd(item);
-  setMsg("Starting...");
-  const started = await jqStartNow(id);
-  setMsg(started ? "Started." : "Start failed; see the queue.", !started);
+  runNowBusy = true;
+  const button = byId("tg-run-now");
+  if (button) button.disabled = true;
+  try {
+    item.delay = 0;
+    const id = jqAdd(item);
+    setMsg("Starting...");
+    const started = await jqStartNow(id);
+    setMsg(started ? "Started." : "Start failed; see the queue.", !started);
+  } finally {
+    runNowBusy = false;
+    if (button) button.disabled = false;
+  }
 }
 
 byId("tg-tool").addEventListener("change", toggleTool);

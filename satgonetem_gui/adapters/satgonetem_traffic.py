@@ -38,6 +38,14 @@ class SatGoNetemTrafficAdapter:
             "ping": self._poll_ping,
             "hping3": self._poll_hping3,
         }
+        self._flow_topologies: dict[int, Any] = {}
+
+    def register_flow(self, topology: Any, flow: Any) -> None:
+        """Register a GUI flow so core container stop cleans it up."""
+        active = getattr(topology, "_active_flows", None)
+        if isinstance(active, list):
+            active.append(flow)
+            self._flow_topologies[id(flow)] = topology
 
     def start_iperf3(
         self,
@@ -111,6 +119,19 @@ class SatGoNetemTrafficAdapter:
         if callable(stop):
             stop()
 
+    def release(self, flow: Any) -> None:
+        """Release the core result object retained by a finished flow."""
+        discard = getattr(flow, "discard_result", None)
+        if callable(discard):
+            discard()
+        topology = self._flow_topologies.pop(id(flow), None)
+        active = getattr(topology, "_active_flows", None)
+        if isinstance(active, list):
+            try:
+                active.remove(flow)
+            except ValueError:
+                pass
+
     @staticmethod
     def _poll_iperf3(flow: Iperf3Flow) -> TrafficPoll:
         status = flow.status()
@@ -124,7 +145,11 @@ class SatGoNetemTrafficAdapter:
                     raise RuntimeError(
                         "Unsupported Iperf3Results shape: missing interval data."
                     )
-                intervals = raw.get("intervals", [])
+                intervals = raw.get("intervals")
+                if not isinstance(intervals, list):
+                    raise RuntimeError(
+                        "Unsupported Iperf3Results shape: missing interval data."
+                    )
                 return TrafficPoll(
                     "done",
                     results=serialize_iperf3_results(result, intervals),

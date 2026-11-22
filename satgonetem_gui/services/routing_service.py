@@ -2,12 +2,15 @@
 
 import asyncio
 import logging
+from contextlib import contextmanager
 
 from ..errors import APIError
 from .ports import NetworkController, NetworkOperationError
 from .topology_service import TopologyService
 
 logger = logging.getLogger(__name__)
+
+NETWORK_OPERATION_TIMEOUT_SECONDS = 300.0
 
 
 class RoutingService:
@@ -17,11 +20,14 @@ class RoutingService:
         self,
         topology: TopologyService,
         controller: NetworkController,
+        operation_timeout_seconds: float = NETWORK_OPERATION_TIMEOUT_SECONDS,
     ) -> None:
         self.topology = topology
         self.controller = controller
+        self.operation_timeout_seconds = operation_timeout_seconds
         self._operation_lock: asyncio.Lock | None = None
         self._operation_loop: asyncio.AbstractEventLoop | None = None
+        self._worker: asyncio.Task | None = None
 
     def status(self) -> dict:
         """Return routing and addressing state, including explicit address state."""
@@ -46,21 +52,75 @@ class RoutingService:
             self._operation_loop = loop
         return self._operation_lock
 
+    @contextmanager
+    def _network_operation(self):
+        """Reserve the session's network slot for one mutation."""
+        if not self.topology.session.begin_network_operation():
+            raise APIError(
+                409,
+                "A project operation is already running.",
+            )
+        try:
+            yield
+        finally:
+            self.topology.session.end_network_operation()
+
+    async def _run_controller(self, func, *args):
+        """Run a blocking controller call without abandoning it on cancellation."""
+        if self._worker is not None and not self._worker.done():
+            raise APIError(
+                409,
+                "A previous network operation is still running in the background.",
+            )
+        worker = asyncio.create_task(asyncio.to_thread(func, *args))
+        self._worker = worker
+
+        def clear(_task: asyncio.Task) -> None:
+            if self._worker is worker:
+                self._worker = None
+            if not worker.cancelled():
+                worker.exception()
+
+        worker.add_done_callback(clear)
+        try:
+            return await asyncio.wait_for(
+                asyncio.shield(worker),
+                timeout=self.operation_timeout_seconds,
+            )
+        except asyncio.TimeoutError as exc:
+            logger.error(
+                "Network operation timed out; the worker is still running."
+            )
+            raise APIError(504, "Network operation timed out.") from exc
+        except asyncio.CancelledError:
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(worker),
+                    timeout=self.operation_timeout_seconds,
+                )
+            except Exception:
+                logger.error(
+                    "Cancelled network operation is still running in the background."
+                )
+            raise
+
     async def apply(self, method: str) -> None:
         """Apply addressing, then initialize the requested routing method."""
         async with self._operation_lock_for_loop():
-            await self._apply(method)
+            with self._network_operation():
+                await self._apply(method)
 
     async def _apply(self, method: str) -> None:
-        topology = self.topology.require_topology()
-        generation = self.topology.generation
+        topology, generation = self.topology.context()
         if not self.topology.gonetem_is_on():
             raise APIError(409, "GoNetEm is not running. Start containers first.")
         try:
-            await asyncio.to_thread(self.controller.apply_addressing, topology)
+            await self._run_controller(self.controller.apply_addressing, topology)
             self._require_current_project(generation)
             self.topology.set_addressing_applied(True)
-            await asyncio.to_thread(self.controller.init_routing, topology, method)
+            await self._run_controller(
+                self.controller.init_routing, topology, method
+            )
             self._require_current_project(generation)
         except APIError:
             raise
@@ -74,16 +134,13 @@ class RoutingService:
     async def delete(self) -> None:
         """Delete installed routing state."""
         async with self._operation_lock_for_loop():
-            await self._delete()
+            with self._network_operation():
+                await self._delete()
 
     async def _delete(self) -> None:
-        topology = self.topology.require_topology()
-        generation = self.topology.generation
+        topology, generation = self.topology.context()
         try:
-            await asyncio.to_thread(
-                self.controller.delete_routing,
-                topology,
-            )
+            await self._run_controller(self.controller.delete_routing, topology)
             self._require_current_project(generation)
             self.topology.set_addressing_applied(False)
         except APIError:
@@ -98,16 +155,13 @@ class RoutingService:
     async def start_gonetem(self) -> None:
         """Start the emulated network containers."""
         async with self._operation_lock_for_loop():
-            await self._start_gonetem()
+            with self._network_operation():
+                await self._start_gonetem()
 
     async def _start_gonetem(self) -> None:
-        topology = self.topology.require_topology()
-        generation = self.topology.generation
+        topology, generation = self.topology.context()
         try:
-            await asyncio.to_thread(
-                self.controller.start_gonetem,
-                topology,
-            )
+            await self._run_controller(self.controller.start_gonetem, topology)
             self._require_current_project(generation)
         except APIError:
             raise
@@ -121,16 +175,13 @@ class RoutingService:
     async def stop_gonetem(self) -> None:
         """Stop the emulated network containers."""
         async with self._operation_lock_for_loop():
-            await self._stop_gonetem()
+            with self._network_operation():
+                await self._stop_gonetem()
 
     async def _stop_gonetem(self) -> None:
-        topology = self.topology.require_topology()
-        generation = self.topology.generation
+        topology, generation = self.topology.context()
         try:
-            await asyncio.to_thread(
-                self.controller.stop_gonetem,
-                topology,
-            )
+            await self._run_controller(self.controller.stop_gonetem, topology)
             self._require_current_project(generation)
             self.topology.set_addressing_applied(False)
         except APIError:

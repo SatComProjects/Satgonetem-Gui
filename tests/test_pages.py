@@ -23,6 +23,14 @@ def test_page_routes_render(client, path: str, marker: str) -> None:
     assert marker in response.text
 
 
+def test_world_plot_controls_keep_an_accessible_name_when_collapsed(client) -> None:
+    """The labelled header does not rely on text removed by the collapsed style."""
+    response = client.get("/world")
+
+    assert response.status_code == 200
+    assert 'role="button" tabindex="0" aria-label="Plot Controls"' in response.text
+
+
 def test_api_documentation_is_available(client) -> None:
     """FastAPI serves its interactive documentation."""
     response = client.get("/docs")
