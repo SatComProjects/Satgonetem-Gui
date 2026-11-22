@@ -7,6 +7,7 @@ import {
   findItem,
   isTerminal,
   normalizeStoredItems,
+  remainingDelay,
   removeItem,
   startableItems,
   updateItem,
@@ -98,14 +99,21 @@ function jqLoad() {
   } catch {
     stored = [];
   }
-  jq.items = stored.map((item) =>
-    item.status === "starting" || item.status === "scheduled"
-      ? { ...item, status: "queued" }
-      : item,
-  );
+  jq.items = stored.map((item) => {
+    if (item.status === "starting") {
+      return { ...item, status: "queued", start_at: null };
+    }
+    if (item.status === "scheduled" && !Number.isFinite(item.start_at)) {
+      return { ...item, status: "queued", start_at: null };
+    }
+    return item;
+  });
   for (const item of jq.items) {
     if (item.status === "running" && item.job_id) {
       schedule(item.id, 0, () => jqTrack(item.id));
+    } else if (item.status === "scheduled") {
+      const delay = remainingDelay(item);
+      schedule(item.id, delay ?? 0, () => jqStartNow(item.id));
     }
   }
   jqSave();
@@ -246,6 +254,7 @@ function jqStartOne(id) {
   const delayMs = Math.max(0, (Number(item.delay) || 0) * 1000);
   jq.items = updateItem(jq.items, id, {
     status: delayMs > 0 ? "scheduled" : "starting",
+    start_at: delayMs > 0 ? Date.now() + delayMs : null,
     error: null,
   });
   jqSave();
@@ -257,7 +266,11 @@ async function jqStartNow(id) {
   clearTimer(id);
   const item = findItem(jq.items, id);
   if (!item) return;
-  jq.items = updateItem(jq.items, id, { status: "starting", error: null });
+  jq.items = updateItem(jq.items, id, {
+    status: "starting",
+    start_at: null,
+    error: null,
+  });
   jqSave();
   jqRender();
   let data;
