@@ -3,6 +3,16 @@ import { api } from "./api.js?v=4";
 import { escapeHtml } from "./escape.js";
 import { cacheEntry, isFresh, staleCacheKeys } from "./nodes_model.js?v=2";
 import {
+  formatCapacityKbps,
+  formatLinkDelay,
+  linkDirectionLabel,
+  linkPeer,
+  linkStateLabel,
+  linkTypeLabel,
+  linksForNode,
+} from "./links_model.js?v=1";
+import {
+  formatDistance,
   pathChain,
   pathRows,
   pathSummary,
@@ -10,6 +20,7 @@ import {
 
 const POLL_INTERVAL_MS = 5000;
 const detailCache = new Map();
+let topologyLinks = [];
 let lastPathData = null;
 let pathBusy = false;
 let pathSelectsEnabled = false;
@@ -39,7 +50,7 @@ function buildInterfaceRow(iface) {
   );
 }
 
-function buildDetailPanel(data) {
+function buildDetailPanel(data, links = []) {
   const position = data.position || {};
   const loopback = data.loopback || {};
   let html = '<div class="node-detail">';
@@ -95,6 +106,33 @@ function buildDetailPanel(data) {
   }
   html += "</div>";
 
+  html += '<div class="detail-section"><h4>Links</h4>';
+  const nodeLinks = linksForNode(links, data.name);
+  if (nodeLinks.length) {
+    html +=
+      '<div class="link-table-wrap"><table class="iface-table link-table"><thead><tr>' +
+      "<th>Peer</th><th>Type</th><th>Direction</th><th>Distance</th>" +
+      "<th>Delay</th><th>Capacity</th><th>State</th>" +
+      "</tr></thead><tbody>";
+    for (const link of nodeLinks) {
+      const inactive = link.is_active === false;
+      html +=
+        `<tr class="${inactive ? "link-inactive" : ""}">` +
+        `<td>${escapeHtml(linkPeer(link, data.name))}</td>` +
+        `<td>${escapeHtml(linkTypeLabel(link.type))}</td>` +
+        `<td>${escapeHtml(linkDirectionLabel(link))}</td>` +
+        `<td>${escapeHtml(formatDistance(link.distance_km))}</td>` +
+        `<td>${escapeHtml(formatLinkDelay(link.delay_ms))}</td>` +
+        `<td>${escapeHtml(formatCapacityKbps(link.capacity_kbps))}</td>` +
+        `<td>${escapeHtml(linkStateLabel(link.is_active))}</td>` +
+        "</tr>";
+    }
+    html += "</tbody></table></div>";
+  } else {
+    html += '<p class="muted">No links reported.</p>';
+  }
+  html += "</div>";
+
   html += '<div class="detail-section"><h4>Routing Table</h4>';
   if (data.routing_table && data.routing_table.length) {
     html += `<pre class="routing-pre">${escapeHtml(data.routing_table.join("\n"))}</pre>`;
@@ -121,7 +159,7 @@ async function toggleNode(name) {
     try {
       const data = await api.get(`/api/nodes/${encodeURIComponent(name)}`);
       detailCache.set(name, cacheEntry(data.node));
-      detail.innerHTML = buildDetailPanel(data.node);
+      detail.innerHTML = buildDetailPanel(data.node, topologyLinks);
     } catch (error) {
       detailCache.delete(name);
       detail.innerHTML = `<div class="muted" style="color:var(--bad)">Error: ${escapeHtml(error.message || error)}</div>`;
@@ -130,7 +168,7 @@ async function toggleNode(name) {
   }
 
   if (!expanded && isFresh(cached)) {
-    detail.innerHTML = buildDetailPanel(cached.data);
+    detail.innerHTML = buildDetailPanel(cached.data, topologyLinks);
   }
   detail.style.display = expanded ? "none" : "block";
   row.classList.toggle("expanded", !expanded);
@@ -504,6 +542,12 @@ function bindPathControls() {
 async function loadNodes() {
   try {
     const nodes = await api.getAll("/api/nodes");
+    try {
+      const links = await api.getAll("/api/links");
+      topologyLinks = Array.isArray(links) ? links : [];
+    } catch {
+      topologyLinks = [];
+    }
     showMsg("");
     renderNodes(Array.isArray(nodes) ? nodes : []);
   } catch (error) {

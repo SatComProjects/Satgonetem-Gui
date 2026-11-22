@@ -1,5 +1,6 @@
 import { api, ApiError } from "./api.js?v=4";
 import { initSimulationControls } from "./simulation_controls.js?v=1";
+import { linkWidth } from "./links_model.js?v=1";
 import {
     linkKey,
     pathLinkKeys,
@@ -20,6 +21,7 @@ const LINK_COLORS = {
     orbital: Cesium.Color.fromCssColorString("#1e40af").withAlpha(0.75),
     adjacent: Cesium.Color.fromCssColorString("#dc2626").withAlpha(0.75),
 };
+const INACTIVE_LINK_COLOR = Cesium.Color.fromCssColorString("#ef4444");
 
 let viewer = null;
 const linkCollections = { gsl: null, orbital: null, adjacent: null };
@@ -412,11 +414,14 @@ function updateLinks(links) {
 
         const onPath = hasPath && pathKeys.has(linkKey(lk.src, lk.dst));
         const dim = hasPath && !onPath;
+        const inactive = lk.is_active === false;
+        const baseColor = inactive ? INACTIVE_LINK_COLOR : LINK_COLORS[ltype];
+        const alpha = dim ? 0.10 : onPath ? 1.0 : inactive ? 0.55 : 0.75;
         col.add({
             positions: [src, dst],
-            width: onPath ? 4.0 : 1.0,
+            width: inactive ? 1.0 : onPath ? 4.0 : linkWidth(lk.capacity_kbps),
             material: Cesium.Material.fromType("Color", {
-                color: LINK_COLORS[ltype].withAlpha(dim ? 0.10 : onPath ? 1.0 : 0.75),
+                color: baseColor.withAlpha(alpha),
             }),
         });
     });

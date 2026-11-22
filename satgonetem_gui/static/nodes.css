@@ -366,3 +366,24 @@
     flex: 1 1 0;
   }
 }
+
+/* Link inspector --------------------------------------------------------- */
+
+.link-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.link-table {
+  min-width: 640px;
+  font-variant-numeric: tabular-nums;
+}
+
+.link-inactive td {
+  color: var(--muted);
+}
+
+.link-inactive td:last-child {
+  color: var(--bad);
+  font-weight: 600;
+}
