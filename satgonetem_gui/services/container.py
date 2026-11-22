@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from ..state import RuntimeState
 from .addressability_service import AddressabilityService
 from .preflight_service import PreflightService
+from .project_catalog_service import ProjectCatalogService
 from .project_service import ProjectService
 from .routing_service import RoutingService
 from .simulation_service import SimulationService
@@ -18,6 +19,7 @@ class ApplicationServices:
 
     runtime: RuntimeState
     project: ProjectService
+    catalog: ProjectCatalogService
     topology: TopologyService
     addressability: AddressabilityService
     routing: RoutingService

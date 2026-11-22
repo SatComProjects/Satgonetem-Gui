@@ -20,6 +20,7 @@ from tests.helpers import wait_for_project_state
         ("POST", "/api/nodes/Sat0/addressable", {"enabled": True}),
         ("GET", "/api/ground_stations", None),
         ("GET", "/api/links", None),
+        ("GET", "/api/links/usage", None),
         ("GET", "/api/nodes", None),
         ("GET", "/api/nodes/Sat0", None),
         ("GET", "/api/routing/status", None),

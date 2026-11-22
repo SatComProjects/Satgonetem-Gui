@@ -1,11 +1,11 @@
 """Read-only topology queries."""
 
 import re
-from typing import Any
+from typing import Any, cast
 
 from ..errors import APIError
 from ..state import ProjectSession
-from .ports import TopologyReader
+from .ports import LinkUsageReader, TopologyReader
 
 _NODE_NAME_RE = re.compile(r"^(?:Sat|Gnd)\d+$")
 
@@ -18,9 +18,17 @@ def is_node_name(name: str) -> bool:
 class TopologyService:
     """Serve topology views from the currently loaded project."""
 
-    def __init__(self, session: ProjectSession, reader: TopologyReader) -> None:
+    def __init__(
+        self,
+        session: ProjectSession,
+        reader: TopologyReader,
+        usage_reader: LinkUsageReader | None = None,
+    ) -> None:
         self.session = session
         self.reader = reader
+        self.usage_reader = (
+            usage_reader if usage_reader is not None else cast(LinkUsageReader, reader)
+        )
 
     def require_topology(self) -> Any:
         """Return the loaded topology or raise the common 404."""
@@ -68,6 +76,10 @@ class TopologyService:
     def links(self) -> list[dict]:
         """Return topology links."""
         return self.reader.links(self.require_topology())
+
+    def link_usage(self) -> dict:
+        """Return live link usage sampled from the running emulation."""
+        return self.usage_reader.link_usage(self.require_topology())
 
     def nodes(self) -> list[dict]:
         """Return the node summary list."""

@@ -156,8 +156,14 @@ class ProjectService:
             logger.exception("Could not read project config.")
             raise APIError(500, "Could not read project config.") from exc
 
-    async def load(self, content: str) -> str:
-        """Load a project from uploaded JSON and return its display name."""
+    async def load(self, content: str, save_path: str = "") -> str:
+        """Load a project from JSON and return its display name.
+
+        Args:
+            content: Saved project document.
+            save_path: Workspace file backing the project, when it was opened
+                from the catalog. Existing callers leave it empty.
+        """
         if self._build_is_running():
             raise APIError(
                 409,
@@ -218,7 +224,7 @@ class ProjectService:
             installed = self.state.project.succeed(
                 result.topology_manager,
                 result.project_name,
-                result.save_path,
+                save_path or result.save_path,
                 token=token,
             )
         except Exception as exc:

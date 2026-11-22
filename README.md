@@ -12,6 +12,8 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Node Explorer** | Browse all satellites and ground stations with detailed status and per-node links. |
 | **Link Metrics** | Inspect link delay, capacity, and active state; Globe link width scales with capacity. |
 | **Readiness Checks** | Preflight storage, Docker, image, and GoNetEm checks plus a rough container/memory estimate. |
+| **Project Workspace** | List, reopen, save in place, duplicate, and delete projects under the configured save root. |
+| **Usage Link Colors** | Opt-in World View link coloring from green (idle) to red (at/above capacity). |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
 | **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
@@ -105,6 +107,7 @@ package.json            # Frontend test/tooling manifest
 | `/nodes` | Node Explorer — list, inspect, and trace paths between all topology nodes |
 | `/traffic` | Traffic Generator — create and queue traffic jobs, review history and comparisons |
 | `/new_project` | New Project — build a constellation from scratch |
+| `/projects` | Projects — list, reopen, save, duplicate, and delete workspace projects |
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
 | `/docs` | API Documentation — auto-generated Swagger UI |
 
@@ -177,6 +180,24 @@ Project creation reports real lifecycle phases (`validating`, `building`,
 `loading`, `finalizing`, `ready`, `error`) and elapsed time. When a phase has no
 meaningful percentage, the progress bar is indeterminate instead of showing a
 made-up number.
+
+## Project Workspace
+
+The Projects page lists JSON project files under `SATGONETEM_GUI_SAVE_ROOT`.
+Projects are addressed by opaque IDs; the browser never sends a filesystem path.
+From the page you can reopen a project, save the current project to the
+workspace, update the current workspace file in place, duplicate a project file,
+or delete one. Saving in place requires a project that was opened from or saved
+to the workspace. Malformed JSON files are skipped with a visible warning.
+
+## Usage Link Colors
+
+Enable **Color links by usage** in World View's Links controls to color active
+links from green (no usage) through amber to red (at or above capacity). The
+page samples `/api/links/usage` every five seconds only while the control is
+enabled. Inactive links remain red; unknown capacity or unavailable usage data
+is gray. Usage depends on the core interface monitor and may be unavailable
+when GoNetEm is stopped or the monitor files are absent.
 
 ## Configuration
 

@@ -10,7 +10,7 @@ import os
 import re
 import shutil
 import tempfile
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -368,6 +368,92 @@ class SatGoNetemTopologyAdapter:
             }
             for link in topology.links.values()
         ]
+
+    def link_usage(self, topology: Any) -> dict[str, Any]:
+        """Sample per-link bandwidth usage from the running emulation.
+
+        Returns an unavailable sample instead of failing the dashboard when the
+        containers are stopped or the core monitor raises.
+        """
+        if not topology.get_gonetem_status():
+            return {
+                "available": False,
+                "sampled_at": None,
+                "links": [],
+                "note": (
+                    "GoNetEm containers are stopped; link usage is unavailable."
+                ),
+            }
+
+        try:
+            raw_entries = topology.get_all_links_usage()
+        except Exception:
+            logger.exception("Could not sample link usage.")
+            return {
+                "available": False,
+                "sampled_at": None,
+                "links": [],
+                "note": "Link usage could not be sampled from GoNetEm.",
+            }
+        if not isinstance(raw_entries, list):
+            raw_entries = []
+
+        capacities: dict[frozenset[str], int] = {}
+        links = getattr(topology, "links", None)
+        if isinstance(links, dict):
+            for link in links.values():
+                try:
+                    source = link.source.name
+                    target = link.target.name
+                    capacity_bps = int(link.get_capacity()) * 1000
+                except Exception:
+                    logger.exception(
+                        "Could not read a link capacity for usage sampling."
+                    )
+                    continue
+                if capacity_bps > 0:
+                    capacities[frozenset((source, target))] = capacity_bps
+
+        entries: list[dict[str, Any]] = []
+        for raw in raw_entries:
+            if not isinstance(raw, dict):
+                continue
+            src = raw.get("src")
+            dst = raw.get("dst")
+            if not isinstance(src, str) or not src:
+                continue
+            if not isinstance(dst, str) or not dst:
+                continue
+            try:
+                value = int(float(raw.get("value") or 0))
+            except (TypeError, ValueError, OverflowError):
+                value = 0
+            value_bps = max(0, value)
+            capacity_bps = capacities.get(frozenset((src, dst)))
+            link_type = raw.get("type")
+            entries.append(
+                {
+                    "src": src,
+                    "dst": dst,
+                    "type": link_type if isinstance(link_type, str) else None,
+                    "value_bps": value_bps,
+                    "capacity_kbps": (
+                        capacity_bps // 1000 if capacity_bps else None
+                    ),
+                    "utilization": (
+                        round(min(1.0, value_bps / capacity_bps), 4)
+                        if capacity_bps
+                        else None
+                    ),
+                }
+            )
+
+        return {
+            "available": True,
+            "sampled_at": datetime.now(timezone.utc).isoformat(),
+            "links": entries,
+            "note": None,
+        }
 
     def nodes(self, topology: Any) -> list[dict[str, Any]]:
         """Return node summaries."""

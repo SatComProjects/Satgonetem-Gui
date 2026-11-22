@@ -57,6 +57,13 @@ def api_links(
     return _page(services.topology.links(), limit, offset)
 
 
+@router.get("/api/links/usage", response_model=schemas.LinkUsageResponse)
+def api_link_usage(
+    services: ApplicationServices = Depends(get_services),
+) -> schemas.LinkUsageResponse:
+    return schemas.LinkUsageResponse(**services.topology.link_usage())
+
+
 @router.get("/api/nodes", response_model=list[schemas.NodeSummary])
 def api_nodes(
     limit: int = Query(default=1000, ge=1, le=5000),

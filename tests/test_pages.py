@@ -8,6 +8,7 @@ import pytest
     [
         ("/", "Dashboard"),
         ("/new_project", "Create New Project"),
+        ("/projects", "Projects"),
         ("/ground_stations", "Select Ground Stations"),
         ("/world", "World View"),
         ("/nodes", "Nodes"),
@@ -29,6 +30,7 @@ def test_world_plot_controls_keep_an_accessible_name_when_collapsed(client) -> N
 
     assert response.status_code == 200
     assert 'role="button" tabindex="0" aria-label="Plot Controls"' in response.text
+    assert 'id="cb-link-usage"' in response.text
 
 
 def test_api_documentation_is_available(client) -> None:
@@ -53,6 +55,10 @@ def test_openapi_schema_contains_all_public_routes(client) -> None:
         "/api/project/config",
         "/api/project/load",
         "/api/project/save",
+        "/api/project/save-to",
+        "/api/project/save-in-place",
+        "/api/projects",
+        "/api/links/usage",
         "/api/satellites",
         "/api/ground_stations",
         "/api/links",

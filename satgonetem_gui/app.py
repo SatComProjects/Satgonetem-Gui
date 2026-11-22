@@ -26,10 +26,12 @@ from .routes import (
     simulation,
     topology,
     traffic,
+    workspace,
 )
 from .services.addressability_service import AddressabilityService
 from .services.container import ApplicationServices
 from .services.preflight_service import PreflightService
+from .services.project_catalog_service import ProjectCatalogService
 from .services.project_service import ProjectService
 from .services.routing_service import RoutingService
 from .services.simulation_service import SimulationService
@@ -134,7 +136,11 @@ def build_services(settings: Settings) -> ApplicationServices:
     topology_adapter = SatGoNetemTopologyAdapter(settings)
     traffic_adapter = SatGoNetemTrafficAdapter()
 
-    topology = TopologyService(runtime.project, topology_adapter)
+    topology = TopologyService(
+        runtime.project,
+        topology_adapter,
+        usage_reader=topology_adapter,
+    )
     addressability = AddressabilityService(topology, topology_adapter)
     simulation = SimulationService(topology, topology_adapter)
     project = ProjectService(
@@ -145,12 +151,19 @@ def build_services(settings: Settings) -> ApplicationServices:
         network_running=topology.network_running,
         stop_simulation=simulation.stop_current,
     )
+    catalog = ProjectCatalogService(
+        runtime,
+        project,
+        topology_adapter,
+        settings,
+    )
     routing = RoutingService(topology, topology_adapter, reader=topology_adapter)
     traffic = TrafficService(topology, traffic_adapter)
     preflight = PreflightService(LocalEnvironmentDoctor(settings))
     return ApplicationServices(
         runtime=runtime,
         project=project,
+        catalog=catalog,
         topology=topology,
         addressability=addressability,
         routing=routing,
@@ -187,6 +200,7 @@ def create_app(
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
     app.include_router(pages.create_pages_router(templates))
+    app.include_router(workspace.router)
     app.include_router(projects.router)
     app.include_router(topology.router)
     app.include_router(addressability.router)

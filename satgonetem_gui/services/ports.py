@@ -49,6 +49,12 @@ class TopologyReader(Protocol):
     def gonetem_is_on(self, topology: Any) -> bool: ...
 
 
+class LinkUsageReader(Protocol):
+    """Live per-link bandwidth sampling for the dashboard."""
+
+    def link_usage(self, topology: Any) -> dict[str, Any]: ...
+
+
 class PathReader(Protocol):
     """Diagnostic path queries over the current routing graph."""
 

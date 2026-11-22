@@ -893,3 +893,161 @@ def test_links_include_delay_capacity_and_active_state(settings) -> None:
             "is_active": False,
         }
     ]
+
+
+def _usage_link(src: str, dst: str, capacity_kbps: int) -> SimpleNamespace:
+    """Build a link stand-in exposing only the capacity read."""
+    return SimpleNamespace(
+        source=SimpleNamespace(name=src),
+        target=SimpleNamespace(name=dst),
+        get_capacity=lambda: capacity_kbps,
+    )
+
+
+def _usage_topology(
+    *,
+    gonetem: bool = True,
+    links: list[SimpleNamespace] | None = None,
+    usage: list[dict] | None = None,
+    failure: Exception | None = None,
+) -> SimpleNamespace:
+    """Build a topology stand-in for the public link-usage query."""
+    links = links or []
+    by_key = {f"{link.source.name}-{link.target.name}": link for link in links}
+
+    def get_usage() -> list[dict]:
+        if failure is not None:
+            raise failure
+        return usage or []
+
+    return SimpleNamespace(
+        get_gonetem_status=lambda: gonetem,
+        get_all_links_usage=get_usage,
+        links=by_key,
+    )
+
+
+def test_link_usage_is_unavailable_when_containers_are_stopped(settings) -> None:
+    """Stopped containers are reported as an empty, unavailable sample."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+
+    result = adapter.link_usage(_usage_topology(gonetem=False))
+
+    assert result == {
+        "available": False,
+        "sampled_at": None,
+        "links": [],
+        "note": "GoNetEm containers are stopped; link usage is unavailable.",
+    }
+    assert "container" in result["note"].lower()
+
+
+def test_link_usage_normalizes_values_capacities_and_utilization(settings) -> None:
+    """Bits per second are clamped and mapped to link capacities."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _usage_topology(
+        links=[
+            _usage_link("Sat0", "Sat1", 100_000),
+            _usage_link("Sat1", "Gnd0", 0),
+        ],
+        usage=[
+            {
+                "src": "Sat0",
+                "dst": "Sat1",
+                "value": 25_000_000,
+                "type": "InterSatelliteLink",
+            },
+            {
+                "src": "Sat1",
+                "dst": "Gnd0",
+                "value": -5,
+                "type": "GroundStationLink",
+            },
+            {"src": "Sat1", "dst": "Sat2", "value": "unknown", "type": None},
+        ],
+    )
+
+    result = adapter.link_usage(topology)
+
+    assert result["available"] is True
+    assert result["note"] is None
+    assert datetime.fromisoformat(result["sampled_at"]).tzinfo is not None
+    entries = {(entry["src"], entry["dst"]): entry for entry in result["links"]}
+    assert entries[("Sat0", "Sat1")] == {
+        "src": "Sat0",
+        "dst": "Sat1",
+        "type": "InterSatelliteLink",
+        "value_bps": 25_000_000,
+        "capacity_kbps": 100_000,
+        "utilization": 0.25,
+    }
+    assert entries[("Sat1", "Gnd0")] == {
+        "src": "Sat1",
+        "dst": "Gnd0",
+        "type": "GroundStationLink",
+        "value_bps": 0,
+        "capacity_kbps": None,
+        "utilization": None,
+    }
+    assert entries[("Sat1", "Sat2")]["capacity_kbps"] is None
+    assert entries[("Sat1", "Sat2")]["utilization"] is None
+    assert entries[("Sat1", "Sat2")]["type"] is None
+
+
+def test_link_usage_clamps_utilization_to_one(settings) -> None:
+    """Usage above the nominal capacity is reported as saturated."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _usage_topology(
+        links=[_usage_link("Sat0", "Sat1", 1_000)],
+        usage=[{"src": "Sat0", "dst": "Sat1", "value": 5_000_000}],
+    )
+
+    entry = adapter.link_usage(topology)["links"][0]
+
+    assert entry["value_bps"] == 5_000_000
+    assert entry["capacity_kbps"] == 1_000
+    assert entry["utilization"] == 1.0
+
+
+def test_link_usage_skips_malformed_entries_and_capacity_failures(settings) -> None:
+    """Bad usage rows are ignored and one bad capacity does not fail the sample."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+
+    def fail_capacity() -> int:
+        raise RuntimeError("capacity failed")
+
+    broken_capacity = SimpleNamespace(
+        source=SimpleNamespace(name="Sat2"),
+        target=SimpleNamespace(name="Sat3"),
+        get_capacity=fail_capacity,
+    )
+    topology = _usage_topology(
+        links=[broken_capacity, _usage_link("Sat0", "Sat1", 2_000)],
+        usage=[
+            {"src": None, "dst": "Sat1", "value": 1},
+            "not-a-dict",
+            {"src": "Sat2", "dst": "Sat3", "value": 10},
+            {"src": "Sat0", "dst": "Sat1", "value": 2_000_000},
+        ],
+    )
+
+    entries = adapter.link_usage(topology)["links"]
+
+    assert [entry["src"] for entry in entries] == ["Sat2", "Sat0"]
+    assert entries[0]["capacity_kbps"] is None
+    assert entries[0]["utilization"] is None
+    assert entries[1]["utilization"] == 1.0
+
+
+def test_link_usage_degrades_when_monitoring_fails(settings) -> None:
+    """A monitor failure is logged and becomes a safe unavailable sample."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _usage_topology(failure=RuntimeError("monitor exploded"))
+
+    result = adapter.link_usage(topology)
+
+    assert result["available"] is False
+    assert result["sampled_at"] is None
+    assert result["links"] == []
+    assert result["note"] is not None
+    assert "monitor exploded" not in result["note"]

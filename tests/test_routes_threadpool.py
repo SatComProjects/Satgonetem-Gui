@@ -16,6 +16,7 @@ from satgonetem_gui.routes import (
     routing,
     topology,
     traffic,
+    workspace,
 )
 
 BLOCKING_ENDPOINTS = [
@@ -28,10 +29,14 @@ BLOCKING_ENDPOINTS = [
     projects.api_project_status,
     projects.api_project_exists,
     projects.api_project_config,
+    workspace.api_projects,
+    workspace.api_duplicate_project,
+    workspace.api_delete_project,
     topology.api_satellites,
     topology.api_ground_stations,
     topology.api_status,
     topology.api_links,
+    topology.api_link_usage,
     topology.api_nodes,
     topology.api_node_detail,
     routing.api_routing_status,
@@ -47,6 +52,9 @@ BLOCKING_ENDPOINTS = [
 ASYNC_ENDPOINTS = [
     projects.api_project_load,
     projects.api_project_save,
+    workspace.api_load_project,
+    workspace.api_save_to,
+    workspace.api_save_in_place,
     routing.api_routing_apply,
     routing.api_routing_delete,
     routing.api_gonetem_start,

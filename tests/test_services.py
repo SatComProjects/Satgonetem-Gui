@@ -119,6 +119,23 @@ class FakePathReader:
         }
 
 
+class FakeUsageReader:
+    """Minimal link-usage reader for service tests."""
+
+    def __init__(self, response=None) -> None:
+        self.response = response or {
+            "available": True,
+            "sampled_at": "2024-01-01T00:00:00+00:00",
+            "links": [],
+            "note": None,
+        }
+        self.calls = []
+
+    def link_usage(self, topology):
+        self.calls.append(topology)
+        return self.response
+
+
 class FakeSimulationController:
     """Minimal simulation controller for service tests."""
 
@@ -271,6 +288,30 @@ def test_topology_queries_require_a_project() -> None:
         service.satellites()
 
     assert error.value.status_code == 404
+
+
+def test_topology_link_usage_requires_a_project() -> None:
+    """Usage cannot be sampled before a project is loaded."""
+    reader = FakeUsageReader()
+    service = TopologyService(ProjectSession(), FakeReader(), usage_reader=reader)
+
+    with pytest.raises(APIError) as error:
+        service.link_usage()
+
+    assert error.value.status_code == 404
+    assert reader.calls == []
+
+
+def test_topology_link_usage_returns_the_reader_payload() -> None:
+    """The service forwards the installed topology to the usage reader."""
+    session = _loaded_session()
+    reader = FakeUsageReader()
+    service = TopologyService(session, FakeReader(), usage_reader=reader)
+
+    result = service.link_usage()
+
+    assert result is reader.response
+    assert reader.calls == [session.get_topology()]
 
 
 def test_routing_apply_requires_gonetem() -> None:

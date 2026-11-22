@@ -235,6 +235,18 @@ not import those dependency internals.
   progress.
 - Declared direct `docker` and `pyyaml` dependencies.
 
+## Phase 15 changes
+
+- Added a contained project workspace/catalog with opaque IDs, atomic writes,
+  list/open/save-to/save-in-place/duplicate/delete, and malformed-file warnings.
+- Added `/projects` with workspace listing and current-project save controls.
+- Added `GET /api/links/usage` backed by the public core usage monitor, with a
+  safe unavailable state and per-link utilization.
+- Added opt-in World View usage coloring (green → amber → red), sampled every
+  five seconds only while enabled.
+- Added the workspace specification, ADR 0007, Vitest formatting/models, and
+  Playwright workspace flows.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -257,15 +269,16 @@ not import those dependency internals.
 - Vitest covers the pure queue, ground-station selection, traffic payload, API
   wrapper, simulation formatting/action rules, addressability summaries/rules,
   experiment-history compaction/export/comparison, forwarding-path formatting,
-  link formatting/filtering/width, preflight/phase formatting, and escaping
-  modules.
+  link formatting/filtering/width/usage colors, preflight/phase formatting,
+  project-workspace formatting, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
   node expansion, dashboard counts, simulation panel accessibility,
   addressability endpoint refresh, history reopen/capture/export/delete/compare,
   forwarding-path rendering, link-inspector rendering, readiness checks,
-  blocking creation, indeterminate build progress, and the WebGL fallback.
-  World View WebGL rendering itself remains a manual desktop check.
+  blocking creation, indeterminate build progress, workspace list/open/save,
+  and the WebGL fallback. World View WebGL rendering itself remains a manual
+  desktop check.
 
 ## Current measurements
 
@@ -276,11 +289,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **571 passed, 1 skipped** in about 37 s with coverage. Frontend:
-**93 Vitest tests**, **25 Playwright tests**.
+Result: **634 passed, 1 skipped** in about 42 s with coverage. Frontend:
+**99 Vitest tests**, **28 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**90.35%** over 2845 statements.
+**89.31%** over 3328 statements.
 
 ## Tooling decisions
 
