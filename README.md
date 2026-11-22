@@ -10,6 +10,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **3D World View** | Interactive CesiumJS globe showing satellites, ground stations, links, and coverage in real time. |
 | **Simulation Controls** | Play, pause, step, reset, seek, and change the playback speed of the emulated constellation. |
 | **Node Explorer** | Browse all satellites and ground stations with detailed status. |
+| **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
 | **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
 | **Routing Control** | Apply Static/Dijkstra, OSPF, IS-IS, or SR-MPLS routing across the emulated topology. |
@@ -98,8 +99,8 @@ package.json            # Frontend test/tooling manifest
 | Path | Page |
 |------|------|
 | `/` | Dashboard — constellation statistics, simulation playback, GoNetem status, routing controls |
-| `/world` | 3D Globe — real-time satellite and ground station visualisation with simulation playback |
-| `/nodes` | Node Explorer — list and inspect all topology nodes |
+| `/world` | 3D Globe — real-time satellite and ground station visualisation with simulation playback and path highlighting |
+| `/nodes` | Node Explorer — list, inspect, and trace paths between all topology nodes |
 | `/traffic` | Traffic Generator — create and queue traffic jobs, review history and comparisons |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
@@ -136,6 +137,18 @@ Only successful runs are recorded. History is per-browser, retains at most 20
 runs (about 2 MB), and samples long iperf3 interval arrays. It is lost if
 browser storage is cleared; it is not a substitute for server-side provenance
 or cross-machine sharing.
+
+## Forwarding Paths
+
+The Nodes page can trace a diagnostic path between any two topology nodes. The
+hop table shows the link type and direction, distance, propagation delay, and
+cumulative totals, plus the active routing method and preference. World View
+has a matching Path control that highlights the route and dims unrelated links.
+
+This is a **routing-graph snapshot, not the live forwarding table**: it is
+computed from the public routing graph, and dynamic routing or an SR-MPLS
+explicit path can install different forwarding state. Re-trace after changing
+the topology, simulation step, or routing configuration.
 
 ## Configuration
 
