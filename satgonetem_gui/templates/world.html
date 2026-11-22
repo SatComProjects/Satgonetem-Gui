@@ -208,6 +208,113 @@
     text-align: right;
     flex-shrink: 0;
   }
+
+  .path-world-row {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    margin-bottom: 7px;
+  }
+
+  .path-world-row .ctrl-slider-label {
+    margin-bottom: 0;
+  }
+
+  .path-world-select {
+    width: 100%;
+    min-width: 0;
+    padding: 4px 7px;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    border-radius: 6px;
+    background: rgba(15, 23, 32, 0.96);
+    color: #e2e8f0;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .path-world-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .path-world-select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .path-world-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+  }
+
+  .path-world-actions .button {
+    flex: 1 1 0;
+    padding: 4px 8px;
+  }
+
+  .path-world-actions .button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .path-world-actions .button:disabled:hover {
+    background: #182230;
+  }
+
+  .path-world-actions .button.secondary {
+    background: rgba(16, 24, 35, 0.9);
+    border-color: rgba(148, 163, 184, 0.28);
+    color: #94a3b8;
+  }
+
+  .path-world-actions .button.secondary:hover {
+    background: rgba(22, 33, 48, 0.95);
+    color: #e2e8f0;
+  }
+
+  .path-world-actions .button.secondary:disabled:hover {
+    background: rgba(16, 24, 35, 0.9);
+    color: #94a3b8;
+  }
+
+  .path-world-actions .button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .path-world-msg {
+    min-height: 1.2em;
+    margin: 6px 0 0;
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .path-world-msg.error {
+    color: var(--bad);
+  }
+
+  .path-world-summary {
+    margin: 2px 0 0;
+    color: #e2e8f0;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .path-world-summary:empty {
+    display: none;
+  }
+
+  .path-world-note {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1.35;
+  }
 </style>
 {% endblock %}
 
@@ -267,6 +374,25 @@
       </div>
 
       <div class="ctrl-section">
+        <div class="ctrl-section-title">Path</div>
+        <div class="path-world-row">
+          <label class="ctrl-slider-label" for="world-path-src">Source</label>
+          <select id="world-path-src" class="path-world-select" disabled></select>
+        </div>
+        <div class="path-world-row">
+          <label class="ctrl-slider-label" for="world-path-dst">Destination</label>
+          <select id="world-path-dst" class="path-world-select" disabled></select>
+        </div>
+        <div class="path-world-actions">
+          <button type="button" class="button small" id="world-path-trace" disabled>Trace</button>
+          <button type="button" class="button small secondary" id="world-path-clear" disabled>Clear</button>
+        </div>
+        <p class="path-world-msg" id="world-path-msg" aria-live="polite"></p>
+        <p class="path-world-summary" id="world-path-summary"></p>
+        <p class="path-world-note">Routing-graph snapshot · not the live forwarding table</p>
+      </div>
+
+      <div class="ctrl-section">
         <div class="ctrl-section-title">Coverage</div>
         <div class="ctrl-row">
           <input type="checkbox" id="cb-coverage">
@@ -300,5 +426,5 @@
   </section>
 </div>
 
-<script type="module" src="/static/world_boot.js?v=10"></script>
+<script type="module" src="/static/world_boot.js?v=11"></script>
 {% endblock %}

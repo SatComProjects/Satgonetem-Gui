@@ -2,9 +2,18 @@
 import { api } from "./api.js?v=4";
 import { escapeHtml } from "./escape.js";
 import { cacheEntry, isFresh, staleCacheKeys } from "./nodes_model.js?v=2";
+import {
+  pathChain,
+  pathRows,
+  pathSummary,
+} from "./path_model.js?v=1";
 
 const POLL_INTERVAL_MS = 5000;
 const detailCache = new Map();
+let lastPathData = null;
+let pathBusy = false;
+let pathSelectsEnabled = false;
+let pathNodesSignature = "";
 
 function el(id) {
   return document.getElementById(id);
@@ -270,6 +279,226 @@ function renderNodes(nodes) {
   }
   syncNodeList(el("satellites-list"), satellites, "No satellites.");
   syncNodeList(el("ground-stations-list"), stations, "No ground stations.");
+  populatePathSelects(nodes);
+}
+
+function setPathMsg(text, isError = false) {
+  const message = el("path-msg");
+  if (!message) return;
+  message.textContent = text;
+  message.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function fillPathSelect(select, nodes) {
+  const previous = select.value;
+  select.replaceChildren();
+  for (const node of nodes) {
+    const option = document.createElement("option");
+    option.value = node.name;
+    option.textContent =
+      node.type === "ground_station" && node.city
+        ? `${node.name} (${node.city})`
+        : node.name;
+    select.appendChild(option);
+  }
+  if (nodes.some((node) => node.name === previous)) {
+    select.value = previous;
+  }
+}
+
+function populatePathSelects(nodes) {
+  const source = el("path-src");
+  const destination = el("path-dst");
+  if (!source || !destination) return;
+
+  const sorted = [...nodes].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true }),
+  );
+  const signature = sorted
+    .map((node) => `${node.name}|${node.city || ""}`)
+    .join("\n");
+  if (signature === pathNodesSignature) return;
+  pathNodesSignature = signature;
+
+  fillPathSelect(source, sorted);
+  fillPathSelect(destination, sorted);
+
+  if (!source.value && sorted.length) {
+    const ground = sorted.find((node) => node.type === "ground_station");
+    source.value = (ground || sorted[0]).name;
+  }
+  if (!destination.value && sorted.length) {
+    const satellite = sorted.find((node) => node.type === "satellite");
+    destination.value = (satellite || sorted[1] || sorted[0]).name;
+  }
+
+  const enabled = sorted.length >= 2;
+  const wasEnabled = pathSelectsEnabled;
+  pathSelectsEnabled = enabled;
+  source.disabled = !enabled;
+  destination.disabled = !enabled;
+  const trace = el("path-trace");
+  const clear = el("path-clear");
+  if (trace) trace.disabled = pathBusy || !enabled;
+  if (clear) clear.disabled = pathBusy || !enabled;
+  if (!enabled) {
+    setPathMsg("Load a project with at least two nodes to trace a path.");
+  } else if (!wasEnabled) {
+    setPathMsg("");
+  }
+}
+
+function renderPath(data) {
+  lastPathData = data;
+  const summary = el("path-summary");
+  const wrap = el("path-table-wrap");
+  const body = el("path-table-body");
+  const actions = el("path-actions");
+  if (summary) summary.textContent = pathSummary(data);
+
+  if (!data.found) {
+    if (body) body.replaceChildren();
+    if (wrap) wrap.hidden = true;
+    if (actions) actions.hidden = true;
+    setPathMsg(data.note || "No path was found.");
+    return;
+  }
+
+  if (body) {
+    body.innerHTML = pathRows(data)
+      .map((row) => {
+        const direction = row.direction
+          ? ` <span class="path-direction">${escapeHtml(row.direction.toLowerCase())}</span>`
+          : "";
+        return `
+          <tr>
+            <td>${row.hop}</td>
+            <td>${escapeHtml(row.link)}</td>
+            <td>${escapeHtml(row.type)}${direction}</td>
+            <td>${escapeHtml(row.distance)}</td>
+            <td>${escapeHtml(row.delay)}</td>
+            <td>${escapeHtml(row.cumulativeDistance)} / ${escapeHtml(row.cumulativeDelay)}</td>
+          </tr>`;
+      })
+      .join("");
+  }
+  if (wrap) wrap.hidden = false;
+  if (actions) actions.hidden = false;
+  setPathMsg(data.note || "");
+}
+
+function setPathTraceBusy(busy) {
+  pathBusy = busy;
+  const trace = el("path-trace");
+  const clear = el("path-clear");
+  const source = el("path-src");
+  const destination = el("path-dst");
+  if (trace) {
+    trace.disabled = busy || (source?.options.length || 0) < 2;
+  }
+  if (clear) {
+    clear.disabled = busy || (source?.options.length || 0) < 2;
+  }
+}
+
+async function tracePath(event) {
+  event.preventDefault();
+  if (pathBusy) return;
+  const source = el("path-src")?.value || "";
+  const destination = el("path-dst")?.value || "";
+  if (!source || !destination) {
+    setPathMsg("Choose a source and destination.", true);
+    return;
+  }
+  if (source === destination) {
+    setPathMsg("Choose different source and destination nodes.", true);
+    return;
+  }
+
+  setPathTraceBusy(true);
+  setPathMsg("Tracing path...");
+  try {
+    const data = await api.get(
+      `/api/routing/path?src=${encodeURIComponent(source)}&dst=${encodeURIComponent(destination)}`,
+    );
+    renderPath(data);
+  } catch (error) {
+    lastPathData = null;
+    const summary = el("path-summary");
+    if (summary) summary.textContent = "";
+    const wrap = el("path-table-wrap");
+    if (wrap) wrap.hidden = true;
+    const actions = el("path-actions");
+    if (actions) actions.hidden = true;
+    setPathMsg(error.message || "Could not trace the path.", true);
+  } finally {
+    setPathTraceBusy(false);
+  }
+}
+
+function clearPath() {
+  lastPathData = null;
+  const summary = el("path-summary");
+  const wrap = el("path-table-wrap");
+  const body = el("path-table-body");
+  const actions = el("path-actions");
+  if (summary) summary.textContent = "";
+  if (body) body.replaceChildren();
+  if (wrap) wrap.hidden = true;
+  if (actions) actions.hidden = true;
+  setPathMsg("");
+}
+
+function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  const copied = document.execCommand("copy");
+  area.remove();
+  return copied
+    ? Promise.resolve()
+    : Promise.reject(new Error("Clipboard is unavailable."));
+}
+
+async function copyPath() {
+  if (!lastPathData?.found) return;
+  try {
+    await copyText(pathChain(lastPathData));
+    setPathMsg("Path copied to the clipboard.");
+  } catch (error) {
+    setPathMsg(error.message || "Could not copy the path.", true);
+  }
+}
+
+function exportPath() {
+  if (!lastPathData) return;
+  const blob = new Blob([JSON.stringify(lastPathData, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `path-${lastPathData.src}-${lastPathData.dst}.json`;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setPathMsg("Path exported as JSON.");
+}
+
+function bindPathControls() {
+  el("path-form")?.addEventListener("submit", tracePath);
+  el("path-clear")?.addEventListener("click", clearPath);
+  el("path-copy")?.addEventListener("click", copyPath);
+  el("path-export")?.addEventListener("click", exportPath);
 }
 
 async function loadNodes() {
@@ -281,9 +510,11 @@ async function loadNodes() {
     showMsg(`Error: ${error.message || error}`, true);
     el("satellites-list").replaceChildren();
     el("ground-stations-list").replaceChildren();
+    populatePathSelects([]);
   }
 }
 
+bindPathControls();
 initNodeList(el("satellites-list"));
 initNodeList(el("ground-stations-list"));
 loadNodes();

@@ -11,10 +11,19 @@ QUEUE_SCRIPT = "/static/queue.js?v=23"
 QUEUE_IMPORT = "./queue.js?v=23"
 QUEUE_MODEL_IMPORT = "./queue_model.js?v=3"
 HISTORY_MODEL_IMPORT = "./history_model.js?v=1"
+PATH_MODEL_IMPORT = "./path_model.js?v=1"
 WORLD_TEMPLATE = PACKAGE / "templates" / "world.html"
 SIMULATION_CONTROLS = PACKAGE / "static" / "simulation_controls.js"
 SIMULATION_MODEL_IMPORT = "./simulation_model.js?v=1"
 ADDRESSABILITY_MODEL_IMPORT = "./addressability_model.js?v=1"
+NODES_MODULE = PACKAGE / "static" / "nodes.js"
+WORLD_MODULE = PACKAGE / "static" / "world.js"
+
+
+def test_path_controllers_import_the_versioned_model() -> None:
+    """Node Explorer and World View share one cache-busted path model."""
+    for path in (NODES_MODULE, WORLD_MODULE):
+        assert f'"{PATH_MODEL_IMPORT}"' in path.read_text(encoding="utf-8")
 
 
 def test_queue_imports_the_versioned_history_and_queue_models() -> None:
