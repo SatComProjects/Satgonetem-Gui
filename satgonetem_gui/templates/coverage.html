@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/coverage.css">
+{% endblock %}
+
+{% block content %}
+<div class="cov-page">
+  <header class="cov-page-head">
+    <p class="cov-eyebrow">Constellation analysis</p>
+    <h2 class="cov-title">Coverage Analytics</h2>
+    <p class="muted cov-lede">Measure the fraction of Earth above the elevation mask at the current simulation step, per shell and per ground station.</p>
+  </header>
+  <p class="muted cov-msg" id="coverage-msg" aria-live="polite"></p>
+  <div class="cov-layout">
+    <section class="card cov-controls-card" aria-labelledby="coverage-controls-title">
+      <h3 class="card-title" id="coverage-controls-title">Snapshot settings</h3>
+      <div class="cov-field cov-range-field">
+        <label for="coverage-elevation">Minimum elevation</label>
+        <input type="range" id="coverage-elevation" min="0" max="90" step="1" value="10">
+        <output id="coverage-elevation-value" for="coverage-elevation">10&deg;</output>
+      </div>
+      <div class="cov-field">
+        <label for="coverage-resolution">Grid resolution</label>
+        <select id="coverage-resolution">
+          <option value="5">5&deg; &mdash; fastest</option>
+          <option value="2">2&deg;</option>
+          <option value="1" selected>1&deg; &mdash; balanced</option>
+          <option value="0.5">0.5&deg; &mdash; detailed</option>
+          <option value="0.25">0.25&deg; &mdash; finest</option>
+        </select>
+      </div>
+      <label class="cov-check"><input type="checkbox" id="coverage-shells" checked> Per-shell breakdown</label>
+      <label class="cov-check"><input type="checkbox" id="coverage-stations" checked> Ground-station coverage</label>
+      <button type="button" class="button cov-run-btn" id="coverage-run">Analyze coverage</button>
+      <p class="muted cov-hint">Fine grids over large constellations are rejected; choose a coarser resolution.</p>
+    </section>
+    <section class="card cov-results-card" aria-labelledby="coverage-results-title">
+      <h3 class="card-title" id="coverage-results-title">Coverage</h3>
+      <p class="cov-empty" id="coverage-empty">
+        <strong>No snapshot yet</strong>
+        <span>Load a project, choose a grid, and analyze coverage.</span>
+      </p>
+      <div id="coverage-results" hidden>
+        <div class="cov-hero">
+          <span class="cov-percent" id="coverage-percent">&mdash;</span>
+          <div class="cov-hero-meta">
+            <p class="muted" id="coverage-summary"></p>
+            <p class="muted" id="coverage-notes"></p>
+          </div>
+        </div>
+        <div class="cov-section">
+          <h4>Per shell</h4>
+          <div class="cov-shells" id="coverage-shells-list"></div>
+          <p class="muted" id="coverage-shells-empty" hidden>No shell breakdown.</p>
+        </div>
+        <div class="cov-section">
+          <h4>Ground stations</h4>
+          <div class="cov-table-wrap" id="coverage-stations-table"></div>
+          <p class="muted" id="coverage-stations-empty" hidden>No ground stations reported.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script type="module" src="/static/coverage.js?v=1"></script>
+{% endblock %}
