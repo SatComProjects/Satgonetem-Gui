@@ -1,4 +1,4 @@
-import { api } from "./api.js?v=2";
+import { api } from "./api.js?v=3";
 import { mergeStations } from "./ground_stations_model.js";
 import { normalizeProjectName } from "./new_project_model.js";
 

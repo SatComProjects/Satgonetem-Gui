@@ -1,5 +1,5 @@
 /** Ground-station preset selection page. */
-import { api } from "./api.js?v=2";
+import { api } from "./api.js?v=3";
 import {
   buildStationMap,
   selectedStations,

@@ -120,6 +120,34 @@ describe("api client", () => {
     ]);
   });
 
+  it("times out while reading a stalled response body", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          new ReadableStream({
+            start() {
+              /* never enqueue or close */
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    );
+
+    const request = apiRequest("/api/status", { timeout: 10 });
+    const assertion = expect(request).rejects.toMatchObject({
+      message: "Request timed out.",
+    });
+    await vi.advanceTimersByTimeAsync(11);
+    await assertion;
+    vi.useRealTimers();
+  });
+
   it("aborts a request that exceeds its timeout", async () => {
     vi.useFakeTimers();
     vi.stubGlobal(
