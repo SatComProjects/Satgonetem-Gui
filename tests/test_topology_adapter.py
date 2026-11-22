@@ -239,6 +239,16 @@ def test_adapter_writes_topology_atomically(settings, tmp_path) -> None:
     assert list(tmp_path.glob("*.tmp")) == []
 
 
+def test_position_sync_hook_change_is_reported(settings) -> None:
+    """A core rename of the private position hook fails loudly."""
+    from satgonetem_gui.adapters.satgonetem_topology import (
+        SatGoNetemTopologyAdapter as Adapter,
+    )
+
+    with pytest.raises(RuntimeError, match="_sync_node_positions"):
+        Adapter._sync_positions(SimpleNamespace())
+
+
 def test_adapter_delete_is_idempotent_when_not_initialized(settings) -> None:
     """Deleting routing that was never applied is a no-op."""
     from types import SimpleNamespace

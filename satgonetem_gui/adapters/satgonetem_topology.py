@@ -546,8 +546,13 @@ class SatGoNetemTopologyAdapter:
     @staticmethod
     def _sync_positions(topology: Any) -> None:
         """Refresh positions through the dependency's private sync hook."""
+        sync = getattr(topology, "_sync_node_positions", None)
+        if not callable(sync):
+            raise RuntimeError(
+                "Core contract changed: _sync_node_positions is unavailable."
+            )
         try:
-            topology._sync_node_positions()
+            sync()
         except Exception:
             logger.exception("Failed to sync node positions.")
 
