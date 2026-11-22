@@ -88,6 +88,11 @@ class TopologyService:
         """Return whether the containers are running."""
         return self.reader.gonetem_is_on(self.require_topology())
 
+    def network_running(self) -> bool:
+        """Return container state without requiring a loaded project."""
+        topology = self.session.get_topology()
+        return False if topology is None else self.reader.gonetem_is_on(topology)
+
     @property
     def generation(self) -> int:
         """Return the current project generation for stale-operation guards."""

@@ -7,7 +7,7 @@ import pytest
 
 from satgonetem_gui.config import Settings
 from satgonetem_gui.errors import APIError
-from satgonetem_gui.schemas import Iperf3Request, PingRequest
+from satgonetem_gui.schemas import Iperf3Request, PingRequest, ProjectCreateRequest
 from satgonetem_gui.services.ports import NetworkOperationError, TrafficPoll
 from satgonetem_gui.services.project_service import ProjectService
 from satgonetem_gui.services.routing_service import RoutingService
@@ -19,6 +19,7 @@ from satgonetem_gui.services.traffic_service import (
     TrafficService,
 )
 from satgonetem_gui.state import ProjectSession, RuntimeState
+from tests.factories import project_payload
 
 
 class FakeReader:
@@ -384,6 +385,26 @@ def test_status_treats_an_unknown_gateway_state_as_a_terminal_error() -> None:
     assert service.jobs.get(job_id).terminal is True
     assert service.status(job_id) == result
     assert gateway.poll_calls == 1
+
+
+def test_project_replacement_is_blocked_while_network_runs(tmp_path) -> None:
+    """Replacing a project while containers run would orphan the old network."""
+    service = ProjectService(
+        RuntimeState(),
+        object(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        network_running=lambda: True,
+    )
+
+    with pytest.raises(APIError) as create_error:
+        service.start_create(ProjectCreateRequest(**project_payload("Replacement")))
+    with pytest.raises(APIError) as load_error:
+        asyncio.run(service.load("{}"))
+
+    assert create_error.value.status_code == 409
+    assert load_error.value.status_code == 409
+    assert "Stop it before replacing" in create_error.value.message
 
 
 def test_project_save_uses_one_topology_snapshot(tmp_path) -> None:

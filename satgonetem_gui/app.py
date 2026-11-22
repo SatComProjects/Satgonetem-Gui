@@ -28,8 +28,14 @@ def build_services(settings: Settings) -> ApplicationServices:
     topology_adapter = SatGoNetemTopologyAdapter(settings)
     traffic_adapter = SatGoNetemTrafficAdapter()
 
-    project = ProjectService(runtime, topology_adapter, settings, GROUND_STATIONS_DIR)
     topology = TopologyService(runtime.project, topology_adapter)
+    project = ProjectService(
+        runtime,
+        topology_adapter,
+        settings,
+        GROUND_STATIONS_DIR,
+        network_running=topology.network_running,
+    )
     routing = RoutingService(topology, topology_adapter)
     traffic = TrafficService(topology, traffic_adapter)
     return ApplicationServices(

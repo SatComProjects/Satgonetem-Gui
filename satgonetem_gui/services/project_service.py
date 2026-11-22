@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from ..config import Settings
@@ -26,11 +27,21 @@ class ProjectService:
         gateway: ProjectGateway,
         settings: Settings,
         resources_dir: Path,
+        network_running: Callable[[], bool] | None = None,
     ) -> None:
         self.state = state
         self.gateway = gateway
         self.settings = settings
         self.resources_dir = resources_dir
+        self.network_running = network_running
+
+    def _guard_replacement(self) -> None:
+        """Refuse to replace a project while containers are still running."""
+        if self.network_running is not None and self.network_running():
+            raise APIError(
+                409,
+                "GoNetEm is running. Stop it before replacing the project.",
+            )
 
     def presets(self) -> list[dict]:
         """Return the bundled ground-station presets."""
@@ -59,6 +70,8 @@ class ProjectService:
                 422,
                 f"Invalid project configuration: {exc}",
             ) from exc
+
+        self._guard_replacement()
 
         started = self.state.project_tasks.start(
             name=name,
@@ -93,6 +106,7 @@ class ProjectService:
 
     async def load(self, content: str) -> str:
         """Load a project from uploaded JSON and return its display name."""
+        self._guard_replacement()
         if not self.state.project.begin(name="", save_path="", operation="load"):
             raise APIError(409, "A project operation is already running.")
 
