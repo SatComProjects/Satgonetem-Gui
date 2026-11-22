@@ -9,7 +9,8 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Project Builder** | Define Walker orbit shells and ground stations through a guided form. |
 | **3D World View** | Interactive CesiumJS globe showing satellites, ground stations, links, and coverage in real time. |
 | **Simulation Controls** | Play, pause, step, reset, seek, and change the playback speed of the emulated constellation. |
-| **Node Explorer** | Browse all satellites and ground stations with detailed status. |
+| **Node Explorer** | Browse all satellites and ground stations with detailed status and per-node links. |
+| **Link Metrics** | Inspect link delay, capacity, and active state; Globe link width scales with capacity. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
 | **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
@@ -149,6 +150,18 @@ This is a **routing-graph snapshot, not the live forwarding table**: it is
 computed from the public routing graph, and dynamic routing or an SR-MPLS
 explicit path can install different forwarding state. Re-trace after changing
 the topology, simulation step, or routing configuration.
+
+## Link Metrics
+
+`/api/links` includes propagation delay, capacity, and active state. Expand a
+node in Node Explorer to see its Links table; on World View, line width scales
+logarithmically with capacity and inactive links are red.
+
+Utilization is not included yet: the pinned core's link monitor reads
+`/tmp/interfaces` files, and that contract has not been verified against the
+net-logger output. Capacity comes from the public `get_capacity()` value
+(peer1/downlink for satellite-to-ground links); a zero or unavailable value is
+shown as “Unknown”.
 
 ## Configuration
 
