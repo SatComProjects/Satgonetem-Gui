@@ -30,6 +30,7 @@ from .routes import (
     routing,
     simulation,
     topology,
+    topology_export,
     traffic,
     workspace,
 )
@@ -43,6 +44,7 @@ from .services.project_catalog_service import ProjectCatalogService
 from .services.project_service import ProjectService
 from .services.routing_service import RoutingService
 from .services.simulation_service import SimulationService
+from .services.topology_export_service import TopologyExportService
 from .services.topology_service import TopologyService
 from .services.traffic_service import TrafficService
 from .state import RuntimeState
@@ -149,6 +151,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         topology_adapter,
         usage_reader=topology_adapter,
     )
+    topology_export = TopologyExportService(topology)
     addressability = AddressabilityService(topology, topology_adapter)
     simulation = SimulationService(topology, topology_adapter)
     project = ProjectService(
@@ -180,6 +183,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         project=project,
         catalog=catalog,
         topology=topology,
+        topology_export=topology_export,
         addressability=addressability,
         routing=routing,
         traffic=traffic,
@@ -221,6 +225,7 @@ def create_app(
     app.include_router(workspace.router)
     app.include_router(projects.router)
     app.include_router(topology.router)
+    app.include_router(topology_export.router)
     app.include_router(addressability.router)
     app.include_router(routing.router)
     app.include_router(simulation.router)

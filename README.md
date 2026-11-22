@@ -16,6 +16,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Usage Link Colors** | Opt-in World View link coloring from green (idle) to red (at/above capacity). |
 | **Connectivity Matrix** | Ping every ordered pair of addressable nodes with a loss/RTT heatmap and CSV/JSON export. |
 | **Coverage Analytics** | Snapshot Earth coverage at a chosen elevation mask, per shell and per ground station. |
+| **Topology Export & Health** | Structural graph checks plus JSON, DOT, and GraphML exports. |
 | **Experiment Runs** | Run v0.3.2 YAML scenarios and keep manifests, metrics, results, and reports on the server. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
@@ -107,7 +108,7 @@ package.json            # Frontend test/tooling manifest
 |------|------|
 | `/` | Dashboard — constellation statistics, simulation playback, GoNetem status, routing controls |
 | `/world` | 3D Globe — real-time satellite and ground station visualisation with simulation playback and path highlighting |
-| `/nodes` | Node Explorer — list, inspect, and trace paths between all topology nodes |
+| `/nodes` | Node Explorer — list, inspect, trace paths, check graph health, and export |
 | `/traffic` | Traffic Generator — create and queue traffic jobs, review history and comparisons |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/projects` | Projects — list, reopen, save, duplicate, and delete workspace projects |
@@ -221,6 +222,15 @@ at 100,000,000 satellite-cells and 1,200,000 grid cells; a finer grid over a
 large constellation is rejected with a request to use a coarser resolution.
 Results are cached per project generation, simulation step, elevation,
 resolution, and section toggles.
+
+## Topology Export and Health
+
+The Nodes page includes a Topology Health card. It reports isolated nodes,
+incomplete or duplicate positions, zero or negative link capacity, negative
+delay, self-links, and duplicate link pairs. Isolated nodes are informational
+(a ground station out of view is normal); the other findings are warnings. The
+same card exports the graph as JSON, Graphviz DOT, or GraphML through
+`/api/topology/export`, with a 10,000,000-character envelope cap.
 
 ## Experiment Runs
 

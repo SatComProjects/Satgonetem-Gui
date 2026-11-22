@@ -393,6 +393,35 @@ class NodeSummary(BaseModel):
     position: Position
 
 
+class TopologyHealthCheck(BaseModel):
+    """One structural finding category for the loaded topology."""
+
+    id: str
+    severity: Literal["info", "warning"]
+    count: int
+    message: str
+    items: list[str] = Field(default_factory=list)
+
+
+class TopologyHealthResponse(BaseModel):
+    """Node/link counts and every structural health check."""
+
+    ok: bool = True
+    nodes: int
+    links: int
+    healthy: bool
+    checks: list[TopologyHealthCheck]
+
+
+class TopologyExportResponse(BaseModel):
+    """Downloadable serialized topology content."""
+
+    ok: bool = True
+    filename: str
+    content: str
+    content_type: str
+
+
 class TrafficNode(BaseModel):
     """Traffic source or destination."""
 

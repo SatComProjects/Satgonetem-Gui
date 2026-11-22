@@ -18,6 +18,7 @@ from satgonetem_gui.routes import (
     projects,
     routing,
     topology,
+    topology_export,
     traffic,
     workspace,
 )
@@ -51,6 +52,8 @@ BLOCKING_ENDPOINTS = [
     topology.api_link_usage,
     topology.api_nodes,
     topology.api_node_detail,
+    topology_export.api_topology_health,
+    topology_export.api_topology_export,
     routing.api_routing_status,
     routing.api_routing_path,
     traffic.api_traffic_nodes,
