@@ -32,9 +32,10 @@ and adapter graph for each app.
 
 - `app.py` - `create_app()`, service composition, routers, static mount.
 - `dependencies.py` - injects `ApplicationServices` from `app.state`.
-- `routes/` - pages, projects, topology, routing, simulation, traffic routers.
-- `services/` - project lifecycle, topology views, routing, simulation
-  transport, traffic jobs.
+- `routes/` - pages, projects, topology, addressability, routing, simulation,
+  traffic routers.
+- `services/` - project lifecycle, topology views, satellite addressability,
+  routing, simulation transport, traffic jobs.
 - `adapters/` - the only modules importing `TopologyManager` or concrete flow
   classes.
 - `state.py` - `ProjectSession`, `ProjectTaskManager`, `RuntimeState`.
@@ -166,6 +167,19 @@ not import those dependency internals.
 - Added a shared Dashboard/World View transport panel, Vitest coverage for the
   pure model, and Playwright coverage for the panel shell.
 
+## Phase 9 changes
+
+- Added an `AddressabilityService` and a narrow `AddressabilityController`
+  protocol for global and per-node satellite traffic addressability.
+- Added `GET/POST /api/satellites/addressable` and
+  `POST /api/nodes/{name}/addressable`; node detail now exposes the satellite
+  addressable flag.
+- Kept addressability session-scoped because the pinned core does not serialize
+  it, and returned a routing-refresh flag when addressing is active.
+- Added the Traffic page satellite-endpoint toggle, a per-node Node Explorer
+  control, Vitest coverage for the pure formatting/rules, and a mocked
+  Playwright flow that verifies endpoint refresh.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -186,12 +200,13 @@ not import those dependency internals.
 - Package-data tests verify bundled presets/config, and CI installs the built
   wheel into a clean target before importing the app.
 - Vitest covers the pure queue, ground-station selection, traffic payload, API
-  wrapper, simulation formatting/action rules, and escaping modules.
+  wrapper, simulation formatting/action rules, addressability summaries/rules,
+  and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
-  node expansion, dashboard counts, simulation panel accessibility, and the
-  WebGL fallback. World View WebGL rendering itself remains a manual desktop
-  check.
+  node expansion, dashboard counts, simulation panel accessibility,
+  addressability endpoint refresh, and the WebGL fallback. World View WebGL
+  rendering itself remains a manual desktop check.
 
 ## Current measurements
 
@@ -202,11 +217,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **463 passed, 1 skipped** in about 30 s with coverage. Frontend:
-**52 Vitest tests**, **12 Playwright tests**.
+Result: **499 passed, 1 skipped** in about 35 s with coverage. Frontend:
+**58 Vitest tests**, **13 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**89.44%** over 2290 statements.
+**89.88%** over 2404 statements.
 
 ## Tooling decisions
 
