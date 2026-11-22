@@ -51,6 +51,27 @@ describe("traffic payload builder", () => {
     expect(result.label).toContain("ping Sat0 -> Gnd9");
   });
 
+  it("uses defaults for empty and fractional integer fields", () => {
+    const result = buildTrafficPayload({
+      tool: "iperf3",
+      src: "Sat0",
+      dst: "Sat1",
+      duration: "",
+      port: "  ",
+      parallel: "4.5",
+      bandwidthMbps: "",
+      interval: "",
+    });
+
+    expect(result.payload).toMatchObject({
+      duration: 10,
+      port: 5201,
+      parallel: 1,
+      bandwidth_mbps: 0,
+      interval: 1,
+    });
+  });
+
   it("builds an hping3 payload", () => {
     const result = buildTrafficPayload({
       tool: "hping3",
