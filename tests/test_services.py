@@ -5,9 +5,11 @@ import threading
 
 import pytest
 
+from satgonetem_gui.config import Settings
 from satgonetem_gui.errors import APIError
 from satgonetem_gui.schemas import Iperf3Request, PingRequest
 from satgonetem_gui.services.ports import NetworkOperationError, TrafficPoll
+from satgonetem_gui.services.project_service import ProjectService
 from satgonetem_gui.services.routing_service import RoutingService
 from satgonetem_gui.services.topology_service import TopologyService
 from satgonetem_gui.services.traffic_service import (
@@ -16,7 +18,7 @@ from satgonetem_gui.services.traffic_service import (
     TrafficJob,
     TrafficService,
 )
-from satgonetem_gui.state import ProjectSession
+from satgonetem_gui.state import ProjectSession, RuntimeState
 
 
 class FakeReader:
@@ -383,6 +385,39 @@ def test_status_treats_an_unknown_gateway_state_as_a_terminal_error() -> None:
     assert service.jobs.get(job_id).terminal is True
     assert service.status(job_id) == result
     assert gateway.poll_calls == 1
+
+
+def test_project_save_uses_one_topology_snapshot(tmp_path) -> None:
+    """A concurrent project swap must not change the saved content/filename pair."""
+    runtime = RuntimeState()
+    runtime.project.succeed(object(), "ProjectA", "")
+    started = threading.Event()
+    release = threading.Event()
+
+    class Gateway:
+        def save(self, _topology):
+            started.set()
+            release.wait(timeout=5)
+            return "CONTENT_A"
+
+    service = ProjectService(
+        runtime,
+        Gateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    async def scenario() -> dict:
+        task = asyncio.create_task(service.save())
+        await asyncio.to_thread(started.wait, 2)
+        runtime.project.succeed(object(), "ProjectB", "")
+        release.set()
+        return await task
+
+    assert asyncio.run(scenario()) == {
+        "content": "CONTENT_A",
+        "filename": "ProjectA.json",
+    }
 
 
 def test_registry_running_returns_a_snapshot_of_active_jobs() -> None:

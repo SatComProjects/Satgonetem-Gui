@@ -129,6 +129,15 @@ class ProjectSession:
                 return None
             return self.topology_manager
 
+    def context(self, name: Optional[str] = None) -> tuple[Any, str, str]:
+        """Return topology, name, and save path from one atomic snapshot."""
+        with self._lock:
+            if self.topology_manager is None:
+                return None, "", ""
+            if name is not None and self.project_name != name:
+                return None, "", ""
+            return self.topology_manager, self.project_name or "", self.save_path
+
     def snapshot(self) -> Dict[str, Any]:
         """Return a JSON-serializable snapshot for the project status endpoint."""
         with self._lock:

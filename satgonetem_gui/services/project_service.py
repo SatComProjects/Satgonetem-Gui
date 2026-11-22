@@ -79,12 +79,12 @@ class ProjectService:
 
     def config(self, name: str) -> dict:
         """Return the editable configuration for a loaded project."""
-        topology = self.state.project.get_topology(name)
-        if topology is None:
+        topology, project_name, save_path = self.state.project.context(name)
+        if topology is None or project_name != name:
             raise APIError(404, "Project not found.")
 
         try:
-            return self.gateway.config(topology, self.state.project.save_path)
+            return self.gateway.config(topology, save_path)
         except APIError:
             raise
         except Exception as exc:
@@ -117,7 +117,7 @@ class ProjectService:
 
     async def save(self) -> dict:
         """Serialize the loaded project and return content plus filename."""
-        topology = self.state.project.get_topology()
+        topology, project_name, _save_path = self.state.project.context()
         if topology is None:
             raise APIError(404, "No project is currently loaded.")
 
@@ -127,5 +127,5 @@ class ProjectService:
             logger.exception("Project save failed.")
             raise APIError(500, "Project save failed.") from exc
 
-        name = (self.state.project.project_name or "project").replace(" ", "_")
+        name = (project_name or "project").replace(" ", "_")
         return {"content": content, "filename": f"{name}.json"}
