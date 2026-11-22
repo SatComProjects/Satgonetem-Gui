@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from satgonetem.traffic import PingStatus
 
 from tests.factories import PLANES, PROJECT_NAME, SATELLITES_PER_PLANE, project_payload
 from tests.helpers import wait_for_project_state
@@ -300,6 +301,9 @@ def test_cancel_api_stops_a_fake_job(project_client, services) -> None:
     class FakeFlow:
         def __init__(self) -> None:
             self.stopped = False
+
+        def status(self) -> PingStatus:
+            return PingStatus.RUNNING
 
         def stop(self) -> None:
             self.stopped = True
