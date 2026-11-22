@@ -90,3 +90,45 @@ export function normalizeStoredItems(raw) {
       poll_failures: Math.max(0, Number(item.poll_failures) || 0),
     }));
 }
+
+function copyPayload(payload) {
+  try {
+    return JSON.parse(JSON.stringify(payload || {}));
+  } catch {
+    return { ...(payload || {}) };
+  }
+}
+
+/** Duplicate an item as a fresh queued job without job state or timers. */
+export function cloneQueueItem(item, id = null) {
+  const base = String(item?.label || item?.kind || "job").replace(
+    / \(copy\)$/,
+    "",
+  );
+  return newQueueItem(
+    {
+      kind: item?.kind || "iperf3",
+      payload: copyPayload(item?.payload),
+      label: `${base} (copy)`,
+      delay: Number(item?.delay) || 0,
+    },
+    id,
+  );
+}
+
+/** Turn one stored history record back into a fresh queued job. */
+export function replayQueueItem(record, id = null) {
+  const base = String(record?.label || record?.kind || "job").replace(
+    / \(replay\)$/,
+    "",
+  );
+  return newQueueItem(
+    {
+      kind: record?.kind || "iperf3",
+      payload: copyPayload(record?.payload),
+      label: `${base} (replay)`,
+      delay: 0,
+    },
+    id,
+  );
+}

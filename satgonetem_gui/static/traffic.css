@@ -15,6 +15,81 @@
   gap: 14px;
 }
 
+/* Saved presets: an inset shelf, not a second card. */
+
+.preset-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--input-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.preset-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.preset-title::before {
+  content: "";
+  width: 3px;
+  height: 0.95em;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.preset-panel .form-row {
+  gap: 10px;
+}
+
+.preset-panel .actions-row {
+  align-items: center;
+  gap: 8px;
+  margin-top: 0;
+  padding-top: 10px;
+}
+
+.preset-panel .actions-row .button {
+  flex: 0 0 auto;
+}
+
+#tg-preset-msg {
+  flex: 1 1 160px;
+  min-width: 0;
+  min-height: 1.35em;
+  margin-left: auto;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.preset-panel button:disabled {
+  cursor: not-allowed;
+  background: var(--card);
+  opacity: 0.45;
+}
+
+.preset-panel button:disabled:hover {
+  background: var(--card);
+}
+
+.preset-panel select:focus-visible,
+.preset-panel input:focus-visible,
+.preset-panel button:focus-visible,
+.endpoint-row select:focus-visible,
+.endpoint-row button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .form-row {
   display: flex;
   flex-wrap: wrap;
@@ -47,6 +122,29 @@
 
 .actions-row label {
   flex: 0 0 120px;
+}
+
+/* Endpoints: source / swap / destination share one baseline row. */
+
+.form-row.endpoint-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 10px;
+}
+
+.endpoint-row label {
+  flex: initial;
+  min-width: 0;
+}
+
+.endpoint-row .swap-btn {
+  align-self: end;
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .addressability-panel {
@@ -114,5 +212,16 @@
   .addressability-count {
     align-self: flex-start;
     margin-left: 26px;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-row.endpoint-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .endpoint-row .swap-btn {
+    justify-self: stretch;
+    padding-block: 8px;
   }
 }

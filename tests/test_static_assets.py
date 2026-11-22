@@ -7,9 +7,9 @@ BASE_TEMPLATE = PACKAGE / "templates" / "base.html"
 TRAFFIC_MODULE = PACKAGE / "static" / "traffic.js"
 QUEUE_MODULE = PACKAGE / "static" / "queue.js"
 
-QUEUE_SCRIPT = "/static/queue.js?v=23"
-QUEUE_IMPORT = "./queue.js?v=23"
-QUEUE_MODEL_IMPORT = "./queue_model.js?v=3"
+QUEUE_SCRIPT = "/static/queue.js?v=24"
+QUEUE_IMPORT = "./queue.js?v=24"
+QUEUE_MODEL_IMPORT = "./queue_model.js?v=4"
 HISTORY_MODEL_IMPORT = "./history_model.js?v=1"
 PATH_MODEL_IMPORT = "./path_model.js?v=1"
 LINKS_MODEL_IMPORT = "./links_model.js?v=1"
@@ -29,6 +29,8 @@ COVERAGE_MODULE = PACKAGE / "static" / "coverage.js"
 COVERAGE_MODEL_IMPORT = "./coverage_model.js?v=1"
 TOPOLOGY_HEALTH_MODULE = PACKAGE / "static" / "topology_health.js"
 TOPOLOGY_HEALTH_MODEL_IMPORT = "./topology_health_model.js?v=1"
+TRAFFIC_MODULE = PACKAGE / "static" / "traffic.js"
+TRAFFIC_PRESETS_IMPORT = "./traffic_presets.js?v=1"
 EXPERIMENTS_MODULE = PACKAGE / "static" / "experiments.js"
 EXPERIMENTS_MODEL_IMPORT = "./experiments_model.js?v=2"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
@@ -50,6 +52,11 @@ def test_link_controllers_import_the_versioned_model() -> None:
 def test_experiments_page_imports_the_versioned_model() -> None:
     """The experiment page uses one cache-busted formatting model."""
     assert f'"{EXPERIMENTS_MODEL_IMPORT}"' in EXPERIMENTS_MODULE.read_text(encoding="utf-8")
+
+
+def test_traffic_page_imports_the_versioned_preset_model() -> None:
+    """The traffic form uses one cache-busted preset model."""
+    assert f'"{TRAFFIC_PRESETS_IMPORT}"' in TRAFFIC_MODULE.read_text(encoding="utf-8")
 
 
 def test_topology_health_imports_the_versioned_model() -> None:
