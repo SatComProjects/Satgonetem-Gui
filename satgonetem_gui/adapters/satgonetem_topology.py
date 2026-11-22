@@ -34,17 +34,25 @@ from ..services.ports import NetworkOperationError
 from ..state import ProjectResult
 from ..storage import resolve_data_file, resolve_save_path
 
-apply_satcom_fix()
-
 logger = logging.getLogger(__name__)
 
 DATA_SEARCH_DIR = GROUND_STATIONS_DIR
+_CORE_INITIALIZED = False
+
+
+def initialize_core() -> None:
+    """Apply the pinned core's performance patch once, outside module import."""
+    global _CORE_INITIALIZED
+    if not _CORE_INITIALIZED:
+        apply_satcom_fix()
+        _CORE_INITIALIZED = True
 
 
 class SatGoNetemTopologyAdapter:
     """Concrete adapter around ``TopologyManager`` and its configuration models."""
 
     def __init__(self, settings: Settings) -> None:
+        initialize_core()
         self.settings = settings
 
     def build(self, payload: ProjectCreateRequest) -> ProjectResult:
