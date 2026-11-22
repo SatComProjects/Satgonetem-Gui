@@ -62,8 +62,8 @@ def _data_file_is_allowed(data_file: str, roots: list[Path]) -> bool:
             resolved = candidate.resolve()
         except (OSError, RuntimeError):
             continue
-        if _is_within(resolved, roots):
-            return resolved.is_file()
+        if _is_within(resolved, roots) and resolved.is_file():
+            return True
     return False
 
 
@@ -252,17 +252,17 @@ def validate_project_document(
         except ValueError as exc:
             raise ProjectDocumentError(str(exc)) from exc
 
+    network_config = document.get("network_config")
+    if network_config is not None and not isinstance(network_config, dict):
+        raise ProjectDocumentError(
+            "Project file has an invalid network_config section."
+        )
     simulation_property = document.get("simulation_property")
     if simulation_property is None:
         return document
     if not isinstance(simulation_property, dict):
         raise ProjectDocumentError(
             "Project file has an invalid simulation_property section."
-        )
-    network_config = document.get("network_config")
-    if network_config is not None and not isinstance(network_config, dict):
-        raise ProjectDocumentError(
-            "Project file has an invalid network_config section."
         )
     ground_objects = simulation_property.get("ground_objects_properties", [])
     if not isinstance(ground_objects, list):
