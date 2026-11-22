@@ -113,8 +113,10 @@ The server and project storage are configured through environment variables:
 | `SATGONETEM_GUI_PORT` | `8000` | HTTP port. |
 | `SATGONETEM_GUI_SAVE_ROOT` | `~/satgonetem-projects` | Only project save paths inside this directory are accepted. |
 
-Set `SATGONETEM_GUI_HOST=0.0.0.0` only on a trusted network. The form's
-`Save to` field is optional; when used, its target must stay inside the
+Set `SATGONETEM_GUI_HOST=0.0.0.0` only on a trusted network. The machine's
+hostname and local interface addresses are accepted automatically in that mode;
+add any DNS alias or reverse-proxy name to `SATGONETEM_GUI_ALLOWED_HOSTS`. The
+form's `Save to` field is optional; when used, its target must stay inside the
 configured save root.
 
 ## Security

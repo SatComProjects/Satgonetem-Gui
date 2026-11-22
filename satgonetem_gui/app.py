@@ -1,6 +1,7 @@
 """FastAPI application factory and composition root."""
 
 import os
+import socket
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -27,26 +28,44 @@ LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "testserver", "[::1]", "::1")
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
+def _local_host_names() -> set[str]:
+    """Return the machine hostname and local addresses for wildcard binds."""
+    names = {socket.gethostname(), socket.getfqdn()}
+    try:
+        names.update(str(info[4][0]) for info in socket.getaddrinfo(socket.gethostname(), None))
+    except OSError:
+        pass
+    return {name.lower() for name in names if name}
+
+
 def _allowed_hosts(settings: Settings) -> list[str]:
     """Return loopback hosts plus explicit operator overrides."""
     hosts = set(LOOPBACK_HOSTS)
-    if settings.host not in {"", "0.0.0.0", "::"}:
+    if settings.host in {"0.0.0.0", "::"}:
+        hosts.update(_local_host_names())
+    elif settings.host not in {"", "0.0.0.0", "::"}:
         hosts.add(settings.host)
     configured = os.getenv("SATGONETEM_GUI_ALLOWED_HOSTS", "")
     hosts.update(host.strip() for host in configured.split(",") if host.strip())
-    return sorted(hosts)
+    return sorted(host.lower() for host in hosts)
 
 
 def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
     """Reject untrusted Host headers and cross-origin browser mutations."""
     allowed_names = {
-        host.strip("[]") for host in hosts
+        host.strip("[]").lower() for host in hosts
     } | {"127.0.0.1", "localhost", "testserver", "::1"}
 
     @app.middleware("http")
     async def request_guard(request, call_next):
         host_header = request.headers.get("host", "")
-        host_name = (urlsplit(f"//{host_header}").hostname or "").lower()
+        try:
+            host_name = (urlsplit(f"//{host_header}").hostname or "").lower()
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={"ok": False, "error": "Invalid Host header."},
+            )
         if host_name not in allowed_names:
             return JSONResponse(
                 status_code=400,
@@ -56,8 +75,17 @@ def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
         if request.method in UNSAFE_METHODS:
             origin = request.headers.get("origin")
             if origin:
-                origin_host = (urlsplit(origin).hostname or "").strip("[]")
-                if origin_host not in allowed_names:
+                try:
+                    origin_host = (urlsplit(origin).hostname or "").lower()
+                except ValueError:
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "ok": False,
+                            "error": "Cross-origin request rejected.",
+                        },
+                    )
+                if origin_host.strip("[]") not in allowed_names:
                     return JSONResponse(
                         status_code=403,
                         content={
