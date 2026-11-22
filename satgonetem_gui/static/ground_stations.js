@@ -65,7 +65,7 @@ function renderTable() {
       station.name,
       station.latitude,
       station.longitude,
-      station.elevation_km,
+      station.elevation_m,
     ]) {
       const cell = document.createElement("td");
       cell.textContent = value;
@@ -122,7 +122,7 @@ function renderCustomList() {
   for (const [index, station] of customStations.entries()) {
     const item = document.createElement("li");
     const label = document.createElement("span");
-    label.textContent = `${station.name} (${station.latitude}, ${station.longitude}, ${station.elevation_km} km)`;
+    label.textContent = `${station.name} (${station.latitude}, ${station.longitude}, ${station.elevation_m} m)`;
     const remove = document.createElement("button");
     remove.textContent = "Remove";
     remove.type = "button";
@@ -153,7 +153,7 @@ document.getElementById("add_custom_btn").addEventListener("click", () => {
     name,
     latitude,
     longitude,
-    elevation_km: Number.isNaN(elevation) ? 0 : elevation,
+    elevation_m: Number.isNaN(elevation) ? 0 : elevation,
   });
   customNextIdx += 1;
   document.getElementById("c_name").value = "";

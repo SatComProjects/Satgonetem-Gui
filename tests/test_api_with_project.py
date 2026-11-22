@@ -48,6 +48,7 @@ def test_ground_stations_endpoint(project_client) -> None:
     assert len(stations) == 1
     assert stations[0]["name"] == "Gnd100"
     assert stations[0]["city"] == "Berlin"
+    assert stations[0]["position"]["altitude"] == pytest.approx(0.034)
 
 
 def test_links_endpoint(project_client) -> None:

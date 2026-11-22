@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-STATION_FIELDS = ("index", "name", "latitude", "longitude", "elevation_km")
+STATION_FIELDS = ("index", "name", "latitude", "longitude", "elevation_m")
 _FORBIDDEN_NAME_CHARACTERS = (",", "\r", "\n")
 
 
@@ -14,7 +14,7 @@ def parse_ground_station_file(path: Path) -> list[dict[str, Any]]:
     """Parse a CSV ground-station file into station dictionaries.
 
     Args:
-        path: File with rows of ``index,name,latitude,longitude,elevation_km``.
+        path: File with rows of ``index,name,latitude,longitude,elevation_m``.
 
     Returns:
         Valid rows as dictionaries. Blank and malformed rows are skipped.
@@ -33,7 +33,7 @@ def parse_ground_station_file(path: Path) -> list[dict[str, Any]]:
                         "name": row[1].strip(),
                         "latitude": float(row[2].strip()),
                         "longitude": float(row[3].strip()),
-                        "elevation_km": float(row[4].strip()),
+                        "elevation_m": float(row[4].strip()),
                     }
                 )
             except ValueError:
@@ -84,7 +84,7 @@ def validate_inline_stations(stations: object) -> list[dict[str, Any]]:
             index = int(station["index"])
             latitude = float(station["latitude"])
             longitude = float(station["longitude"])
-            elevation_km = float(station["elevation_km"])
+            elevation_m = float(station["elevation_m"])
         except (TypeError, ValueError) as exc:
             raise ValueError(
                 "Ground station index and coordinates must be numeric."
@@ -95,7 +95,7 @@ def validate_inline_stations(stations: object) -> list[dict[str, Any]]:
                 "name": name,
                 "latitude": latitude,
                 "longitude": longitude,
-                "elevation_km": elevation_km,
+                "elevation_m": elevation_m,
             }
         )
     return validated
@@ -154,7 +154,7 @@ def write_stations_to_temp(
 
     Args:
         stations: Station dictionaries with index, name, latitude, longitude,
-            and elevation_km keys.
+            and elevation_m keys.
         directory: Destination directory. When omitted, the system temporary
             directory is used. The directory is created when missing.
 

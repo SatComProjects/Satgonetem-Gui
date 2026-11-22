@@ -29,7 +29,7 @@ class GroundStationPoint(BaseModel):
     name: str
     latitude: float
     longitude: float
-    elevation_km: float
+    elevation_m: float
 
 
 class GroundStationPreset(BaseModel):
