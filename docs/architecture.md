@@ -313,11 +313,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **715 passed, 1 skipped** in about 46 s with coverage. Frontend:
+Result: **716 passed, 1 skipped** in about 46 s with coverage. Frontend:
 **108 Vitest tests**, **30 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**87.26%** over 4184 statements.
+**88.83%** over 4181 statements.
 
 ## Tooling decisions
 
