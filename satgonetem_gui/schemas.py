@@ -181,7 +181,12 @@ class RoutingStatusResponse(BaseModel):
 class RoutingApplyRequest(BaseModel):
     """Requested routing method."""
 
-    method: str = "static"
+    method: Literal[
+        "static",
+        "dynamic-ospf",
+        "dynamic-isis",
+        "sr-mpls",
+    ] = "static"
 
 
 class LoopbackInfo(BaseModel):

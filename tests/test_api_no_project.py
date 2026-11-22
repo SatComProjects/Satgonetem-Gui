@@ -41,6 +41,14 @@ def test_project_dependent_routes_return_404(client, method: str, path: str, bod
     assert response.status_code == 404
 
 
+def test_routing_apply_rejects_unknown_method_before_service(client) -> None:
+    """An unsupported method is a 422, not a core 500."""
+    response = client.post("/api/routing/apply", json={"method": "bogus"})
+
+    assert response.status_code == 422
+    assert response.json()["ok"] is False
+
+
 def test_status_without_project_has_empty_counts(client) -> None:
     """The dashboard can poll status before a project is loaded."""
     response = client.get("/api/status")
