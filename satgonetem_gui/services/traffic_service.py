@@ -212,12 +212,20 @@ class TrafficService:
         try:
             job = self._create_job(kind, flow, request)
         except JobCapacityError as exc:
-            try:
-                self.gateway.stop(flow)
-            except Exception:
-                logger.exception("Failed to stop a rejected traffic flow.")
+            self._stop_flow(flow)
             raise APIError(429, str(exc)) from exc
+        except Exception as exc:
+            self._stop_flow(flow)
+            logger.exception("Failed to register a %s traffic job.", kind)
+            raise APIError(500, "Failed to register traffic job.") from exc
         return job.job_id
+
+    def _stop_flow(self, flow: Any) -> None:
+        """Stop a flow that never became a tracked job."""
+        try:
+            self.gateway.stop(flow)
+        except Exception:
+            logger.exception("Failed to stop an untracked traffic flow.")
 
     def _create_job(self, kind: str, flow: Any, request: Any) -> TrafficJob:
         """Create a job, reclaiming finished jobs once when the registry is full."""

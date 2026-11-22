@@ -348,6 +348,27 @@ def test_capacity_rejection_stops_the_unregistered_flow() -> None:
     assert len(gateway.stopped) == 1
 
 
+def test_registration_failure_stops_the_unregistered_flow() -> None:
+    """Any registry failure, not only capacity, cleans up the started flow."""
+
+    class BrokenRegistry:
+        def create(self, *_args, **_kwargs):
+            raise RuntimeError("registry unavailable")
+
+        def running(self):
+            return []
+
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    gateway = FakeTraffic()
+    service = TrafficService(topology, gateway, BrokenRegistry())
+
+    with pytest.raises(APIError) as error:
+        service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+
+    assert error.value.status_code == 500
+    assert len(gateway.stopped) == 1
+
+
 def test_lazy_reclaim_polls_finished_jobs_when_the_registry_is_full() -> None:
     """A full registry polls running jobs once and retries job creation."""
     topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
