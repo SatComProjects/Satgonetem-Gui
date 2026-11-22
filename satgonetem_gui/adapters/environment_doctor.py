@@ -115,6 +115,31 @@ def listen_address(config: object) -> tuple[str, int]:
     return host.strip("[]") or "localhost", port
 
 
+def _has_explicit_reference(image: str) -> bool:
+    """Return whether an image reference includes a tag or digest."""
+    last = image.rsplit("/", 1)[-1]
+    return ":" in last or "@" in last
+
+
+def _image_repository(reference: str) -> str:
+    """Return the repository part of a local image tag reference."""
+    reference = reference.split("@", 1)[0]
+    last = reference.rsplit("/", 1)[-1]
+    if ":" in last:
+        return reference.rsplit(":", 1)[0]
+    return reference
+
+
+def _local_image_references(client: Any) -> set[str]:
+    """Return every tag currently present in the local Docker image store."""
+    references: set[str] = set()
+    for image in client.images.list() or []:
+        for tag in getattr(image, "tags", []) or []:
+            if tag:
+                references.add(str(tag))
+    return references
+
+
 def _nearest_existing_directory(path: Path) -> Path | None:
     """Return the closest existing ancestor of a not-yet-created save root."""
     for candidate in (path, *path.parents):
@@ -303,11 +328,26 @@ class LocalEnvironmentDoctor:
             )
 
         missing: list[str] = []
+        local_references: set[str] | None = None
         try:
             for image in images:
-                try:
-                    client.images.get(image)
-                except docker.errors.ImageNotFound:
+                if _has_explicit_reference(image):
+                    try:
+                        client.images.get(image)
+                    except docker.errors.ImageNotFound:
+                        missing.append(image)
+                    continue
+
+                # A repository-only config entry (for example
+                # ``mroy31/gonetem-frr``) is satisfied by any locally tagged
+                # release such as ``mroy31/gonetem-frr:0.6.0``. Docker's
+                # implicit ``latest`` is not what gonetem-console installs.
+                if local_references is None:
+                    local_references = _local_image_references(client)
+                if not any(
+                    _image_repository(reference) == image
+                    for reference in local_references
+                ):
                     missing.append(image)
         except Exception as exc:
             logger.info("Could not inspect Docker images: %s", exc)
@@ -322,6 +362,11 @@ class LocalEnvironmentDoctor:
             listed = ", ".join(missing[:5])
             if len(missing) > 5:
                 listed += f", and {len(missing) - 5} more"
+            hint = (
+                "Pull the GoNetEm images with: gonetem-console pull"
+                if missing[0].startswith("mroy31/")
+                else f"Pull a missing image with: docker pull {missing[0]}"
+            )
             return _check(
                 "images",
                 "Container images",
@@ -330,7 +375,7 @@ class LocalEnvironmentDoctor:
                     f"{len(missing)} of {len(images)} required images are missing: "
                     f"{listed}."
                 ),
-                f"Pull a missing image with: docker pull {missing[0]}",
+                hint,
             )
 
         return _check(

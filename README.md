@@ -177,6 +177,11 @@ ground stations, containers, and memory (128 MB per container). Storage errors
 block creation; Docker and GoNetEm problems are warnings because a project can
 still be built in-process without running containers.
 
+GoNetEm component images are published with version tags (for example
+`0.6.0`). The image check matches repository-only entries in the bundled config
+against any locally present tag, and the hint points at `gonetem-console pull`
+rather than an untagged `docker pull`.
+
 Project creation reports real lifecycle phases (`validating`, `building`,
 `loading`, `finalizing`, `ready`, `error`) and elapsed time. When a phase has no
 meaningful percentage, the progress bar is indeterminate instead of showing a
