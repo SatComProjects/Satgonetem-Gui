@@ -6,6 +6,7 @@ import {
   selectedStations,
   selectionSummary,
   stationKey,
+  validateStationName,
 } from "../satgonetem_gui/static/ground_stations_model.js";
 
 const presets = [
@@ -32,6 +33,14 @@ describe("ground station selection", () => {
       "Berlin",
       "Tokyo",
     ]);
+  });
+
+  it("rejects station names the core parser cannot represent", () => {
+    expect(validateStationName("Berlin")).toBeNull();
+    expect(validateStationName("Berlin, DE")).toMatch("commas");
+    expect(validateStationName('Berlin "Mitte"')).toMatch("quotes");
+    expect(validateStationName("Berlin\nMitte")).toMatch("newlines");
+    expect(validateStationName("   ")).toMatch("required");
   });
 
   it("merges pending stations across picker visits without duplicates", () => {

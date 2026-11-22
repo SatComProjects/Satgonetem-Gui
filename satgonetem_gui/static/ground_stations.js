@@ -6,6 +6,7 @@ import {
   selectionSummary,
   setPresetSelection,
   stationKey,
+  validateStationName,
 } from "./ground_stations_model.js";
 
 const presetSelect = document.getElementById("preset_select");
@@ -164,6 +165,11 @@ document.getElementById("add_custom_btn").addEventListener("click", () => {
   const latitude = parseFloat(document.getElementById("c_lat").value);
   const longitude = parseFloat(document.getElementById("c_lon").value);
   const elevation = parseFloat(document.getElementById("c_elev").value || "0");
+  const nameError = validateStationName(name);
+  if (nameError) {
+    alert(nameError);
+    return;
+  }
   if (!name || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     alert("Name, latitude, and longitude are required.");
     return;

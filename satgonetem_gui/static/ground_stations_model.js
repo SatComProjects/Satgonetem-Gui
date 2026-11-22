@@ -1,5 +1,13 @@
 /** Pure ground-station preset selection helpers. */
 
+export function validateStationName(name) {
+  if (!String(name || "").trim()) return "Station name is required.";
+  if (/[,|\r\n"]/.test(name)) {
+    return "Station names cannot contain commas, quotes, or newlines.";
+  }
+  return null;
+}
+
 export function stationKey(presetName, stationIndex) {
   return `${presetName}:${stationIndex}`;
 }
