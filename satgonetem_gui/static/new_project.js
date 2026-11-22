@@ -1,6 +1,10 @@
 import { api } from "./api.js?v=3";
 import { mergeStations } from "./ground_stations_model.js";
-import { normalizeProjectName } from "./new_project_model.js";
+import {
+  normalizeProjectName,
+  validateGroundNumbers,
+  validateShellNumbers,
+} from "./new_project_model.js";
 
   var shells = [];
   var grounds = [];
@@ -101,6 +105,11 @@ import { normalizeProjectName } from "./new_project_model.js";
     var sats = parseInt(document.getElementById("sh_sats_plane").value || "1", 10);
     var incl = parseFloat(document.getElementById("sh_incl").value || "0");
     var rev = parseFloat(document.getElementById("sh_rev").value || "0");
+    var shellError = validateShellNumbers(planes, sats, incl, rev);
+    if (shellError) {
+      alert(shellError);
+      return;
+    }
 
     shells.push({
       type: type,
@@ -141,6 +150,11 @@ import { normalizeProjectName } from "./new_project_model.js";
     var elev = parseInt(document.getElementById("g_elev").value || "10", 10);
     var maxconn = parseInt(document.getElementById("g_maxconn").value || "3", 10);
     var strat = document.getElementById("g_strategy").value;
+    var groundError = validateGroundNumbers(elev, maxconn);
+    if (groundError) {
+      alert(groundError);
+      return;
+    }
 
     grounds.push({
       identifier: id,
