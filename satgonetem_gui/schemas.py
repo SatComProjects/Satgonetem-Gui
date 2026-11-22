@@ -584,6 +584,53 @@ class ConnectivityExportResponse(BaseModel):
     content_type: str = "text/csv"
 
 
+class CoverageRequest(BaseModel):
+    """Coverage snapshot options for the current topology."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    elevation_deg: float = Field(default=10.0, ge=0.0, le=90.0)
+    grid_resolution_deg: float = Field(default=1.0, ge=0.25, le=10.0)
+    include_shells: bool = True
+    include_ground_stations: bool = True
+
+
+class CoverageShellResult(BaseModel):
+    """One shell's contribution to the coverage snapshot."""
+
+    identifier: str
+    satellites: int
+    coverage_percent: float
+
+
+class CoverageGroundStationResult(BaseModel):
+    """Best satellite and coverage state for one ground station."""
+
+    name: str
+    covered: bool
+    best_satellite: str | None = None
+    best_elevation_deg: float | None = None
+
+
+class CoverageResponse(BaseModel):
+    """Bounded coverage snapshot for the loaded topology."""
+
+    ok: bool = True
+    coverage_percent: float
+    satellites: int
+    sampled_cells: int
+    elevation_deg: float
+    grid_resolution_deg: float
+    step: int
+    generation: int
+    duration_ms: float
+    cached: bool = False
+    shells: list[CoverageShellResult] = Field(default_factory=list)
+    ground_stations: list[CoverageGroundStationResult] = Field(default_factory=list)
+    shells_truncated: bool = False
+    ground_stations_truncated: bool = False
+
+
 class ExperimentStartRequest(BaseModel):
     """Submitted scenario YAML and execution mode for a new experiment run."""
 

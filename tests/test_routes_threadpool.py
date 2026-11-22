@@ -12,6 +12,7 @@ import pytest
 from satgonetem_gui.routes import (
     addressability,
     connectivity,
+    coverage,
     diagnostics,
     experiments,
     projects,
@@ -29,6 +30,7 @@ BLOCKING_ENDPOINTS = [
     connectivity.api_connectivity_start,
     connectivity.api_connectivity_status,
     connectivity.api_connectivity_export,
+    coverage.api_coverage,
     experiments.api_experiment_start,
     experiments.api_experiment_list,
     experiments.api_experiment_status,

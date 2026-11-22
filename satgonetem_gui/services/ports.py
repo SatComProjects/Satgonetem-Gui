@@ -62,6 +62,22 @@ class PathReader(Protocol):
     def routing_path(self, topology: Any, src: str, dst: str) -> dict[str, Any]: ...
 
 
+class CoverageController(Protocol):
+    """Snapshot coverage over the current topology."""
+
+    def coverage_snapshot(
+        self,
+        topology: Any,
+        *,
+        elevation_deg: float,
+        grid_resolution_deg: float,
+        include_shells: bool,
+        include_ground_stations: bool,
+        max_shells: int,
+        max_ground_stations: int,
+    ) -> dict[str, Any]: ...
+
+
 class NetworkOperationError(RuntimeError):
     """Raised when a GoNetEm operation reports failure via a return code."""
 
