@@ -266,8 +266,15 @@ def resolve_workspace_project(save_root: Path, project_id: str) -> Path | None:
     return None
 
 
-def write_workspace_project(path: Path, content: str) -> None:
-    """Atomically replace a workspace project file with ``content``."""
+def write_text_atomic(path: Path, text: str) -> Path:
+    """Atomically replace ``path`` with UTF-8 ``text``.
+
+    The temporary file is created next to the target so ``os.replace`` stays
+    on one filesystem and readers never observe a partially written file.
+
+    Returns:
+        The written target path.
+    """
     target = Path(path).expanduser()
     target.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temp_name = tempfile.mkstemp(
@@ -278,10 +285,16 @@ def write_workspace_project(path: Path, content: str) -> None:
     temp_path = Path(temp_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
-            handle.write(content)
+            handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_path, target)
     except Exception:
         temp_path.unlink(missing_ok=True)
         raise
+    return target
+
+
+def write_workspace_project(path: Path, content: str) -> None:
+    """Atomically replace a workspace project file with ``content``."""
+    write_text_atomic(path, content)

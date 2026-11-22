@@ -1,6 +1,7 @@
 """Narrow interfaces implemented by the satgonetem adapters."""
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 from ..schemas import Hping3Request, Iperf3Request, PingRequest, ProjectCreateRequest
@@ -139,6 +140,21 @@ class TrafficPoll:
     status: str
     results: dict[str, Any] | None = None
     error: str | None = None
+
+
+class ExperimentGateway(Protocol):
+    """Declarative scenario validation and execution."""
+
+    def validate_scenario(self, path: Path) -> dict[str, Any]: ...
+
+    def run_scenario(
+        self,
+        path: Path,
+        run_dir: Path,
+        mode: str,
+    ) -> dict[str, Any]: ...
+
+    def core_version(self) -> str: ...
 
 
 class TrafficGateway(Protocol):

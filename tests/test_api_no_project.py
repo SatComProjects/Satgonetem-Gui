@@ -55,6 +55,21 @@ def test_project_dependent_routes_return_404(client, method: str, path: str, bod
     assert response.status_code == 404
 
 
+def test_experiments_list_works_without_project(client) -> None:
+    """The experiments catalog is independent of the loaded project."""
+    response = client.get("/api/experiments")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "runs": []}
+
+
+def test_experiment_artifact_without_project_is_404(client) -> None:
+    """Unknown experiment artifacts are missing before any project is loaded."""
+    response = client.get("/api/experiments/missing/artifacts/summary.json")
+
+    assert response.status_code == 404
+
+
 def test_project_create_rejects_unreadable_data_file(client) -> None:
     """A bad data_file is a 422 before the background build starts."""
     ground = ground_object()
