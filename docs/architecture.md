@@ -180,6 +180,19 @@ not import those dependency internals.
   control, Vitest coverage for the pure formatting/rules, and a mocked
   Playwright flow that verifies endpoint refresh.
 
+## Phase 10 changes
+
+- Added a browser-local experiment ledger (`static/history_model.js`) that
+  captures successful terminal runs, compacts long interval arrays, and caps
+  the ledger by count and approximate bytes.
+- Added a History view to the existing results modal with reopen, delete,
+  per-run/all-run JSON export, CSV export, and same-kind comparison.
+- Added queue `created_at`/`started_at` timestamps for run duration and bumped
+  the queue module versions (`queue.js?v=23`, `queue_model.js?v=3`).
+- Added Vitest coverage for compaction, normalization, export, and comparison,
+  plus Playwright coverage for seeded history, live capture, exports, delete,
+  compare, and a stubbed Chart.js contract.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -201,12 +214,13 @@ not import those dependency internals.
   wheel into a clean target before importing the app.
 - Vitest covers the pure queue, ground-station selection, traffic payload, API
   wrapper, simulation formatting/action rules, addressability summaries/rules,
-  and escaping modules.
+  experiment-history compaction/export/comparison, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
   node expansion, dashboard counts, simulation panel accessibility,
-  addressability endpoint refresh, and the WebGL fallback. World View WebGL
-  rendering itself remains a manual desktop check.
+  addressability endpoint refresh, history reopen/capture/export/delete/compare,
+  and the WebGL fallback. World View WebGL rendering itself remains a manual
+  desktop check.
 
 ## Current measurements
 
@@ -217,8 +231,8 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **499 passed, 1 skipped** in about 35 s with coverage. Frontend:
-**58 Vitest tests**, **13 Playwright tests**.
+Result: **499 passed, 1 skipped** in about 26 s with coverage. Frontend:
+**73 Vitest tests**, **18 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
 **89.88%** over 2404 statements.
