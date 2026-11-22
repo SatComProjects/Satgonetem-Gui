@@ -139,6 +139,17 @@ def test_topology_status_is_empty_without_a_project() -> None:
     assert service.status()["satellites"] == 0
 
 
+def test_topology_context_returns_the_topology_and_generation_together() -> None:
+    """Routing reads both values from one session snapshot."""
+    session = _loaded_session()
+    service = TopologyService(session, FakeReader())
+
+    topology, generation = service.context()
+
+    assert topology is session.get_topology()
+    assert generation == session.generation
+
+
 def test_topology_queries_require_a_project() -> None:
     """Read routes raise the common 404 when nothing is loaded."""
     service = TopologyService(ProjectSession(), FakeReader())

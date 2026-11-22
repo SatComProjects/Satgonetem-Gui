@@ -94,8 +94,7 @@ class RoutingService:
             await self._apply(method)
 
     async def _apply(self, method: str) -> None:
-        topology = self.topology.require_topology()
-        generation = self.topology.generation
+        topology, generation = self.topology.context()
         if not self.topology.gonetem_is_on():
             raise APIError(409, "GoNetEm is not running. Start containers first.")
         try:
@@ -121,8 +120,7 @@ class RoutingService:
             await self._delete()
 
     async def _delete(self) -> None:
-        topology = self.topology.require_topology()
-        generation = self.topology.generation
+        topology, generation = self.topology.context()
         try:
             await self._run_controller(self.controller.delete_routing, topology)
             self._require_current_project(generation)
@@ -142,8 +140,7 @@ class RoutingService:
             await self._start_gonetem()
 
     async def _start_gonetem(self) -> None:
-        topology = self.topology.require_topology()
-        generation = self.topology.generation
+        topology, generation = self.topology.context()
         try:
             await self._run_controller(self.controller.start_gonetem, topology)
             self._require_current_project(generation)
@@ -162,8 +159,7 @@ class RoutingService:
             await self._stop_gonetem()
 
     async def _stop_gonetem(self) -> None:
-        topology = self.topology.require_topology()
-        generation = self.topology.generation
+        topology, generation = self.topology.context()
         try:
             await self._run_controller(self.controller.stop_gonetem, topology)
             self._require_current_project(generation)

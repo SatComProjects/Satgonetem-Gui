@@ -79,6 +79,11 @@ class ProjectSession:
         with self._lock:
             return self._active_token
 
+    def topology_snapshot(self) -> tuple[Any, int]:
+        """Return the installed topology and its generation atomically."""
+        with self._lock:
+            return self.topology_manager, self._generation
+
     def begin(
         self,
         name: str,

@@ -29,6 +29,13 @@ class TopologyService:
             raise APIError(404, "No project is currently loaded.")
         return topology
 
+    def context(self) -> tuple[Any, int]:
+        """Return the topology and generation from one locked snapshot."""
+        topology, generation = self.session.topology_snapshot()
+        if topology is None:
+            raise APIError(404, "No project is currently loaded.")
+        return topology, generation
+
     def status(self) -> dict:
         """Return the dashboard status snapshot, including the empty state."""
         topology = self.session.get_topology()
