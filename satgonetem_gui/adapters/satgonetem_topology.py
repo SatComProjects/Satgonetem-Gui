@@ -107,8 +107,7 @@ class SatGoNetemTopologyAdapter:
                 self.settings.save_root,
             )
             if save_target is not None:
-                save_target.parent.mkdir(parents=True, exist_ok=True)
-                topology.to_file(str(save_target))
+                self._write_topology_atomically(topology, save_target)
 
             return ProjectResult(
                 topology_manager=topology,
@@ -432,6 +431,23 @@ class SatGoNetemTopologyAdapter:
         topology.stop_gonetem()
         if topology.get_gonetem_status():
             raise NetworkOperationError("GoNetEm failed to stop.")
+
+    @staticmethod
+    def _write_topology_atomically(topology: Any, target: Path) -> None:
+        """Write through a sibling temp file and atomically replace the target."""
+        target.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temp_name = tempfile.mkstemp(
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+        )
+        os.close(descriptor)
+        temp_path = Path(temp_name)
+        try:
+            topology.to_file(str(temp_path))
+            temp_path.replace(target)
+        finally:
+            temp_path.unlink(missing_ok=True)
 
     def _require_ground_files(self, topology: Any) -> None:
         """Fail before core serialization when a referenced data file is unusable.

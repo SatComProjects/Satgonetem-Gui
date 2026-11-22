@@ -1,5 +1,6 @@
 """Filesystem path resolution and save-root policy."""
 
+import hashlib
 import re
 from collections.abc import Iterable
 from pathlib import Path
@@ -82,9 +83,14 @@ def _is_within(path: Path, root: Path) -> bool:
 
 
 def safe_project_filename(project_name: str) -> str:
-    """Convert a project name into a safe single path component."""
+    """Convert a project name into a collision-resistant safe path component."""
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", project_name).strip("._-")
-    return cleaned or "project"
+    if not cleaned:
+        return "project"
+    if cleaned != project_name:
+        digest = hashlib.sha256(project_name.encode("utf-8")).hexdigest()[:8]
+        cleaned = f"{cleaned}-{digest}"
+    return cleaned
 
 
 def resolve_save_path(

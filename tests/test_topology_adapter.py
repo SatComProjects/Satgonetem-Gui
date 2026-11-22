@@ -221,6 +221,24 @@ def test_node_detail_uses_the_core_node_type_not_the_name(settings) -> None:
     assert "default_qos_is_on" not in detail
 
 
+def test_adapter_writes_topology_atomically(settings, tmp_path) -> None:
+    """A failed serialization leaves the previous target intact."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    target = tmp_path / "project.json"
+    target.write_text("old", encoding="utf-8")
+
+    class FailingTopology:
+        def to_file(self, path):
+            Path(path).write_text("partial", encoding="utf-8")
+            raise RuntimeError("write failed")
+
+    with pytest.raises(RuntimeError, match="write failed"):
+        adapter._write_topology_atomically(FailingTopology(), target)
+
+    assert target.read_text(encoding="utf-8") == "old"
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
 def test_adapter_delete_is_idempotent_when_not_initialized(settings) -> None:
     """Deleting routing that was never applied is a no-op."""
     from types import SimpleNamespace
