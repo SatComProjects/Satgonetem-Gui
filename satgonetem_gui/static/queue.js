@@ -77,10 +77,39 @@ function cancelJob(jobId) {
   api.post("/api/traffic/cancel", { job_id: jobId }).catch(() => {});
 }
 
+function claimStart(id) {
+  const key = `sgnt_traffic_start_${id}`;
+  const now = Date.now();
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const claim = JSON.parse(raw);
+      if (claim.owner !== TAB_ID && Number(claim.until) > now) {
+        return false;
+      }
+    }
+    localStorage.setItem(
+      key,
+      JSON.stringify({ owner: TAB_ID, until: now + 15_000 }),
+    );
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 function queueInit() {
   jqLoad();
   jqRender();
   bindStaticControls();
+  window.addEventListener("storage", (event) => {
+    if (event.key !== JQ_KEY) return;
+    storageSync = true;
+    for (const id of Object.keys(jq.timers)) clearTimer(id);
+    jqLoad();
+    jqRender();
+    storageSync = false;
+  });
 }
 
 function bindStaticControls() {
@@ -173,6 +202,7 @@ function jqRender() {
     .map((item) => {
       const id = escapeHtml(item.id);
       const canStart = item.status === "queued" || item.status === "scheduled";
+      const canRetry = item.status === "error" || item.status === "cancelled";
       const canCancel =
         item.status === "running" || item.status === "scheduled";
       return `
@@ -186,6 +216,7 @@ function jqRender() {
           <div class="queue-item-actions">
             ${item.status === "done" ? `<button type="button" class="button small secondary" data-action="plot" data-id="${id}">Plot</button>` : ""}
             ${canStart ? `<button type="button" class="button small" data-action="start" data-id="${id}">Start</button>` : ""}
+            ${canRetry ? `<button type="button" class="button small" data-action="start" data-id="${id}">Retry</button>` : ""}
             ${canCancel ? `<button type="button" class="button small secondary" data-action="cancel" data-id="${id}">Cancel</button>` : ""}
             <button type="button" class="button small secondary" data-action="remove" data-id="${id}">Remove</button>
           </div>
@@ -285,6 +316,7 @@ async function jqStartNow(id) {
   clearTimer(id);
   const item = findItem(jq.items, id);
   if (!item) return false;
+  if (!claimStart(id)) return false;
   jq.items = updateItem(jq.items, id, {
     status: "starting",
     start_at: null,
