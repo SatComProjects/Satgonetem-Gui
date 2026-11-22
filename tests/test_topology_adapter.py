@@ -2,6 +2,7 @@
 
 import json
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -432,3 +433,138 @@ def test_load_migrates_restored_files_and_backups_remain_restorable(settings) ->
     reloaded = adapter.load(backup)
     config = adapter.config(reloaded.topology_manager, "")
     assert config["ground_objects_properties"][0]["stations"][0]["name"] == "Berlin"
+
+
+def _simulation_topology(**overrides) -> SimpleNamespace:
+    """Build a topology stand-in exposing the public simulation API."""
+    values = {
+        "get_topology_summary": lambda: {
+            "satellites": 1,
+            "ground_stations": 0,
+            "links": 0,
+        },
+        "get_current_time": lambda: None,
+        "get_status": lambda: True,
+        "get_gonetem_status": lambda: False,
+        "get_running": lambda: False,
+        "get_current_time_step": lambda: 0,
+        "get_project_duration_in_timesteps": lambda: 120,
+        "update_factor": 1.0,
+        "get_last_simulation_error": lambda: None,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def test_adapter_simulation_controls_use_public_core_methods(settings) -> None:
+    """Each adapter operation calls the matching public core method."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    calls = []
+    topology = SimpleNamespace(
+        get_running=lambda: False,
+        start=lambda: calls.append("start"),
+        stop=lambda: calls.append("stop"),
+        next_step=lambda: calls.append("step"),
+        reset_simulation=lambda: calls.append("reset"),
+        speed_up=lambda: calls.append("faster"),
+        speed_down=lambda: calls.append("slower"),
+    )
+
+    assert adapter.simulation_running(topology) is False
+    assert adapter.simulation_running(SimpleNamespace(get_running=lambda: True)) is True
+    adapter.start_simulation(topology)
+    adapter.stop_simulation(topology)
+    adapter.step_simulation(topology)
+    adapter.reset_simulation(topology)
+    adapter.change_simulation_speed(topology, "faster")
+    adapter.change_simulation_speed(topology, "slower")
+
+    assert calls == ["start", "stop", "step", "reset", "faster", "slower"]
+
+    with pytest.raises(ValueError, match="direction"):
+        adapter.change_simulation_speed(topology, "sideways")
+
+
+def test_adapter_seek_computes_the_absolute_step_time(settings) -> None:
+    """Seeking converts a step index into start_time plus whole ticks."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    targets = []
+    start = datetime(2024, 1, 1)
+    topology = SimpleNamespace(
+        get_project_duration_in_timesteps=lambda: 120,
+        start_time=start,
+        update_time=5,
+        move_to_time=targets.append,
+    )
+
+    adapter.seek_simulation(topology, 12)
+
+    assert targets == [start + timedelta(seconds=60)]
+
+
+@pytest.mark.parametrize("step", [-1, 121])
+def test_adapter_seek_rejects_out_of_range_steps(settings, step: int) -> None:
+    """A target outside the project duration is rejected before moving."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    targets = []
+    topology = SimpleNamespace(
+        get_project_duration_in_timesteps=lambda: 120,
+        start_time=datetime(2024, 1, 1),
+        update_time=5,
+        move_to_time=targets.append,
+    )
+
+    with pytest.raises(ValueError, match="outside"):
+        adapter.seek_simulation(topology, step)
+
+    assert targets == []
+
+
+def test_adapter_status_includes_simulation_transport_metadata(settings) -> None:
+    """Status exposes total steps, playback rate, and the last tick error."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _simulation_topology(
+        update_factor=0.5,
+        get_last_simulation_error=lambda: RuntimeError("tick failed"),
+    )
+
+    status = adapter.status(topology)
+
+    assert status["total_steps"] == 120
+    assert status["simulation_rate"] == 2.0
+    assert status["last_simulation_error"] == "RuntimeError: tick failed"
+
+
+def test_adapter_status_degrades_when_transport_metadata_is_unavailable(
+    settings,
+) -> None:
+    """A missing core value must not break the dashboard status read."""
+
+    def fail() -> None:
+        raise RuntimeError("core value unavailable")
+
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _simulation_topology(
+        get_project_duration_in_timesteps=fail,
+        update_factor=0,
+        get_last_simulation_error=fail,
+    )
+
+    status = adapter.status(topology)
+
+    assert status["satellites"] == 1
+    assert status["total_steps"] is None
+    assert status["simulation_rate"] == 1.0
+    assert status["last_simulation_error"] is None
+
+
+def test_adapter_status_truncates_long_simulation_errors(settings) -> None:
+    """A verbose tick error is summarized without a traceback."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _simulation_topology(get_last_simulation_error=lambda: RuntimeError("x" * 600))
+
+    message = adapter.status(topology)["last_simulation_error"]
+
+    assert message is not None
+    assert message.startswith("RuntimeError: ")
+    assert len(message) == 500

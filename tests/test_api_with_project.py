@@ -400,3 +400,59 @@ def test_traffic_schema_defaults_still_reach_the_service(project_client) -> None
 
     assert response.status_code == 409
     assert response.json()["error"] == "GoNetEm is not running."
+
+
+def test_simulation_routes_forward_to_the_controller(project_client, services) -> None:
+    """The six transport routes call the matching controller operation."""
+
+    class FakeSimulationController:
+        def __init__(self) -> None:
+            self.calls = []
+            self.running = False
+
+        def simulation_running(self, topology) -> bool:
+            return self.running
+
+        def start_simulation(self, topology) -> None:
+            self.calls.append("start")
+            self.running = True
+
+        def stop_simulation(self, topology) -> None:
+            self.calls.append("stop")
+            self.running = False
+
+        def step_simulation(self, topology) -> None:
+            self.calls.append("step")
+
+        def reset_simulation(self, topology) -> None:
+            self.calls.append("reset")
+
+        def seek_simulation(self, topology, step) -> None:
+            self.calls.append(("seek", step))
+
+        def change_simulation_speed(self, topology, direction) -> None:
+            self.calls.append(("speed", direction))
+
+    controller = FakeSimulationController()
+    services.simulation.controller = controller
+
+    assert project_client.post("/api/simulation/start").status_code == 200
+    blocked = project_client.post("/api/simulation/step")
+    assert blocked.status_code == 409
+    assert project_client.post("/api/simulation/stop").status_code == 200
+    assert project_client.post("/api/simulation/step").status_code == 200
+    assert project_client.post("/api/simulation/reset").status_code == 200
+    assert project_client.post("/api/simulation/seek", json={"step": 12}).status_code == 200
+    assert (
+        project_client.post("/api/simulation/speed", json={"direction": "slower"}).status_code
+        == 200
+    )
+
+    assert controller.calls == [
+        "start",
+        "stop",
+        "step",
+        "reset",
+        ("seek", 12),
+        ("speed", "slower"),
+    ]

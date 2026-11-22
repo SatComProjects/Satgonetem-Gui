@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -237,7 +238,82 @@ class SatGoNetemTopologyAdapter:
             "simulation_updating": topology.get_running(),
             "current_step": topology.get_current_time_step(),
             "current_time": current_time.isoformat() if current_time else None,
+            "total_steps": self._simulation_total_steps(topology),
+            "simulation_rate": self._simulation_rate(topology),
+            "last_simulation_error": self._last_simulation_error(topology),
         }
+
+    def simulation_running(self, topology: Any) -> bool:
+        """Return whether the core simulation loop is running."""
+        return bool(topology.get_running())
+
+    def start_simulation(self, topology: Any) -> None:
+        """Start the core simulation loop."""
+        topology.start()
+
+    def stop_simulation(self, topology: Any) -> None:
+        """Stop the core simulation loop and join its thread."""
+        topology.stop()
+
+    def step_simulation(self, topology: Any) -> None:
+        """Advance the simulation by one step."""
+        topology.next_step()
+
+    def reset_simulation(self, topology: Any) -> None:
+        """Reset the simulation clock to the project start."""
+        topology.reset_simulation()
+
+    def seek_simulation(self, topology: Any, step: int) -> None:
+        """Jump to an absolute step and rebuild routing through the core."""
+        total_steps = topology.get_project_duration_in_timesteps()
+        if step < 0 or step > total_steps:
+            raise ValueError(f"Step {step} is outside 0..{total_steps}.")
+        target = topology.start_time + timedelta(
+            seconds=step * topology.update_time
+        )
+        topology.move_to_time(target)
+
+    def change_simulation_speed(self, topology: Any, direction: str) -> None:
+        """Change playback speed through the core's public controls."""
+        if direction == "faster":
+            topology.speed_up()
+        elif direction == "slower":
+            topology.speed_down()
+        else:
+            raise ValueError(f"Unknown simulation speed direction: {direction!r}")
+
+    @staticmethod
+    def _simulation_total_steps(topology: Any) -> int | None:
+        """Return the project duration in steps, or None when unavailable."""
+        try:
+            return int(topology.get_project_duration_in_timesteps())
+        except Exception:
+            logger.exception("Could not read the project duration in steps.")
+            return None
+
+    @staticmethod
+    def _simulation_rate(topology: Any) -> float | None:
+        """Return the playback multiplier, falling back to real time."""
+        try:
+            factor = float(getattr(topology, "update_factor", 1.0) or 1.0)
+        except Exception:
+            logger.exception("Could not read the simulation update factor.")
+            return None
+        if factor <= 0:
+            return 1.0
+        return round(1.0 / factor, 2)
+
+    @staticmethod
+    def _last_simulation_error(topology: Any) -> str | None:
+        """Return the last loop tick error without exposing a traceback."""
+        try:
+            error = topology.get_last_simulation_error()
+        except Exception:
+            logger.exception("Could not read the last simulation error.")
+            return None
+        if error is None:
+            return None
+        return f"{type(error).__name__}: {error}"[:500]
 
     def satellites(self, topology: Any) -> list[dict[str, Any]]:
         """Return satellite identity and positions."""
