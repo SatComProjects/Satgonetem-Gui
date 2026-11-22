@@ -248,6 +248,16 @@ not import those dependency internals.
 - Added the workspace specification, ADR 0007, Vitest formatting/models, and
   Playwright workspace flows.
 
+## Phase 16 changes
+
+- Added a bounded background connectivity service over the public v0.3.2
+  `build_connectivity_matrix()` API, with node resolution, generation guards,
+  four-job capacity, and one-hour terminal TTL.
+- Added connectivity start/status/CSV/JSON export routes and the
+  `/connectivity` page with an N×N loss/RTT heatmap.
+- Added the connectivity specification, Vitest matrix formatting, and
+  Playwright start/heatmap/export coverage.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -271,15 +281,16 @@ not import those dependency internals.
   wrapper, simulation formatting/action rules, addressability summaries/rules,
   experiment-history compaction/export/comparison, forwarding-path formatting,
   link formatting/filtering/width/usage colors, preflight/phase formatting,
-  project-workspace formatting, and escaping modules.
+  project-workspace formatting, connectivity matrix formatting, and escaping
+  modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
   node expansion, dashboard counts, simulation panel accessibility,
   addressability endpoint refresh, history reopen/capture/export/delete/compare,
   forwarding-path rendering, link-inspector rendering, readiness checks,
   blocking creation, indeterminate build progress, workspace list/open/save,
-  and the WebGL fallback. World View WebGL rendering itself remains a manual
-  desktop check.
+  connectivity start/heatmap/export, and the WebGL fallback. World View WebGL
+  rendering itself remains a manual desktop check.
 
 ## Current measurements
 
@@ -290,11 +301,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **636 passed, 1 skipped** in about 40 s with coverage. Frontend:
-**99 Vitest tests**, **28 Playwright tests**.
+Result: **680 passed, 1 skipped** in about 43 s with coverage. Frontend:
+**104 Vitest tests**, **29 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**89.34%** over 3352 statements.
+**89.82%** over 3676 statements.
 
 ## Tooling decisions
 
