@@ -153,7 +153,11 @@ function buildDetailPanel(data, links = []) {
     html +=
       '<p class="muted">No routing table available (containers may not be running).</p>';
   }
-  html += "</div></div>";
+  html += "</div>";
+  html +=
+    '<div class="detail-section"><a class="button small secondary" ' +
+    `href="/world?node=${encodeURIComponent(data.name)}">Open in World</a></div>`;
+  html += "</div>";
   return html;
 }
 
