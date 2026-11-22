@@ -19,6 +19,7 @@ const MAX_POLL_FAILURES = 5;
 const jq = { items: [], timers: {} };
 let lastFocused = null;
 const activeCharts = [];
+let plotGeneration = 0;
 
 function createChart(canvas, config) {
   const chart = new Chart(canvas, config);
@@ -27,6 +28,7 @@ function createChart(canvas, config) {
 }
 
 function destroyCharts() {
+  plotGeneration += 1;
   for (const chart of activeCharts.splice(0)) {
     try {
       chart.destroy();
@@ -426,9 +428,45 @@ async function jqCancel(id) {
   jqRender();
 }
 
-function jqPlot(id) {
-  const item = findItem(jq.items, id);
-  if (!item || !item.results) return;
+async function jqPlot(id) {
+  let item = findItem(jq.items, id);
+  if (!item) return;
+
+  if (!item.results && item.job_id) {
+    try {
+      const status = await api.get(
+        `/api/traffic/status?job_id=${encodeURIComponent(item.job_id)}`,
+      );
+      if (status.status === "done" && status.results) {
+        jq.items = updateItem(jq.items, id, {
+          status: "done",
+          results: status.results,
+          poll_failures: 0,
+        });
+        jqSave();
+        jqRender();
+        item = findItem(jq.items, id);
+      }
+    } catch (error) {
+      jq.items = updateItem(jq.items, id, {
+        error: error.message || "Could not load results",
+      });
+      jqSave();
+      jqRender();
+      return;
+    }
+  }
+
+  if (!item || !item.results) {
+    if (item) {
+      jq.items = updateItem(jq.items, id, {
+        error: "Results are not available for this job.",
+      });
+      jqSave();
+      jqRender();
+    }
+    return;
+  }
   if (item.kind === "iperf3") plotIperf3(item);
   else if (item.kind === "ping") plotPing(item);
   else if (item.kind === "hping3") plotHping3(item);
@@ -507,7 +545,9 @@ function plotIperf3(item) {
     metricsHtml + chartsHtml,
   );
 
+  const generation = plotGeneration;
   requestAnimationFrame(() => {
+    if (generation !== plotGeneration) return;
     const intervals = Array.isArray(result.intervals) ? result.intervals : [];
     const streamCount = intervals.reduce(
       (max, entry) =>
@@ -921,7 +961,9 @@ function plotHping3(item) {
     metricsHtml + chartsHtml,
   );
 
+  const generation = plotGeneration;
   requestAnimationFrame(() => {
+    if (generation !== plotGeneration) return;
     const labels = (result.seq || []).map(String);
     newChart("chart-hping-rtt", "line", labels, [
       {
