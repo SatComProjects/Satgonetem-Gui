@@ -444,6 +444,9 @@ function plotIperf3(item) {
   metricsHtml += "</div>";
 
   const chartsHtml =
+    (window.Chart
+      ? ""
+      : '<p class="muted">Charts are unavailable because the Chart.js CDN did not load.</p>') +
     '<div class="chart-grid">' +
     '<div class="chart-container"><canvas id="chart-main-1"></canvas></div>' +
     '<div class="chart-container"><canvas id="chart-aux"></canvas></div>' +
@@ -861,6 +864,9 @@ function plotHping3(item) {
   metricsHtml += "</div>";
 
   const chartsHtml =
+    (window.Chart
+      ? ""
+      : '<p class="muted">Charts are unavailable because the Chart.js CDN did not load.</p>') +
     '<div class="chart-grid">' +
     '<div class="chart-container"><canvas id="chart-hping-rtt"></canvas></div>' +
     '<div class="chart-container"><canvas id="chart-hping-cum"></canvas></div>' +

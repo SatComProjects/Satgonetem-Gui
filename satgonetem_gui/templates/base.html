@@ -6,7 +6,9 @@
   <title>SatGoNetem Web Control</title>
   <link rel="stylesheet" href="/static/base.css">
   <link rel="stylesheet" href="/static/queue.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+          integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4"
+          crossorigin="anonymous" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -71,6 +73,6 @@
 </div>
 
 <!-- Keep this queue.js version in sync with the import in static/traffic.js. -->
-<script type="module" src="/static/queue.js?v=6"></script>
+<script type="module" src="/static/queue.js?v=7"></script>
 </body>
 </html>
