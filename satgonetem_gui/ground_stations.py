@@ -101,8 +101,10 @@ def validate_inline_stations(stations: object) -> list[dict[str, Any]]:
             raise ValueError("Ground station latitude must be between -90 and 90.")
         if not -180.0 <= longitude <= 180.0:
             raise ValueError("Ground station longitude must be between -180 and 180.")
-        if elevation_m < 0:
-            raise ValueError("Ground station elevation must be non-negative.")
+        if elevation_m < -1000.0:
+            raise ValueError(
+                "Ground station elevation must be at least -1000 metres."
+            )
         validated.append(
             {
                 "index": index,

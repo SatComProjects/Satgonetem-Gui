@@ -91,7 +91,7 @@ def test_validate_inline_stations_rejects_out_of_range_coordinates() -> None:
         ({"latitude": -91}, "latitude"),
         ({"longitude": 181}, "longitude"),
         ({"longitude": -181}, "longitude"),
-        ({"elevation_m": -1}, "elevation"),
+        ({"elevation_m": -1001}, "elevation"),
         ({"elevation_m": float("nan")}, "finite"),
         ({"index": -1}, "index"),
     ]

@@ -176,8 +176,8 @@ document.getElementById("add_custom_btn").addEventListener("click", () => {
     alert("Longitude must be between -180 and 180.");
     return;
   }
-  if (!Number.isFinite(elevation) || elevation < 0) {
-    alert("Elevation must be a non-negative number of metres.");
+  if (!Number.isFinite(elevation) || elevation < -1000) {
+    alert("Elevation must be at least -1000 metres.");
     return;
   }
   customStations.push({
