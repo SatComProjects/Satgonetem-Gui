@@ -1,33 +1,84 @@
 """Filesystem path resolution and save-root policy."""
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
 
 
 class SavePathError(ValueError):
-    """Raised when a requested save path escapes the configured root."""
+    """Raised when a requested path escapes the configured roots."""
 
 
-def resolve_data_file(data_file: str, search_dir: Path) -> Path:
-    """Resolve a ground-station data file path.
+def resolve_data_file(
+    data_file: str,
+    search_dir: Path,
+    allowed_roots: Iterable[Path] | None = None,
+) -> Path:
+    """Resolve a contained ground-station data file path.
+
+    Relative paths are tried under ``search_dir`` and under each allowed root.
+    Any candidate path must stay inside those roots, and the final path must be
+    a regular file.
 
     Args:
-        data_file: Absolute path or path relative to the search directory.
-        search_dir: Directory used to resolve relative paths.
+        data_file: Absolute path or path relative to a root.
+        search_dir: Directory used to resolve relative paths and an implicit
+            allowed root.
+        allowed_roots: Additional directories where data files may live.
 
     Returns:
-        Existing path.
+        Resolved path to an existing regular file.
 
     Raises:
-        FileNotFoundError: If neither candidate exists.
+        SavePathError: If the path escapes every allowed root.
+        FileNotFoundError: If the contained path is not a regular file.
     """
+    if not isinstance(data_file, str) or not data_file.strip():
+        raise FileNotFoundError(f"Ground station data file not found: {data_file!r}")
+    if "\x00" in data_file:
+        raise SavePathError("Ground station data file path is invalid.")
+
+    search_root = Path(search_dir).expanduser().resolve()
+    roots = [search_root]
+    if allowed_roots is not None:
+        roots.extend(Path(root).expanduser().resolve() for root in allowed_roots)
+
     path = Path(data_file).expanduser()
-    if path.is_absolute() and path.exists():
-        return path
-    resolved = Path(search_dir) / data_file
-    if resolved.exists():
-        return resolved
-    raise FileNotFoundError(f"Ground station data file not found: {data_file!r}")
+    if path.is_absolute():
+        candidates = [path]
+    else:
+        candidates = [search_root / path]
+        candidates.extend(root / path for root in roots[1:])
+
+    contained_but_missing = False
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except (OSError, RuntimeError):
+            continue
+        if not any(_is_within(resolved, root) for root in roots):
+            continue
+        contained_but_missing = True
+        if resolved.is_file():
+            return resolved
+
+    if contained_but_missing:
+        raise FileNotFoundError(
+            f"Ground station data file not found: {data_file!r}"
+        )
+    raise SavePathError(
+        "Ground station data file must be inside an allowed directory: "
+        f"{data_file!r}"
+    )
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    """Return whether path is at or below root."""
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
 
 
 def safe_project_filename(project_name: str) -> str:
