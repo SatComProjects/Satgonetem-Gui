@@ -4,15 +4,17 @@ import { escapeHtml } from "./escape.js";
 import {
   addItem,
   activeCount,
+  cloneQueueItem,
   findItem,
   isTerminal,
   normalizeStoredItems,
   pollRetryDelay,
   remainingDelay,
   removeItem,
+  replayQueueItem,
   startableItems,
   updateItem,
-} from "./queue_model.js?v=3";
+} from "./queue_model.js?v=4";
 import {
   HISTORY_KEY,
   addHistoryRecord,
@@ -270,6 +272,7 @@ function jqRender() {
             ${canStart ? `<button type="button" class="button small" data-action="start" data-id="${id}">Start</button>` : ""}
             ${canRetry ? `<button type="button" class="button small" data-action="start" data-id="${id}">Retry</button>` : ""}
             ${canCancel ? `<button type="button" class="button small secondary" data-action="cancel" data-id="${id}">Cancel</button>` : ""}
+            <button type="button" class="button small secondary" data-action="clone" data-id="${id}">Clone</button>
             <button type="button" class="button small secondary" data-action="remove" data-id="${id}">Remove</button>
           </div>
         </div>`;
@@ -289,6 +292,9 @@ function jqRender() {
         case "cancel":
           jqCancel(id);
           break;
+        case "clone":
+          jqClone(id);
+          break;
         case "remove":
           jqRemove(id);
           break;
@@ -307,6 +313,12 @@ function jqAdd(item) {
   jqRender();
   jqExpand();
   return created.id;
+}
+
+function jqClone(id) {
+  const item = findItem(jq.items, id);
+  if (!item) return;
+  jqAdd(cloneQueueItem(item));
 }
 
 function jqRemove(id) {
@@ -727,6 +739,7 @@ function historyRowHtml(record) {
       <td class="history-summary">${escapeHtml(historySummaryText(record))}</td>
       <td class="history-actions">
         <button type="button" class="button small secondary" data-history-action="open" data-history-id="${id}">Open</button>
+        <button type="button" class="button small secondary" data-history-action="replay" data-history-id="${id}">Replay</button>
         <button type="button" class="button small secondary" data-history-action="export" data-history-id="${id}">Export</button>
         <button type="button" class="button small secondary" data-history-action="delete" data-history-id="${id}">Delete</button>
       </td>
@@ -938,8 +951,14 @@ function handleResultsBodyClick(event) {
   );
   if (!record) return;
   if (action === "open") openHistoryRecord(record);
+  else if (action === "replay") replayHistoryRecord(record);
   else if (action === "export") exportHistoryRecord(record);
   else if (action === "delete") deleteHistoryRecord(record);
+}
+
+function replayHistoryRecord(record) {
+  jqAdd(replayQueueItem(record));
+  setHistoryMessage("Replay added to the queue.", false);
 }
 
 function handleResultsBodyChange(event) {

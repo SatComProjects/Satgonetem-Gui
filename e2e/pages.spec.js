@@ -57,7 +57,7 @@ test("queue items add and remove by stable ID", async ({ page }) => {
   await page.waitForLoadState("networkidle");
 
   await page.evaluate(async () => {
-    const queue = await import("/static/queue.js?v=23");
+    const queue = await import("/static/queue.js?v=24");
     queue.jqAdd({
       kind: "ping",
       payload: { src: "Sat0", dst: "Sat1" },

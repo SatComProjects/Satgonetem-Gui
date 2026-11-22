@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/traffic.css">
+  <link rel="stylesheet" href="/static/traffic.css?v=1">
 {% endblock %}
 
 {% block content %}
@@ -11,6 +11,26 @@
   <section class="card traffic-form-card">
     <h3 class="card-title">New Flow</h3>
     <div class="traffic-form">
+      <div class="preset-panel" id="tg-preset-panel" aria-labelledby="tg-preset-title">
+        <span class="preset-title" id="tg-preset-title">Saved presets</span>
+        <div class="form-row">
+          <label for="tg-preset-select">Preset
+            <select id="tg-preset-select">
+              <option value="">Select a preset...</option>
+            </select>
+          </label>
+          <label for="tg-preset-name">Name
+            <input type="text" id="tg-preset-name" maxlength="60" placeholder="e.g. Berlin to Oslo ping">
+          </label>
+        </div>
+        <div class="form-row actions-row">
+          <button type="button" class="button small secondary" id="tg-preset-save">Save preset</button>
+          <button type="button" class="button small secondary" id="tg-preset-apply" disabled>Apply</button>
+          <button type="button" class="button small secondary" id="tg-preset-delete" disabled>Delete</button>
+          <span id="tg-preset-msg" class="muted" aria-live="polite"></span>
+        </div>
+      </div>
+
       <div class="form-row">
         <label>Tool
           <select id="tg-tool">
@@ -34,11 +54,12 @@
         <p class="addressability-note muted" id="tg-addressability-note" aria-live="polite"></p>
       </div>
 
-      <div class="form-row">
-        <label>Source
+      <div class="form-row endpoint-row">
+        <label for="tg-src">Source
           <select id="tg-src"></select>
         </label>
-        <label>Destination
+        <button type="button" class="button small secondary swap-btn" id="tg-swap" aria-label="Swap source and destination">Swap</button>
+        <label for="tg-dst">Destination
           <select id="tg-dst"></select>
         </label>
       </div>
@@ -158,5 +179,5 @@
 
 </div>
 
-<script type="module" src="/static/traffic.js?v=18"></script>
+<script type="module" src="/static/traffic.js?v=19"></script>
 {% endblock %}

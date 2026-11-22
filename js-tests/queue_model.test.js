@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   activeCount,
   addItem,
+  cloneQueueItem,
   findItem,
   isTerminal,
   normalizeStoredItems,
   pollRetryDelay,
   remainingDelay,
   removeItem,
+  replayQueueItem,
   startableItems,
   updateItem,
 } from "../satgonetem_gui/static/queue_model.js";
@@ -113,6 +115,49 @@ describe("queue model", () => {
     expect(items[0].poll_failures).toBe(0);
     expect(items[1].poll_failures).toBe(3);
     expect(items[2].poll_failures).toBe(0);
+  });
+
+  it("clones an item without sharing payload or job state", () => {
+    const original = {
+      id: "q1",
+      kind: "hping3",
+      payload: { src: "Sat0", dst: "Sat1", flags: ["S"] },
+      label: "hping3 tcp Sat0 -> Sat1",
+      delay: 4,
+      status: "done",
+      job_id: "job-1",
+      results: { packet_loss_percent: 0 },
+    };
+
+    const copy = cloneQueueItem(original);
+
+    expect(copy.id).not.toBe("q1");
+    expect(copy.status).toBe("queued");
+    expect(copy.job_id).toBeNull();
+    expect(copy.results).toBeNull();
+    expect(copy.label).toBe("hping3 tcp Sat0 -> Sat1 (copy)");
+    expect(copy.payload).toEqual(original.payload);
+    expect(copy.payload).not.toBe(original.payload);
+    copy.payload.flags.push("A");
+    expect(original.payload.flags).toEqual(["S"]);
+    expect(cloneQueueItem(copy).label).toBe(
+      "hping3 tcp Sat0 -> Sat1 (copy)",
+    );
+  });
+
+  it("replays a history record as a fresh queued item", () => {
+    const replay = replayQueueItem({
+      id: "run-1",
+      kind: "ping",
+      payload: { src: "Gnd0", dst: "Gnd1", count: 5 },
+      label: "ping Gnd0 -> Gnd1 (5)",
+    });
+
+    expect(replay.status).toBe("queued");
+    expect(replay.delay).toBe(0);
+    expect(replay.job_id).toBeNull();
+    expect(replay.label).toBe("ping Gnd0 -> Gnd1 (5) (replay)");
+    expect(replay.payload).toEqual({ src: "Gnd0", dst: "Gnd1", count: 5 });
   });
 
   it("backs off status polling instead of abandoning the job", () => {
