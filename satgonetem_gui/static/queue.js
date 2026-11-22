@@ -16,6 +16,7 @@ const JQ_KEY = "sgnt_traffic_queue";
 const MAX_POLL_FAILURES = 5;
 
 const jq = { items: [], timers: {} };
+let lastFocused = null;
 
 function byId(id) {
   return document.getElementById(id);
@@ -59,6 +60,12 @@ function bindStaticControls() {
   byId("jq-clear")?.addEventListener("click", jqClear);
   byId("results-close")?.addEventListener("click", closeResults);
   byId("results-backdrop")?.addEventListener("click", closeResults);
+  document.addEventListener("keydown", (event) => {
+    const modal = byId("results-modal");
+    if (event.key === "Escape" && modal && modal.style.display !== "none") {
+      closeResults();
+    }
+  });
 }
 
 function jqLoad() {
@@ -85,9 +92,12 @@ function jqToggleCollapsed() {
   const panel = byId("floating-queue");
   if (!panel) return;
   panel.classList.toggle("collapsed");
+  const collapsed = panel.classList.contains("collapsed");
+  const header = byId("jq-toggle");
+  if (header) header.setAttribute("aria-expanded", String(!collapsed));
   const icon = byId("jq-toggle-icon");
   if (icon) {
-    icon.textContent = panel.classList.contains("collapsed") ? "\u25B2" : "\u25BC";
+    icon.textContent = collapsed ? "\u25B2" : "\u25BC";
   }
 }
 
@@ -95,6 +105,8 @@ function jqExpand() {
   const panel = byId("floating-queue");
   if (!panel) return;
   panel.classList.remove("collapsed");
+  const header = byId("jq-toggle");
+  if (header) header.setAttribute("aria-expanded", "true");
   const icon = byId("jq-toggle-icon");
   if (icon) icon.textContent = "\u25BC";
 }
@@ -385,12 +397,20 @@ function openModal(title, body) {
   const bodyElement = byId("results-body");
   if (titleElement) titleElement.textContent = title;
   if (bodyElement) bodyElement.innerHTML = body;
-  if (modal) modal.style.display = "flex";
+  if (modal) {
+    lastFocused = document.activeElement;
+    modal.style.display = "flex";
+    byId("results-close")?.focus();
+  }
 }
 
 function closeResults() {
   const modal = byId("results-modal");
   if (modal) modal.style.display = "none";
+  if (lastFocused && typeof lastFocused.focus === "function") {
+    lastFocused.focus();
+  }
+  lastFocused = null;
 }
 
 function plotIperf3(item) {

@@ -97,6 +97,7 @@
     padding-bottom: 0;
     opacity: 0;
     overflow: hidden;
+    visibility: hidden;
   }
 
   .plot-controls-content::-webkit-scrollbar { width: 5px; }
@@ -216,7 +217,7 @@
 
 <div id="world">
   <div class="plot-controls collapsed" id="plot-controls">
-    <div class="plot-controls-header" id="plot-controls-header">
+    <div class="plot-controls-header" id="plot-controls-header" role="button" tabindex="0" aria-expanded="false" aria-controls="plot-controls-content">
       <span class="plot-controls-title" id="plot-controls-title">Plot Controls</span>
       <span class="plot-controls-toggle" id="plot-controls-toggle">▶</span>
     </div>
@@ -269,14 +270,14 @@
         </div>
         <div id="coverage-opts">
           <div class="ctrl-slider-group">
-            <div class="ctrl-slider-label">Min. Elevation (deg)</div>
+            <label class="ctrl-slider-label" for="sl-elevation">Min. Elevation (deg)</label>
             <div class="ctrl-slider-row">
               <input type="range" id="sl-elevation" class="ctrl-slider" min="0" max="90" step="1" value="10">
               <span class="ctrl-slider-val" id="sl-elevation-val">10</span>
             </div>
           </div>
           <div class="ctrl-slider-group">
-            <div class="ctrl-slider-label">Opacity</div>
+            <label class="ctrl-slider-label" for="sl-opacity">Opacity</label>
             <div class="ctrl-slider-row">
               <input type="range" id="sl-opacity" class="ctrl-slider" min="0" max="100" step="1" value="40">
               <span class="ctrl-slider-val" id="sl-opacity-val">40%</span>
@@ -289,5 +290,5 @@
   </div>
 </div>
 
-<script type="module" src="/static/world_boot.js?v=3"></script>
+<script type="module" src="/static/world_boot.js?v=4"></script>
 {% endblock %}

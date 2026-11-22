@@ -458,6 +458,8 @@ function togglePanel() {
     content.classList.toggle("collapsed", isNowCollapsed);
     toggle.textContent = isNowCollapsed ? "▶" : "◀";
     title.style.visibility = isNowCollapsed ? "hidden" : "visible";
+    const header = document.getElementById("plot-controls-header");
+    if (header) header.setAttribute("aria-expanded", String(!isNowCollapsed));
 }
 
 let pollTimer = null;
@@ -550,7 +552,13 @@ function startWorld() {
         }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    document.getElementById("plot-controls-header").addEventListener("click", togglePanel);
+    const panelHeader = document.getElementById("plot-controls-header");
+    panelHeader.addEventListener("click", togglePanel);
+    panelHeader.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        togglePanel();
+    });
 
     poll();
 }

@@ -99,6 +99,7 @@ async function toggleNode(name) {
     detail.innerHTML = '<div class="muted">Loading...</div>';
     detail.style.display = "block";
     row.classList.add("expanded");
+    row.setAttribute("aria-expanded", "true");
     try {
       const data = await api.get(`/api/nodes/${encodeURIComponent(name)}`);
       detailCache.set(name, cacheEntry(data.node));
@@ -115,6 +116,7 @@ async function toggleNode(name) {
   }
   detail.style.display = expanded ? "none" : "block";
   row.classList.toggle("expanded", !expanded);
+  row.setAttribute("aria-expanded", String(!expanded));
 }
 
 function buildNodeRow(node) {
@@ -124,7 +126,7 @@ function buildNodeRow(node) {
     label += ` (${escapeHtml(node.city)})`;
   }
   return (
-    `<div class="node-row" id="row-${name}" data-node-name="${name}">` +
+    `<div class="node-row" id="row-${name}" data-node-name="${name}" role="button" tabindex="0" aria-expanded="false" aria-controls="detail-${name}">` +
     '<span class="node-chevron">&#9654;</span>' +
     `<span class="node-label">${label}</span>` +
     "</div>" +
@@ -136,6 +138,13 @@ function initNodeList(container) {
   container.addEventListener("click", (event) => {
     const row = event.target.closest(".node-row");
     if (!row || !container.contains(row)) return;
+    toggleNode(row.dataset.nodeName);
+  });
+  container.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target.closest(".node-row");
+    if (!row || !container.contains(row)) return;
+    event.preventDefault();
     toggleNode(row.dataset.nodeName);
   });
 }

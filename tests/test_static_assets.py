@@ -6,8 +6,8 @@ PACKAGE = Path(__file__).resolve().parent.parent / "satgonetem_gui"
 BASE_TEMPLATE = PACKAGE / "templates" / "base.html"
 TRAFFIC_MODULE = PACKAGE / "static" / "traffic.js"
 
-QUEUE_SCRIPT = "/static/queue.js?v=5"
-QUEUE_IMPORT = "./queue.js?v=5"
+QUEUE_SCRIPT = "/static/queue.js?v=6"
+QUEUE_IMPORT = "./queue.js?v=6"
 
 
 def test_base_template_loads_the_versioned_queue_module() -> None:
