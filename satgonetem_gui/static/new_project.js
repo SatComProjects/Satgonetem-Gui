@@ -4,7 +4,7 @@ import {
   normalizeProjectName,
   validateGroundNumbers,
   validateShellNumbers,
-} from "./new_project_model.js";
+} from "./new_project_model.js?v=2";
 
   var shells = [];
   var grounds = [];

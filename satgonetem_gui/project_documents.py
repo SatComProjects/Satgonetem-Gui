@@ -103,6 +103,50 @@ def validate_project_create_payload(
             raise ValueError("Orbit shell type must be a string.")
         if not isinstance(shell["constellation_property"], dict):
             raise ValueError("Orbit shell constellation_property must be an object.")
+        constellation = shell["constellation_property"]
+        identifier = constellation.get("identifier")
+        if not isinstance(identifier, str) or not identifier.strip():
+            raise ValueError("Orbit shell identifier must be a non-empty string.")
+        planes = constellation.get("amount_of_orbit_plane")
+        satellites = constellation.get("amount_of_satellite_per_orbit_plane")
+        if (
+            not isinstance(planes, int)
+            or isinstance(planes, bool)
+            or not 1 <= planes <= 1000
+        ):
+            raise ValueError(
+                "Orbit shell amount_of_orbit_plane must be an integer between "
+                "1 and 1000."
+            )
+        if (
+            not isinstance(satellites, int)
+            or isinstance(satellites, bool)
+            or not 1 <= satellites <= 1000
+        ):
+            raise ValueError(
+                "Orbit shell amount_of_satellite_per_orbit_plane must be an "
+                "integer between 1 and 1000."
+            )
+        if planes * satellites > 10_000:
+            raise ValueError("An orbit shell cannot exceed 10000 satellites.")
+        inclination = constellation.get("inclination")
+        if (
+            not isinstance(inclination, (int, float))
+            or isinstance(inclination, bool)
+            or not 0 <= inclination <= 180
+        ):
+            raise ValueError(
+                "Orbit shell inclination must be between 0 and 180 degrees."
+            )
+        revolutions = constellation.get("mean_revolution_per_day")
+        if (
+            not isinstance(revolutions, (int, float))
+            or isinstance(revolutions, bool)
+            or not 0 <= revolutions <= 100
+        ):
+            raise ValueError(
+                "Orbit shell mean_revolution_per_day must be between 0 and 100."
+            )
         if not isinstance(shell["orbital_connectivity_property"], dict):
             raise ValueError(
                 "Orbit shell orbital_connectivity_property must be an object."

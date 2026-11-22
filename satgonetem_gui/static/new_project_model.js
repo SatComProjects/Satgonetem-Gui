@@ -15,6 +15,9 @@ export function validateShellNumbers(planes, satellitesPerPlane, inclination, re
   ) {
     return "Satellites per plane must be an integer between 1 and 1000.";
   }
+  if (planes * satellitesPerPlane > 10000) {
+    return "A shell cannot exceed 10000 satellites.";
+  }
   if (!Number.isFinite(inclination) || inclination < 0 || inclination > 180) {
     return "Inclination must be between 0 and 180 degrees.";
   }

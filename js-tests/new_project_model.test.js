@@ -18,6 +18,7 @@ describe("new project form model", () => {
     expect(validateShellNumbers(10, 1.5, 70, 14.4)).toMatch("Satellites");
     expect(validateShellNumbers(10, 10, 181, 14.4)).toMatch("Inclination");
     expect(validateShellNumbers(10, 10, 70, 101)).toMatch("Revolutions");
+    expect(validateShellNumbers(1000, 1000, 70, 14.4)).toMatch("10000");
   });
 
   it("rejects invalid ground-object numbers", () => {
