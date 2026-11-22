@@ -782,6 +782,42 @@ def test_routing_timeout_blocks_overlapping_operations_until_the_worker_ends() -
     asyncio.run(scenario())
 
 
+def test_routing_start_is_blocked_while_a_project_operation_is_active() -> None:
+    """Starting containers during a build cannot target the old topology."""
+    session = _loaded_session()
+    topology = TopologyService(session, FakeReader(gonetem=True))
+    controller = FakeController()
+    service = RoutingService(topology, controller)
+    assert session.begin("NewProject", operation="create") is True
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.start_gonetem())
+
+    assert error.value.status_code == 409
+    assert "project operation" in error.value.message.lower()
+    assert "start_gonetem" not in controller.calls
+
+
+def test_project_replacement_is_blocked_while_a_network_operation_is_active(
+    tmp_path,
+) -> None:
+    """A build cannot start while a routing/container mutation is in flight."""
+    state = RuntimeState()
+    assert state.project.begin_network_operation() is True
+    service = ProjectService(
+        state,
+        object(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    with pytest.raises(APIError) as error:
+        service.start_create(ProjectCreateRequest(**project_payload("Replacement")))
+
+    assert error.value.status_code == 409
+    state.project.end_network_operation()
+
+
 def test_routing_status_does_not_use_gonetem_as_addressing() -> None:
     """A running container network does not imply addressing was applied."""
     topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))

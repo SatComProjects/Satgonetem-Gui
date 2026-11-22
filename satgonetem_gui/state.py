@@ -53,6 +53,7 @@ class ProjectSession:
     _generation: int = 0
     _operation_token: int = 0
     _active_token: Optional[int] = None
+    _network_operation: bool = False
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @property
@@ -89,10 +90,21 @@ class ProjectSession:
         name: str,
         save_path: str = "",
         operation: str = "create",
+        precondition: Optional[Callable[[], bool]] = None,
     ) -> bool:
-        """Reserve the single build slot for a new operation."""
+        """Reserve the single build slot for a new operation.
+
+        Args:
+            name: Pending project name.
+            save_path: Requested save target.
+            operation: ``create`` or ``load``.
+            precondition: Checked under the session lock before reserving, so a
+                network operation cannot start between the check and ``begin``.
+        """
         with self._lock:
-            if self.state is ProjectState.CREATING:
+            if self.state is ProjectState.CREATING or self._network_operation:
+                return False
+            if precondition is not None and not precondition():
                 return False
             self.state = ProjectState.CREATING
             self.operation = operation
@@ -101,6 +113,25 @@ class ProjectSession:
             self._operation_token += 1
             self._active_token = self._operation_token
             return True
+
+    def begin_network_operation(self) -> bool:
+        """Reserve the network lifecycle unless a project operation is active."""
+        with self._lock:
+            if self.state is ProjectState.CREATING or self._network_operation:
+                return False
+            self._network_operation = True
+            return True
+
+    def end_network_operation(self) -> None:
+        """Release the network lifecycle reservation."""
+        with self._lock:
+            self._network_operation = False
+
+    @property
+    def network_operation(self) -> bool:
+        """Return True while a routing/container mutation is in flight."""
+        with self._lock:
+            return self._network_operation
 
     def succeed(
         self,
@@ -198,6 +229,7 @@ class ProjectSession:
             self.error = None
             self.addressing_applied = False
             self._active_token = None
+            self._network_operation = False
             self._generation += 1
 
 
@@ -223,9 +255,15 @@ class ProjectTaskManager:
         runner: Callable[[], ProjectResult],
         *,
         timeout_seconds: float | None = None,
+        precondition: Callable[[], bool] | None = None,
     ) -> bool:
         """Reserve the session and run the build in a background thread."""
-        if not self.session.begin(name, save_path=save_path, operation=operation):
+        if not self.session.begin(
+            name,
+            save_path=save_path,
+            operation=operation,
+            precondition=precondition,
+        ):
             return False
         token = self.session.token
 

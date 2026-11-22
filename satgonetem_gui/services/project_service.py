@@ -48,6 +48,10 @@ class ProjectService:
                 "GoNetEm is running. Stop it before replacing the project.",
             )
 
+    def _network_is_stopped(self) -> bool:
+        """Return whether a replacement may start, checked under the session lock."""
+        return self.network_running is None or not self.network_running()
+
     def presets(self) -> list[dict]:
         """Return the bundled ground-station presets."""
         return [
@@ -89,6 +93,7 @@ class ProjectService:
             operation="create",
             runner=lambda: self.gateway.build(payload),
             timeout_seconds=PROJECT_BUILD_TIMEOUT_SECONDS,
+            precondition=self._network_is_stopped,
         )
         if not started:
             raise APIError(409, "A project operation is already running.")
@@ -118,7 +123,12 @@ class ProjectService:
     async def load(self, content: str) -> str:
         """Load a project from uploaded JSON and return its display name."""
         self._guard_replacement()
-        if not self.state.project.begin(name="", save_path="", operation="load"):
+        if not self.state.project.begin(
+            name="",
+            save_path="",
+            operation="load",
+            precondition=self._network_is_stopped,
+        ):
             raise APIError(409, "A project operation is already running.")
         token = self.state.project.token
 
