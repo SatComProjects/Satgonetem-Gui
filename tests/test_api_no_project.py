@@ -15,6 +15,9 @@ from tests.helpers import wait_for_project_state
     ("method", "path", "body"),
     [
         ("GET", "/api/satellites", None),
+        ("GET", "/api/satellites/addressable", None),
+        ("POST", "/api/satellites/addressable", {"enabled": True}),
+        ("POST", "/api/nodes/Sat0/addressable", {"enabled": True}),
         ("GET", "/api/ground_stations", None),
         ("GET", "/api/links", None),
         ("GET", "/api/nodes", None),

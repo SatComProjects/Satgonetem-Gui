@@ -143,6 +143,33 @@ class SatelliteResponse(BaseModel):
     position: Position
 
 
+class SatelliteAddressabilityResponse(BaseModel):
+    """Satellites currently exposed as traffic endpoints."""
+
+    ok: bool = True
+    addressable: list[str]
+    count: int
+    total: int
+    routing_refresh_required: bool = False
+
+
+class AddressabilityUpdateRequest(BaseModel):
+    """Requested addressability state for all or one satellite."""
+
+    enabled: bool
+
+
+class AddressabilityUpdateResponse(BaseModel):
+    """Result of an addressability mutation."""
+
+    ok: bool = True
+    name: str | None = None
+    addressable: bool | None = None
+    enabled: bool
+    updated: int
+    routing_refresh_required: bool = False
+
+
 class GroundStationResponse(BaseModel):
     """Ground-station identity and position."""
 
@@ -241,6 +268,7 @@ class NodeDetail(BaseModel):
     city: str | None = None
     default_qos_is_on: bool | None = None
     program_specific_qos_is_on: bool | None = None
+    addressable: bool | None = None
 
 
 class NodeDetailResponse(BaseModel):

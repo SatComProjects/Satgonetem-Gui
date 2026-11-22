@@ -445,6 +445,7 @@ class SatGoNetemTopologyAdapter:
             data["program_specific_qos_is_on"] = getattr(
                 node, "program_specific_qos_is_on", False
             )
+            data["addressable"] = node.is_addressable()
         return data
 
     def find_node(self, topology: Any, name: str) -> Any | None:
@@ -491,6 +492,44 @@ class SatGoNetemTopologyAdapter:
     def gonetem_is_on(self, topology: Any) -> bool:
         """Return whether containers are running."""
         return topology.get_gonetem_status()
+
+    def satellite_addressability(self, topology: Any) -> dict[str, Any]:
+        """Return the addressable satellite names and the satellite total."""
+        satellites = list(topology.satellites.values())
+        return {
+            "addressable": sorted(
+                satellite.name
+                for satellite in satellites
+                if satellite.is_addressable()
+            ),
+            "total": len(satellites),
+        }
+
+    def set_satellites_addressable(
+        self,
+        topology: Any,
+        enabled: bool,
+        names: list[str] | None = None,
+    ) -> int:
+        """Enable or disable addressability for all or selected satellites."""
+        satellites = list(topology.satellites.values())
+        if names is None:
+            targets = satellites
+        else:
+            by_name = {satellite.name: satellite for satellite in satellites}
+            missing = [name for name in names if name not in by_name]
+            if missing:
+                raise ValueError(f"Unknown satellite: {missing[0]}")
+            targets = [by_name[name] for name in names]
+
+        if not targets:
+            return 0
+        if enabled:
+            topology.set_addressable_satellites(targets)
+        else:
+            for satellite in targets:
+                satellite.set_addressable(False)
+        return len(targets)
 
     def routing_status(self, topology: Any) -> dict[str, Any]:
         """Return routing and container state without guessing addressing state."""

@@ -32,6 +32,7 @@ Status: proposed
 Add a link to each new record here.
 
 - [0001 — Simulation transport controls](0001-simulation-transport.md)
+- [0002 — Session-scoped satellite addressability](0002-session-scoped-addressability.md)
 
 ## Related documents
 

@@ -11,6 +11,14 @@ QUEUE_IMPORT = "./queue.js?v=22"
 WORLD_TEMPLATE = PACKAGE / "templates" / "world.html"
 SIMULATION_CONTROLS = PACKAGE / "static" / "simulation_controls.js"
 SIMULATION_MODEL_IMPORT = "./simulation_model.js?v=1"
+ADDRESSABILITY_MODEL_IMPORT = "./addressability_model.js?v=1"
+
+
+def test_addressability_controls_import_the_versioned_model() -> None:
+    """The traffic controller and its pure model share one cache-busted URL."""
+    content = TRAFFIC_MODULE.read_text(encoding="utf-8")
+
+    assert f'from "{ADDRESSABILITY_MODEL_IMPORT}"' in content
 
 
 def test_simulation_controls_imports_the_versioned_model() -> None:

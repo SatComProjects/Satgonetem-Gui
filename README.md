@@ -10,7 +10,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **3D World View** | Interactive CesiumJS globe showing satellites, ground stations, links, and coverage in real time. |
 | **Simulation Controls** | Play, pause, step, reset, seek, and change the playback speed of the emulated constellation. |
 | **Node Explorer** | Browse all satellites and ground stations with detailed status. |
-| **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between nodes with a queued job system. |
+| **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between ground stations and opt-in satellite endpoints with a queued job system. |
 | **Routing Control** | Apply Static/Dijkstra, OSPF, IS-IS, or SR-MPLS routing across the emulated topology. |
 | **GoNetem Integration** | Start and stop Dockerised network nodes directly from the web UI. |
 | **Save / Load** | Export and import projects as JSON files. |
@@ -112,6 +112,16 @@ step, and faster/slower playback. Step, reset, and seek require the loop to be
 paused. Playback still updates satellite positions with containers stopped;
 routing and traffic changes require GoNetEm to be running. A failed loop tick
 is shown in the panel without stopping the loop.
+
+## Satellite Traffic Endpoints
+
+Satellites are not traffic endpoints by default. On the Traffic page, enable
+**Include satellites as traffic endpoints** to expose every satellite as a
+source or destination; the Nodes page can toggle one satellite at a time. The
+setting is session-scoped because SatGoNetEm v0.3.1 does not serialize the
+addressable flag, so re-enable it after loading or replacing a project. If
+addressing and routing are already applied, re-apply them before running
+traffic so the new endpoints receive routes.
 
 ## Configuration
 

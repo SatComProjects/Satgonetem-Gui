@@ -16,7 +16,16 @@ from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
 from .config import Settings, load_settings
 from .errors import install_error_handlers
 from .resources import GROUND_STATIONS_DIR
-from .routes import pages, projects, routing, simulation, topology, traffic
+from .routes import (
+    addressability,
+    pages,
+    projects,
+    routing,
+    simulation,
+    topology,
+    traffic,
+)
+from .services.addressability_service import AddressabilityService
 from .services.container import ApplicationServices
 from .services.project_service import ProjectService
 from .services.routing_service import RoutingService
@@ -123,6 +132,7 @@ def build_services(settings: Settings) -> ApplicationServices:
     traffic_adapter = SatGoNetemTrafficAdapter()
 
     topology = TopologyService(runtime.project, topology_adapter)
+    addressability = AddressabilityService(topology, topology_adapter)
     simulation = SimulationService(topology, topology_adapter)
     project = ProjectService(
         runtime,
@@ -138,6 +148,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         runtime=runtime,
         project=project,
         topology=topology,
+        addressability=addressability,
         routing=routing,
         traffic=traffic,
         simulation=simulation,
@@ -173,6 +184,7 @@ def create_app(
     app.include_router(pages.create_pages_router(templates))
     app.include_router(projects.router)
     app.include_router(topology.router)
+    app.include_router(addressability.router)
     app.include_router(routing.router)
     app.include_router(simulation.router)
     app.include_router(traffic.router)

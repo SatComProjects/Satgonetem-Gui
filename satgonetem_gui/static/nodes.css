@@ -139,3 +139,17 @@
   color: var(--text);
   margin: 0;
 }
+
+.addressability-control .muted {
+  margin: 0 0 10px;
+}
+
+.addressability-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.addressability-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

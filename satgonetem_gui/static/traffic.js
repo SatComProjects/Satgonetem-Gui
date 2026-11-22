@@ -3,6 +3,11 @@ import { api } from "./api.js?v=4";
 // Keep this queue.js version in sync with the script tag in templates/base.html.
 import { jqAdd, jqStartNow, jqStartOne } from "./queue.js?v=22";
 import { buildTrafficPayload } from "./traffic_model.js";
+import {
+  addressabilityCheckboxState,
+  addressabilitySummary,
+  routingRefreshMessage,
+} from "./addressability_model.js?v=1";
 
 function byId(id) {
   return document.getElementById(id);
@@ -55,6 +60,62 @@ async function loadNodes() {
     if (nodes.length > 1) destination.value = nodes[1].name;
   } catch (error) {
     setMsg(error.message || "Could not load traffic nodes.", true);
+  }
+}
+
+let addressabilityBusy = false;
+
+async function loadAddressability() {
+  const checkbox = byId("tg-satellites");
+  const count = byId("tg-addressability-count");
+  if (!checkbox || !count) return;
+
+  try {
+    const data = await api.get("/api/satellites/addressable");
+    const state = addressabilityCheckboxState(data.count, data.total);
+    checkbox.checked = state.checked;
+    checkbox.indeterminate = state.indeterminate;
+    checkbox.disabled = addressabilityBusy || state.disabled;
+    count.textContent = addressabilitySummary(data.count, data.total);
+
+    const note = byId("tg-addressability-note");
+    if (note && !note.textContent && data.routing_refresh_required) {
+      note.textContent =
+        "Routing is active; re-apply it after changing satellite endpoints.";
+    }
+  } catch {
+    checkbox.checked = false;
+    checkbox.indeterminate = false;
+    checkbox.disabled = true;
+    count.textContent = "Load a project to manage satellite endpoints.";
+    const note = byId("tg-addressability-note");
+    if (note) note.textContent = "";
+  }
+}
+
+async function toggleAddressability() {
+  const checkbox = byId("tg-satellites");
+  if (!checkbox || addressabilityBusy) return;
+
+  addressabilityBusy = true;
+  checkbox.disabled = true;
+  const note = byId("tg-addressability-note");
+  if (note) note.textContent = "";
+  const enabling = checkbox.checked;
+  setMsg(enabling ? "Enabling satellite endpoints..." : "Disabling satellite endpoints...");
+
+  try {
+    const data = await api.post("/api/satellites/addressable", {
+      enabled: enabling,
+    });
+    if (note) note.textContent = routingRefreshMessage(data.routing_refresh_required);
+    setMsg("");
+    await loadNodes();
+  } catch (error) {
+    setMsg(error.message || "Could not update satellite endpoints.", true);
+  } finally {
+    addressabilityBusy = false;
+    await loadAddressability();
   }
 }
 
@@ -127,8 +188,13 @@ byId("tg-proto").addEventListener("change", toggleProtocol);
 byId("tg-hping-rate").addEventListener("change", toggleHpingRate);
 byId("tg-add-queue").addEventListener("click", addToQueue);
 byId("tg-run-now").addEventListener("click", runNow);
+const satelliteToggle = byId("tg-satellites");
+if (satelliteToggle) {
+  satelliteToggle.addEventListener("change", toggleAddressability);
+}
 
 toggleTool();
 toggleProtocol();
 toggleHpingRate();
 loadNodes();
+loadAddressability();
