@@ -31,7 +31,7 @@ Status: proposed
 
 Add a link to each new record here.
 
-- (none yet)
+- [0001 — Simulation transport controls](0001-simulation-transport.md)
 
 ## Related documents
 

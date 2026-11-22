@@ -8,6 +8,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 |---------|-------------|
 | **Project Builder** | Define Walker orbit shells and ground stations through a guided form. |
 | **3D World View** | Interactive CesiumJS globe showing satellites, ground stations, links, and coverage in real time. |
+| **Simulation Controls** | Play, pause, step, reset, seek, and change the playback speed of the emulated constellation. |
 | **Node Explorer** | Browse all satellites and ground stations with detailed status. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows between nodes with a queued job system. |
 | **Routing Control** | Apply Static/Dijkstra, OSPF, IS-IS, or SR-MPLS routing across the emulated topology. |
@@ -74,9 +75,9 @@ satgonetem_gui/
 ├── schemas.py          # Pydantic request/response models
 ├── errors.py           # Shared API error envelope
 ├── state.py            # Per-application project/runtime state
-├── routes/             # Page, project, topology, routing, traffic APIs
+├── routes/             # Page, project, topology, routing, simulation, traffic APIs
 ├── services/           # Use-case orchestration and job registry
-├── adapters/           # SatGoNetem topology and traffic adapters
+├── adapters/           # SatGoNetem topology (including simulation) and traffic adapters
 ├── ground_stations.py  # Ground-station CSV parsing/writing
 ├── serializers.py      # Traffic result shaping
 ├── storage.py          # Data-file and save-path policy
@@ -95,13 +96,22 @@ package.json            # Frontend test/tooling manifest
 
 | Path | Page |
 |------|------|
-| `/` | Dashboard — constellation statistics, GoNetem status, routing controls |
-| `/world` | 3D Globe — real-time satellite and ground station visualisation |
+| `/` | Dashboard — constellation statistics, simulation playback, GoNetem status, routing controls |
+| `/world` | 3D Globe — real-time satellite and ground station visualisation with simulation playback |
 | `/nodes` | Node Explorer — list and inspect all topology nodes |
 | `/traffic` | Traffic Generator — create and queue traffic jobs |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
 | `/docs` | API Documentation — auto-generated Swagger UI |
+
+## Simulation Controls
+
+The Dashboard and World View expose transport controls for the core simulation
+loop: start/pause, single step, reset to the first step, seek to an absolute
+step, and faster/slower playback. Step, reset, and seek require the loop to be
+paused. Playback still updates satellite positions with containers stopped;
+routing and traffic changes require GoNetEm to be running. A failed loop tick
+is shown in the panel without stopping the loop.
 
 ## Configuration
 

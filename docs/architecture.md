@@ -32,8 +32,9 @@ and adapter graph for each app.
 
 - `app.py` - `create_app()`, service composition, routers, static mount.
 - `dependencies.py` - injects `ApplicationServices` from `app.state`.
-- `routes/` - pages, projects, topology, routing, traffic routers.
-- `services/` - project lifecycle, topology views, routing, traffic jobs.
+- `routes/` - pages, projects, topology, routing, simulation, traffic routers.
+- `services/` - project lifecycle, topology views, routing, simulation
+  transport, traffic jobs.
 - `adapters/` - the only modules importing `TopologyManager` or concrete flow
   classes.
 - `state.py` - `ProjectSession`, `ProjectTaskManager`, `RuntimeState`.
@@ -153,6 +154,18 @@ not import those dependency internals.
 - Added a WebGL-unavailable fallback for World View, covered by Playwright.
 - Added an 85% coverage gate and completed the documentation/security notes.
 
+## Phase 8 changes
+
+- Added a `SimulationService` and a narrow `SimulationController` protocol for
+  start/pause, single-step, reset, seek-to-step, and faster/slower playback.
+- Added `POST /api/simulation/*` routes and extended `/api/status` with total
+  steps, playback rate, and the last simulation tick error.
+- Serialized simulation mutations with the existing session-level network
+  operation gate and stopped the loop before project replacement and on
+  application shutdown.
+- Added a shared Dashboard/World View transport panel, Vitest coverage for the
+  pure model, and Playwright coverage for the panel shell.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -173,36 +186,27 @@ not import those dependency internals.
 - Package-data tests verify bundled presets/config, and CI installs the built
   wheel into a clean target before importing the app.
 - Vitest covers the pure queue, ground-station selection, traffic payload, API
-  wrapper, and escaping modules.
+  wrapper, simulation formatting/action rules, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
-  node expansion, dashboard counts, and the WebGL fallback. World View WebGL
-  rendering itself remains a manual desktop check.
+  node expansion, dashboard counts, simulation panel accessibility, and the
+  WebGL fallback. World View WebGL rendering itself remains a manual desktop
+  check.
 
 ## Current measurements
 
-Measured on 2026-11-03 with Python 3.15.0, pytest 9.2.0, and coverage 7.17.1:
+Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
+7.17.1:
 
 ```bash
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **148 passed, 1 skipped** in about 1.8 s. Frontend: **14 Vitest tests**, **10 Playwright smoke tests**.
+Result: **463 passed, 1 skipped** in about 30 s with coverage. Frontend:
+**52 Vitest tests**, **12 Playwright tests**.
 
-| Module | Statements | Coverage |
-|---|---:|---:|
-| `adapters/satgonetem_topology.py` | 166 | 88% |
-| `adapters/satgonetem_traffic.py` | 76 | 76% |
-| `services/project_service.py` | 73 | 86% |
-| `services/routing_service.py` | 63 | 82% |
-| `services/topology_service.py` | 37 | 98% |
-| `services/traffic_service.py` | 155 | 88% |
-| `state.py` | 123 | 95% |
-| `schemas.py` | 120 | 98% |
-| `storage.py` | 29 | 95% |
-| **Total** | **1201** | **90%** |
-
-Branch coverage is enabled with an 85% minimum; the current suite is at 90%.
+Branch coverage is enabled with an 85% minimum; the current suite is at
+**89.44%** over 2290 statements.
 
 ## Tooling decisions
 
