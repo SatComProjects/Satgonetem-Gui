@@ -206,7 +206,7 @@ class TrafficService:
         if not isinstance(request, strategy.request_type):
             raise APIError(422, f"Invalid request for {kind}.")
 
-        self.topology.require_topology()
+        topology = self.topology.require_topology()
         if not self.topology.gonetem_is_on():
             raise APIError(409, "GoNetEm is not running.")
         if not self.topology.addressing_applied:
@@ -224,6 +224,13 @@ class TrafficService:
             raise APIError(500, f"Failed to start {kind} flow.") from exc
 
         try:
+            self.gateway.register_flow(topology, flow)
+        except Exception as exc:
+            self._stop_flow(flow)
+            logger.exception("Failed to register %s flow with the topology.", kind)
+            raise APIError(500, f"Failed to start {kind} flow.") from exc
+
+        try:
             job = self._create_job(kind, flow, request)
         except JobCapacityError as exc:
             self._stop_flow(flow)
@@ -235,11 +242,15 @@ class TrafficService:
         return job.job_id
 
     def _stop_flow(self, flow: Any) -> None:
-        """Stop a flow that never became a tracked job."""
+        """Stop and release a flow that never became a tracked job."""
         try:
             self.gateway.stop(flow)
         except Exception:
             logger.exception("Failed to stop an untracked traffic flow.")
+        try:
+            self.gateway.release(flow)
+        except Exception:
+            logger.exception("Failed to release an untracked traffic flow.")
 
     def _create_job(self, kind: str, flow: Any, request: Any) -> TrafficJob:
         """Create a job, reclaiming finished jobs once when the registry is full."""

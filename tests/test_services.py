@@ -94,6 +94,7 @@ class FakeTraffic:
         self.poll_status = poll_status
         self.stopped = []
         self.released = []
+        self.registered = []
         self.poll_calls = 0
 
     def start_iperf3(self, source, destination, request):
@@ -116,6 +117,9 @@ class FakeTraffic:
 
     def release(self, flow):
         self.released.append(flow)
+
+    def register_flow(self, topology, flow):
+        self.registered.append(flow)
 
 
 def _loaded_session() -> ProjectSession:
@@ -228,6 +232,7 @@ def test_traffic_start_and_status() -> None:
     flow = job.flow
 
     assert job_id.startswith("j")
+    assert gateway.registered == [flow]
     assert service.status(job_id) == {"status": "done", "results": {"ok": True}}
     assert gateway.poll_calls == 1
     assert job.flow is None

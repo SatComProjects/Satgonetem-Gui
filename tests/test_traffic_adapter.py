@@ -162,6 +162,19 @@ def test_release_discards_the_core_result() -> None:
     assert flow.discarded == 1
 
 
+def test_register_flow_joins_the_topology_active_list() -> None:
+    """A GUI flow is visible to the core's container-stop cleanup."""
+    topology = SimpleNamespace(_active_flows=[])
+    flow = SimpleNamespace(discard_result=lambda: None)
+    adapter = SatGoNetemTrafficAdapter()
+
+    adapter.register_flow(topology, flow)
+    assert topology._active_flows == [flow]
+
+    adapter.release(flow)
+    assert topology._active_flows == []
+
+
 def test_poll_unknown_flow_state_maps_to_a_terminal_error() -> None:
     """Unrecognized core states never leak as a non-terminal 'unknown'."""
     adapter = SatGoNetemTrafficAdapter()
