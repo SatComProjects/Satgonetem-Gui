@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from satgonetem import connectivity as core_connectivity
 
 from satgonetem_gui.adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from satgonetem_gui.schemas import ProjectCreateRequest
@@ -1051,3 +1052,162 @@ def test_link_usage_degrades_when_monitoring_fails(settings) -> None:
     assert result["links"] == []
     assert result["note"] is not None
     assert "monitor exploded" not in result["note"]
+
+
+def _connectivity_topology() -> SimpleNamespace:
+    """Build a topology stand-in with addressable and filtered endpoints."""
+    ground_stations = {
+        10: _traffic_endpoint("Gnd10", 10),
+        5: _traffic_endpoint("Gnd5", 5),
+        8: _traffic_endpoint("Gnd8", 8, interfaces=0),
+    }
+    satellites = {
+        12: _traffic_endpoint("Sat12", 12, addressable=True),
+        3: _traffic_endpoint("Sat3", 3, addressable=True, interfaces=2),
+        7: _traffic_endpoint("Sat7", 7, addressable=False),
+        9: _traffic_endpoint("Sat9", 9, addressable=True, interfaces=0),
+    }
+    by_name = {
+        node.name: node for node in list(ground_stations.values()) + list(satellites.values())
+    }
+    return SimpleNamespace(
+        ground_stations=ground_stations,
+        satellites=satellites,
+        get_node_by_name=by_name.get,
+    )
+
+
+def test_connectivity_nodes_default_to_ground_first_then_satellites(settings) -> None:
+    """All addressable endpoints are returned in deterministic id order."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+
+    nodes = adapter.resolve_connectivity_nodes(_connectivity_topology(), None)
+
+    assert nodes == ["Gnd5", "Gnd10", "Sat3", "Sat12"]
+
+
+def test_connectivity_nodes_preserve_the_requested_order_without_duplicates(
+    settings,
+) -> None:
+    """A selected subset is validated, deduplicated, and kept in request order."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+
+    nodes = adapter.resolve_connectivity_nodes(
+        _connectivity_topology(),
+        ["Sat12", "Gnd10", "Sat12"],
+    )
+
+    assert nodes == ["Sat12", "Gnd10"]
+
+
+@pytest.mark.parametrize("name", ["Sat7", "Sat9", "Gnd8", "Missing"])
+def test_connectivity_nodes_reject_non_addressable_endpoints(
+    settings,
+    name: str,
+) -> None:
+    """Unaddressable satellites, stations without interfaces, and unknown names fail."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+
+    with pytest.raises(
+        ValueError,
+        match=f"Node is not an addressable traffic endpoint: {name}",
+    ):
+        adapter.resolve_connectivity_nodes(
+            _connectivity_topology(),
+            ["Sat3", name],
+        )
+
+
+@pytest.mark.parametrize(
+    "names",
+    [None, [], ["Sat3"], ["Sat3", "Sat3"]],
+)
+def test_connectivity_nodes_require_at_least_two(settings, names) -> None:
+    """A matrix needs two distinct addressable endpoints."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _connectivity_topology()
+    if names is None:
+        topology.ground_stations = {}
+        topology.satellites = {3: topology.satellites[3]}
+
+    with pytest.raises(
+        ValueError,
+        match="At least two addressable nodes are required",
+    ):
+        adapter.resolve_connectivity_nodes(topology, names)
+
+
+def test_connectivity_matrix_uses_core_config_and_returns_named_results(
+    settings,
+    monkeypatch,
+) -> None:
+    """The adapter resolves objects, pins the ping config, and shapes results."""
+    captured = {}
+
+    class FakeMatrix:
+        def to_dict(self):
+            return {
+                "summary": {"pairs": 2, "reachable": 1, "unreachable": 1},
+                "results": [
+                    {
+                        "source": "Sat3",
+                        "destination": "Gnd5",
+                        "reachable": True,
+                    }
+                ],
+            }
+
+    def fake_build(nodes, **kwargs):
+        captured["nodes"] = list(nodes)
+        captured.update(kwargs)
+        return FakeMatrix()
+
+    monkeypatch.setattr(
+        core_connectivity,
+        "build_connectivity_matrix",
+        fake_build,
+    )
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _connectivity_topology()
+
+    result = adapter.run_connectivity_matrix(
+        topology,
+        ["Sat3", "Gnd5"],
+        ping_count=3,
+        max_workers=4,
+        flow_timeout_seconds=2.5,
+    )
+
+    assert [node.name for node in captured["nodes"]] == ["Sat3", "Gnd5"]
+    config = captured["config"]
+    assert config.count == 3
+    assert config.interval_sec == 0.01
+    assert config.preload == 1
+    assert config.packet_size == 64
+    assert captured["max_workers"] == 4
+    assert captured["flow_timeout_sec"] == 2.5
+    assert result["nodes"] == ["Sat3", "Gnd5"]
+    assert result["summary"]["pairs"] == 2
+    assert result["results"][0]["source"] == "Sat3"
+
+
+def test_connectivity_matrix_translates_core_failures(
+    settings,
+    monkeypatch,
+) -> None:
+    """An unexpected core failure becomes a safe runtime error for the job."""
+    monkeypatch.setattr(
+        core_connectivity,
+        "build_connectivity_matrix",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("scheduler exploded")),
+    )
+    adapter = SatGoNetemTopologyAdapter(settings)
+
+    with pytest.raises(RuntimeError, match="Connectivity check failed"):
+        adapter.run_connectivity_matrix(
+            _connectivity_topology(),
+            ["Sat3", "Gnd5"],
+            ping_count=1,
+            max_workers=1,
+            flow_timeout_seconds=1.0,
+        )

@@ -94,6 +94,26 @@ class NetworkController(Protocol):
     def stop_gonetem(self, topology: Any) -> None: ...
 
 
+class ConnectivityController(Protocol):
+    """Full-mesh connectivity node resolution and matrix execution."""
+
+    def resolve_connectivity_nodes(
+        self,
+        topology: Any,
+        names: list[str] | None,
+    ) -> list[str]: ...
+
+    def run_connectivity_matrix(
+        self,
+        topology: Any,
+        names: list[str],
+        *,
+        ping_count: int,
+        max_workers: int,
+        flow_timeout_seconds: float,
+    ) -> dict[str, Any]: ...
+
+
 class SimulationController(Protocol):
     """Simulation loop transport controls."""
 

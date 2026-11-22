@@ -516,3 +516,69 @@ class PreflightResponse(BaseModel):
     blocking: bool
     checks: list[PreflightCheck]
     estimate: ProjectEstimate | None = None
+
+
+class ConnectivityStartRequest(BaseModel):
+    """Full-mesh connectivity check options."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    nodes: list[str] | None = None
+    ping_count: int = Field(default=10, ge=1, le=50)
+    max_workers: int = Field(default=32, ge=1, le=128)
+    flow_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+
+
+class ConnectivityStartResponse(BaseModel):
+    """Started connectivity job."""
+
+    ok: bool = True
+    job_id: str
+
+
+class ConnectivityResultItem(BaseModel):
+    """One ordered source/destination connectivity result."""
+
+    source: str
+    destination: str
+    reachable: bool
+    packets_transmitted: int
+    packets_received: int
+    packet_loss_percent: float
+    rtt_min_ms: float | None = None
+    rtt_avg_ms: float | None = None
+    rtt_max_ms: float | None = None
+    error: str | None = None
+
+
+class ConnectivitySummary(BaseModel):
+    """Aggregate reachability counts for one matrix."""
+
+    pairs: int
+    reachable: int
+    unreachable: int
+
+
+class ConnectivityStatusResponse(BaseModel):
+    """Polled connectivity job state and its completed matrix."""
+
+    ok: bool = True
+    job_id: str
+    status: Literal["running", "done", "error"]
+    nodes: list[str]
+    pair_count: int
+    summary: ConnectivitySummary | None = None
+    results: list[ConnectivityResultItem] = Field(default_factory=list)
+    error: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    elapsed_ms: int | None = None
+
+
+class ConnectivityExportResponse(BaseModel):
+    """Downloadable connectivity matrix content."""
+
+    ok: bool = True
+    filename: str
+    content: str
+    content_type: str = "text/csv"
