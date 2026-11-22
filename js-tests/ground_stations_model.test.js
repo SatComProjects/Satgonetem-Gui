@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildStationMap,
+  mergeStations,
   selectedStations,
   selectionSummary,
   stationKey,
@@ -31,6 +32,15 @@ describe("ground station selection", () => {
       "Berlin",
       "Tokyo",
     ]);
+  });
+
+  it("merges pending stations across picker visits without duplicates", () => {
+    const berlin = { index: 0, name: "Berlin", latitude: 52.5, longitude: 13.4, elevation_m: 34 };
+    const paris = { index: 1, name: "Paris", latitude: 48.8, longitude: 2.3, elevation_m: 35 };
+
+    expect(mergeStations([berlin], [paris])).toEqual([berlin, paris]);
+    expect(mergeStations([berlin], [berlin])).toEqual([berlin]);
+    expect(mergeStations(undefined, [paris])).toEqual([paris]);
   });
 
   it("summarizes all, some, and none for the header checkbox", () => {

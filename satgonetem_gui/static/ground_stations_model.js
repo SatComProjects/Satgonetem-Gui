@@ -28,6 +28,21 @@ export function selectedStations(selectedKeys, stationMap) {
   return result;
 }
 
+export function mergeStations(existing, incoming) {
+  const merged = new Map();
+  for (const station of [...(existing || []), ...(incoming || [])]) {
+    const key = [
+      station.index,
+      station.name,
+      station.latitude,
+      station.longitude,
+      station.elevation_m,
+    ].join("|");
+    merged.set(key, station);
+  }
+  return [...merged.values()];
+}
+
 export function selectionSummary(selectedKeys, presetName, stations) {
   if (stations.length === 0) return "none";
   let selected = 0;

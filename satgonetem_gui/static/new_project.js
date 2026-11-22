@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { mergeStations } from "./ground_stations_model.js";
 import { normalizeProjectName } from "./new_project_model.js";
 
   var shells = [];
@@ -165,6 +166,7 @@ import { normalizeProjectName } from "./new_project_model.js";
       fields: Object.fromEntries(fd.entries()),
       shells: shells,
       grounds: grounds,
+      pendingStations: pendingStations.slice(),
       gObj: {
         id: document.getElementById("g_id").value,
         type: document.getElementById("g_type").value,
@@ -189,6 +191,8 @@ import { normalizeProjectName } from "./new_project_model.js";
 
     shells = backup.shells || [];
     grounds = backup.grounds || [];
+    pendingStations = mergeStations(backup.pendingStations, pendingStations);
+    updateGsLabel();
     renderShells();
     renderGrounds();
 
