@@ -33,6 +33,11 @@ the operator re-applies them.
 
 ## Consequences
 
+> **Update (v0.3.2):** the core now persists addressability in
+> runtime-state projects. Simulation-property (Walker) projects — the GUI's
+> normal project format — still do not serialize the flag, so the session-scoped
+> behavior remains for those projects.
+
 - Users can run satellite-to-satellite and ground-to-satellite traffic without
   changing the core pin.
 - The setting must be re-enabled after loading or replacing a project. The UI

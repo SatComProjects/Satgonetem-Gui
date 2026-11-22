@@ -174,8 +174,9 @@ not import those dependency internals.
 - Added `GET/POST /api/satellites/addressable` and
   `POST /api/nodes/{name}/addressable`; node detail now exposes the satellite
   addressable flag.
-- Kept addressability session-scoped because the pinned core does not serialize
-  it, and returned a routing-refresh flag when addressing is active.
+- Kept addressability session-scoped for simulation-property (Walker) projects
+  because the pinned core persists the flag only in runtime-state projects, and
+  returned a routing-refresh flag when addressing is active.
 - Added the Traffic page satellite-endpoint toggle, a per-node Node Explorer
   control, Vitest coverage for the pure formatting/rules, and a mocked
   Playwright flow that verifies endpoint refresh.
@@ -300,7 +301,7 @@ Branch coverage is enabled with an 85% minimum; the current suite is at
 - `uv.lock` is the source of truth and is committed.
 - Runtime data is packaged under `satgonetem_gui/data/` and loaded through
   `importlib.resources`; the wheel test verifies it is present.
-- SatGoNetEm is pinned to the `v0.3.1` Git tag (commit `55d4da5`). The runtime
+- SatGoNetEm is pinned to the `v0.3.2` Git tag (commit `b5a2f6e`). The runtime
   dependency is a PEP 508 direct URL, so built wheel metadata carries the pin
   instead of a floating version range; `[tool.uv.sources]` pins the same tag
   for `uv` resolution. The 10x10 adapter contract tests pass against the tag.
@@ -309,7 +310,7 @@ Branch coverage is enabled with an 85% minimum; the current suite is at
 - CI runs on pushes and pull requests to `main` and `develop`, installs Python
   and npm dependencies, runs Python/Vitest/Playwright tests, and verifies the
   wheel contains application modules, data, templates, and static assets and
-  that its metadata pins the SatGoNetEm `v0.3.1` direct URL.
+  that its metadata pins the SatGoNetEm `v0.3.2` direct URL.
 - `node_modules/`, `.npm-cache/`, and Playwright browser/artifacts are ignored.
 
 ## Status

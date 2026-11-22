@@ -4,7 +4,7 @@ Status: accepted
 
 ## Context
 
-SatGoNetem v0.3.1 owns a discrete-time simulation loop with public operations
+SatGoNetem v0.3.2 owns a discrete-time simulation loop with public operations
 for start, stop, single step, reset, speed, seek, total duration, and last-tick
 error. The GUI only read `simulation_updating`, `current_step`, and
 `current_time` and rendered them as a passive card. Users could watch the

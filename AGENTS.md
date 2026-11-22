@@ -305,7 +305,7 @@ cycles.
 ### Cross-repository changes
 
 - The GUI consumes SatGoNetem from the pinned Git tag in `pyproject.toml`
-  (`v0.3.1`, resolved commit `55d4da59cdd9cbe921430ea0a200e32f1d3297ed`) and
+  (`v0.3.2`, resolved commit `b5a2f6eef93c8a1f57c0cfa031343f80b2eac535`) and
   records the resolved revision in `uv.lock`. The runtime dependency is a PEP
   508 direct URL so built wheel metadata carries the pin, and
   `[tool.uv.sources]` pins the same tag for `uv` resolution.

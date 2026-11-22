@@ -1,8 +1,9 @@
 /**
  * Pure helpers for the satellite addressability controls.
  *
- * Addressability is session-scoped: core does not serialize the flag, so the
- * UI must make the current state and the routing-refresh requirement explicit.
+ * Addressability is session-scoped for simulation-property projects: core
+ * persists it only in runtime-state projects, so the UI must make the current
+ * state and the routing-refresh requirement explicit.
  */
 
 /**
