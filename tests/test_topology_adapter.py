@@ -858,3 +858,38 @@ def test_routing_path_rejects_a_path_missing_from_the_graph(settings) -> None:
 
     with pytest.raises(ValueError, match="no longer present"):
         adapter.routing_path(topology, "Sat0", "Sat1")
+
+
+def test_links_include_delay_capacity_and_active_state(settings) -> None:
+    """The link payload carries the metrics needed by the inspector."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    source = SimpleNamespace(name="Gnd100")
+    target = SimpleNamespace(name="Sat0")
+    topology = SimpleNamespace(
+        links={
+            "Gnd100-Sat0": SimpleNamespace(
+                source=source,
+                target=target,
+                type="GroundStationLink",
+                direction="",
+                distance=1_500_000.0,
+                is_active=False,
+                get_capacity=lambda: 100_000,
+            )
+        }
+    )
+
+    links = adapter.links(topology)
+
+    assert links == [
+        {
+            "src": "Gnd100",
+            "dst": "Sat0",
+            "type": "GroundStationLink",
+            "direction": "",
+            "distance_km": 1500.0,
+            "delay_ms": 5.0,
+            "capacity_kbps": 100000,
+            "is_active": False,
+        }
+    ]

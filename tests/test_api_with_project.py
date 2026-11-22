@@ -70,7 +70,34 @@ def test_links_endpoint(project_client) -> None:
     link_types = {link["type"] for link in links}
     assert "InterSatelliteLink" in link_types
     assert "GroundStationLink" in link_types
-    assert all({"src", "dst", "type", "direction", "distance_km"} == set(link) for link in links)
+    assert all(
+        {
+            "src",
+            "dst",
+            "type",
+            "direction",
+            "distance_km",
+            "delay_ms",
+            "capacity_kbps",
+            "is_active",
+        }
+        == set(link)
+        for link in links
+    )
+
+
+def test_links_endpoint_reports_delay_capacity_and_state(project_client) -> None:
+    """Link metrics are usable for explaining throughput and latency."""
+    links = project_client.get("/api/links").json()
+
+    ground = next(link for link in links if link["type"] == "GroundStationLink")
+    assert ground["delay_ms"] > 0
+    assert ground["capacity_kbps"] > 0
+    assert ground["is_active"] is True
+    assert ground["delay_ms"] == pytest.approx(
+        ground["distance_km"] / 299.792458,
+        rel=0.01,
+    )
 
 
 def test_nodes_and_node_detail(project_client) -> None:
