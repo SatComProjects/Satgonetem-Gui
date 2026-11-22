@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from .adapters.coverage_adapter import SatGoNetemCoverageAdapter
 from .adapters.environment_doctor import LocalEnvironmentDoctor
 from .adapters.experiment_adapter import SatGoNetemExperimentAdapter
 from .adapters.satgonetem_topology import SatGoNetemTopologyAdapter
@@ -21,6 +22,7 @@ from .resources import GROUND_STATIONS_DIR
 from .routes import (
     addressability,
     connectivity,
+    coverage,
     diagnostics,
     experiments,
     pages,
@@ -34,6 +36,7 @@ from .routes import (
 from .services.addressability_service import AddressabilityService
 from .services.connectivity_service import ConnectivityService
 from .services.container import ApplicationServices
+from .services.coverage_service import CoverageService
 from .services.experiment_service import ExperimentService
 from .services.preflight_service import PreflightService
 from .services.project_catalog_service import ProjectCatalogService
@@ -166,6 +169,7 @@ def build_services(settings: Settings) -> ApplicationServices:
     traffic = TrafficService(topology, traffic_adapter)
     preflight = PreflightService(LocalEnvironmentDoctor(settings))
     connectivity_service = ConnectivityService(topology, topology_adapter)
+    coverage_service = CoverageService(topology, SatGoNetemCoverageAdapter())
     experiment_service = ExperimentService(
         settings,
         topology,
@@ -182,6 +186,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         simulation=simulation,
         preflight=preflight,
         connectivity=connectivity_service,
+        coverage=coverage_service,
         experiments=experiment_service,
     )
 
@@ -222,5 +227,6 @@ def create_app(
     app.include_router(traffic.router)
     app.include_router(diagnostics.router)
     app.include_router(connectivity.router)
+    app.include_router(coverage.router)
     app.include_router(experiments.router)
     return app

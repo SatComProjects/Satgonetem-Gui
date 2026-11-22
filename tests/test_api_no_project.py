@@ -43,6 +43,7 @@ from tests.helpers import wait_for_project_state
         ("POST", "/api/traffic/cancel", {"job_id": "missing"}),
         ("GET", "/api/project/save", None),
         ("GET", "/api/project/config?name=Missing", None),
+        ("POST", "/api/analysis/coverage", {}),
         ("POST", "/api/diagnostics/connectivity", {}),
         ("GET", "/api/diagnostics/connectivity/missing", None),
         ("GET", "/api/diagnostics/connectivity/missing/export?format=csv", None),

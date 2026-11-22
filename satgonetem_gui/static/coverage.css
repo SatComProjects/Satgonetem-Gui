@@ -1,0 +1,855 @@
+/* Coverage analytics -------------------------------------------------------
+ * Snapshot of Earth-area coverage for the current simulation step. The page
+ * frame and controls are static; the results region, per-shell bars, and the
+ * ground-station table are injected by coverage.js. Colors follow the theme
+ * tokens in base.css so coverage levels agree with the rest of the GUI.
+ */
+
+.cov-page {
+  --cov-grid-line: rgba(138, 160, 183, 0.06);
+  --cov-muted-ink: #b7c7d8;
+
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cov-page > *,
+.cov-layout > * {
+  min-width: 0;
+}
+
+/* The results region, empty messages, and result table are toggled with the
+ * hidden attribute by the page script; their base layout uses flex/grid, so
+ * the attribute needs to win over those display values. */
+.cov-page [hidden] {
+  display: none !important;
+}
+
+/* Page header -------------------------------------------------------------- */
+
+.cov-page-head {
+  position: relative;
+  overflow: hidden;
+  padding: 22px 24px 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 160% at 100% -20%, rgba(61, 169, 252, 0.17), transparent 58%),
+    radial-gradient(85% 120% at 88% 130%, rgba(74, 222, 128, 0.07), transparent 62%),
+    linear-gradient(135deg, rgba(61, 169, 252, 0.045), transparent 46%),
+    var(--card);
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* Latitude/longitude grid, strongest at the top-right corner. */
+.cov-page-head::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--cov-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cov-grid-line) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(115% 150% at 82% 0, #000 12%, transparent 68%);
+  mask-image: radial-gradient(115% 150% at 82% 0, #000 12%, transparent 68%);
+  pointer-events: none;
+}
+
+/* Concentric ground-track rings anchored to the right edge. */
+.cov-page-head::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -64px;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle at center,
+    rgba(61, 169, 252, 0.16) 0 1px,
+    transparent 1px 42px
+  );
+  -webkit-mask-image: radial-gradient(circle at center, transparent 0 34%, #000 52%, transparent 74%);
+  mask-image: radial-gradient(circle at center, transparent 0 34%, #000 52%, transparent 74%);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.cov-page-head > * {
+  position: relative;
+  z-index: 1;
+}
+
+.cov-eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.cov-page .cov-title {
+  margin: 5px 0 8px;
+  font-size: clamp(1.55rem, 1.1rem + 1.4vw, 2.05rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.cov-lede {
+  max-width: 70ch;
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.cov-msg {
+  min-height: 1.35em;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.cov-msg.error,
+.cov-msg[data-state="error"] {
+  color: var(--bad);
+}
+
+/* Layout ------------------------------------------------------------------- */
+
+.cov-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.cov-page .card {
+  position: relative;
+}
+
+.cov-controls-card::before,
+.cov-results-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(90deg, var(--accent), transparent 62%);
+  pointer-events: none;
+}
+
+.cov-results-card::before {
+  background: linear-gradient(90deg, var(--accent), var(--ok) 55%, transparent 88%);
+  opacity: 0.7;
+}
+
+.cov-controls-card .card-title,
+.cov-results-card .card-title {
+  margin: 0 0 14px;
+}
+
+/* Focus -------------------------------------------------------------------- */
+
+.cov-page button:focus-visible,
+.cov-page input:focus-visible,
+.cov-page select:focus-visible,
+.cov-page output:focus-visible,
+.cov-page .cov-table-wrap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Controls ----------------------------------------------------------------- */
+
+.cov-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+.cov-field > label {
+  color: var(--cov-muted-ink);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.cov-field select {
+  width: 100%;
+  min-height: 36px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cov-range-field {
+  display: grid;
+  grid-template-areas:
+    "label value"
+    "range range";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.cov-range-field > label {
+  grid-area: label;
+}
+
+.cov-range-field > input[type="range"] {
+  grid-area: range;
+}
+
+.cov-range-field > output {
+  grid-area: value;
+  min-width: 3.4em;
+  padding: 2px 9px;
+  border: 1px solid rgba(61, 169, 252, 0.3);
+  border-radius: 999px;
+  background: rgba(61, 169, 252, 0.08);
+  color: #bfe3ff;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* Range: custom track with 10-degree tick marks so the mask scale reads at a
+ * glance. The thumb is the only high-contrast element in the control card. */
+.cov-range-field input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.cov-range-field input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(230, 237, 243, 0.22) 0 1px,
+      transparent 1px 10%
+    ),
+    linear-gradient(180deg, #0b1118, #14202d);
+}
+
+.cov-range-field input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border: 2px solid #0b0f14;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #6fc5ff, #2f9bea);
+  box-shadow:
+    0 0 0 1px rgba(61, 169, 252, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.cov-range-field input[type="range"]::-moz-range-track {
+  height: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(230, 237, 243, 0.22) 0 1px,
+      transparent 1px 10%
+    ),
+    linear-gradient(180deg, #0b1118, #14202d);
+}
+
+.cov-range-field input[type="range"]::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1d6fb8, var(--accent));
+}
+
+.cov-range-field input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #0b0f14;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #6fc5ff, #2f9bea);
+  box-shadow:
+    0 0 0 1px rgba(61, 169, 252, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.cov-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #c4d2e0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.cov-check:hover {
+  border-color: var(--border-subtle);
+  background: #16202b;
+}
+
+.cov-check:has(input:checked) {
+  border-color: rgba(61, 169, 252, 0.2);
+  background: rgba(61, 169, 252, 0.06);
+}
+
+.cov-check input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.cov-run-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 16px;
+  border: 1px solid rgba(61, 169, 252, 0.65);
+  background: linear-gradient(180deg, #53b8ff 0%, #2f9bea 100%);
+  color: #04121f;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 20px rgba(61, 169, 252, 0.18);
+  transition: background 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+.cov-run-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #6fc5ff 0%, #3da9fc 100%);
+  box-shadow: 0 10px 24px rgba(61, 169, 252, 0.24);
+}
+
+.cov-run-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.cov-run-btn:disabled {
+  border-color: #2a394b;
+  background: #182230;
+  color: var(--muted);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cov-hint {
+  margin: 10px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+/* Empty state -------------------------------------------------------------- */
+
+.cov-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 34px 20px 36px;
+  border: 1px dashed #263344;
+  border-radius: 12px;
+  background:
+    radial-gradient(70% 100% at 50% 0, rgba(61, 169, 252, 0.06), transparent 68%),
+    rgba(11, 15, 20, 0.35);
+  text-align: center;
+}
+
+.cov-empty::before {
+  content: "";
+  width: 54px;
+  height: 54px;
+  margin-bottom: 4px;
+  border: 1px solid rgba(61, 169, 252, 0.35);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(61, 169, 252, 0.18), transparent 72%),
+    repeating-linear-gradient(0deg, rgba(61, 169, 252, 0.24) 0 1px, transparent 1px 9px),
+    repeating-linear-gradient(90deg, rgba(61, 169, 252, 0.16) 0 1px, transparent 1px 9px);
+  box-shadow:
+    0 0 0 6px rgba(61, 169, 252, 0.04),
+    0 0 26px rgba(61, 169, 252, 0.14);
+}
+
+.cov-empty strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.cov-empty span {
+  max-width: 46ch;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+/* Results ------------------------------------------------------------------ */
+
+#coverage-results {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cov-hero {
+  --cov-level: var(--muted);
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  overflow: hidden;
+  padding: 16px 18px 16px 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 160% at 100% 0, rgba(61, 169, 252, 0.08), transparent 62%),
+    var(--input-bg);
+}
+
+.cov-hero::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--cov-level);
+  opacity: 0.9;
+}
+
+.cov-hero::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -46px;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle at center,
+    rgba(61, 169, 252, 0.2) 0 1px,
+    transparent 1px 22px
+  );
+  -webkit-mask-image: radial-gradient(circle at center, #000 0 48%, transparent 68%);
+  mask-image: radial-gradient(circle at center, #000 0 48%, transparent 68%);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.cov-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.cov-hero:has(#coverage-percent[data-level="none"]) {
+  --cov-level: #52687e;
+}
+
+.cov-hero:has(#coverage-percent[data-level="low"]) {
+  --cov-level: var(--bad);
+  border-color: var(--bad-border);
+}
+
+.cov-hero:has(#coverage-percent[data-level="fair"]) {
+  --cov-level: var(--warning);
+  border-color: var(--warning-border);
+}
+
+.cov-hero:has(#coverage-percent[data-level="good"]) {
+  --cov-level: var(--ok);
+  border-color: var(--ok-border);
+}
+
+.cov-hero:has(#coverage-percent[data-level="unknown"]) {
+  --cov-level: var(--unknown);
+}
+
+.cov-percent {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: clamp(2.2rem, 1.5rem + 2.3vw, 2.9rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.cov-percent[data-level="none"] {
+  color: #5f7488;
+}
+
+.cov-percent[data-level="low"] {
+  color: var(--bad);
+  text-shadow: 0 0 26px rgba(248, 113, 113, 0.22);
+}
+
+.cov-percent[data-level="fair"] {
+  color: var(--warning);
+  text-shadow: 0 0 26px rgba(251, 191, 36, 0.18);
+}
+
+.cov-percent[data-level="good"] {
+  color: var(--ok);
+  text-shadow: 0 0 26px rgba(74, 222, 128, 0.2);
+}
+
+.cov-percent[data-level="unknown"] {
+  color: var(--unknown);
+}
+
+.cov-hero-meta {
+  min-width: 0;
+}
+
+.cov-hero-meta p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.cov-hero-meta p + p {
+  margin-top: 4px;
+}
+
+#coverage-summary {
+  font-size: 0.84rem;
+}
+
+#coverage-summary:empty,
+#coverage-notes:empty {
+  display: none;
+}
+
+/* Result sections ---------------------------------------------------------- */
+
+.cov-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.cov-section h4 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.cov-section > .muted {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.cov-shells {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cov-shells:empty {
+  display: none;
+}
+
+.cov-shell {
+  display: grid;
+  grid-template-columns: minmax(64px, 108px) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.cov-shell:hover {
+  border-color: var(--border-subtle);
+  background: #16202b;
+}
+
+.cov-shell-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.cov-bar {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  background: #0b1118;
+}
+
+.cov-bar::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #0b1118;
+}
+
+.cov-bar::-webkit-progress-value {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1d6fb8, var(--accent));
+}
+
+.cov-bar::-moz-progress-bar {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1d6fb8, var(--accent));
+}
+
+.cov-shell-value {
+  min-width: 3.7em;
+  color: #bfe3ff;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cov-shell-count {
+  font-size: 0.76rem;
+  line-height: 1.3;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Ground-station table ----------------------------------------------------- */
+
+.cov-table-wrap {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(11, 15, 20, 0.35);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.cov-table-wrap:empty {
+  display: none;
+}
+
+.cov-table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cov-table th,
+.cov-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  line-height: 1.4;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.cov-table thead th {
+  background: #101923;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.cov-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.cov-table tbody tr:hover td {
+  background: rgba(61, 169, 252, 0.045);
+}
+
+.cov-table td:first-child {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.cov-table th:last-child,
+.cov-table td:last-child {
+  text-align: right;
+}
+
+.cov-table td:nth-child(2) {
+  white-space: nowrap;
+}
+
+.cov-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.cov-badge::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.cov-badge[data-covered="true"] {
+  border-color: var(--ok-border);
+  background: rgba(74, 222, 128, 0.08);
+  color: var(--ok);
+}
+
+.cov-badge[data-covered="false"] {
+  border-color: var(--bad-border);
+  background: rgba(248, 113, 113, 0.08);
+  color: var(--bad);
+}
+
+/* Responsive --------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .cov-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .cov-page {
+    gap: 14px;
+  }
+
+  .cov-page-head {
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .cov-page-head::after {
+    right: -90px;
+    width: 240px;
+    height: 240px;
+    opacity: 0.7;
+  }
+
+  .cov-page .cov-title {
+    font-size: 1.5rem;
+  }
+
+  .cov-page .card {
+    padding: 16px;
+  }
+
+  .cov-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 16px 16px 16px 18px;
+  }
+
+  .cov-hero::after {
+    right: -58px;
+    width: 130px;
+    height: 130px;
+  }
+
+  .cov-percent {
+    font-size: 2.4rem;
+  }
+
+  .cov-shell {
+    grid-template-columns: minmax(52px, auto) minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    padding: 8px;
+  }
+
+  .cov-shell-count {
+    grid-column: 1 / -1;
+    text-align: right;
+  }
+
+  .cov-range-field input[type="range"] {
+    height: 34px;
+  }
+
+  .cov-range-field input[type="range"]::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+    margin-top: -8px;
+  }
+
+  .cov-range-field input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
+
+  .cov-table {
+    min-width: 360px;
+  }
+
+  .cov-table th,
+  .cov-table td {
+    padding: 8px 10px;
+  }
+
+  .cov-empty {
+    padding: 28px 16px 30px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cov-check,
+  .cov-run-btn,
+  .cov-shell {
+    transition: none;
+  }
+
+  .cov-run-btn:active:not(:disabled) {
+    transform: none;
+  }
+}
