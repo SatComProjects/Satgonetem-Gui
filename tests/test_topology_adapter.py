@@ -121,6 +121,19 @@ def test_adapter_maps_addressing_and_routing_failures(settings) -> None:
         adapter.init_routing(routing, "static")
 
 
+def test_adapter_maps_addressing_exceptions(settings) -> None:
+    """v0.3.1 raises when any node failed; expose it as a network error."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+
+    def fail() -> None:
+        raise RuntimeError("IPv4 assignment failed on 3 node(s)")
+
+    topology = SimpleNamespace(set_ip_addresses=fail)
+
+    with pytest.raises(NetworkOperationError, match="3 node"):
+        adapter.apply_addressing(topology)
+
+
 def test_adapter_delete_and_start_failures(settings) -> None:
     """Delete/start return-code and state failures are mapped."""
     from types import SimpleNamespace

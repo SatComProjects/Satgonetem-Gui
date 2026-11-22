@@ -389,7 +389,10 @@ class SatGoNetemTopologyAdapter:
 
     def apply_addressing(self, topology: Any) -> None:
         """Apply IP addresses and raise if the dependency reports failure."""
-        result = topology.set_ip_addresses()
+        try:
+            result = topology.set_ip_addresses()
+        except RuntimeError as exc:
+            raise NetworkOperationError(str(exc)) from exc
         if result is not None and result < 0:
             raise NetworkOperationError("IP addressing failed.")
 
