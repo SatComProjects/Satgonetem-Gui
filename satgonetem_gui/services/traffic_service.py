@@ -276,19 +276,22 @@ class TrafficService:
                 raise APIError(409, "Job is already finished.")
             try:
                 poll = self.gateway.poll(job.kind, job.flow)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Error polling traffic job status before cancel.")
-            else:
-                if poll.status != "running":
-                    if poll.status in TERMINAL_STATUSES:
-                        job.transition(
-                            poll.status,
-                            results=poll.results,
-                            error=poll.error,
-                        )
-                    else:
-                        job.transition("error", error="Unknown flow state.")
-                    raise APIError(409, "Job is already finished.")
+                raise APIError(
+                    500,
+                    "Could not verify the traffic job state; retry cancel.",
+                ) from exc
+            if poll.status != "running":
+                if poll.status in TERMINAL_STATUSES:
+                    job.transition(
+                        poll.status,
+                        results=poll.results,
+                        error=poll.error,
+                    )
+                else:
+                    job.transition("error", error="Unknown flow state.")
+                raise APIError(409, "Job is already finished.")
             try:
                 self.gateway.stop(job.flow)
             except Exception as exc:

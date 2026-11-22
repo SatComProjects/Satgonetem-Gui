@@ -234,8 +234,8 @@ def test_cancel_before_poll_preserves_completed_results() -> None:
     assert gateway.stopped == []
 
 
-def test_cancel_poll_failure_still_stops_the_flow() -> None:
-    """A failed pre-cancel poll is logged and does not block stopping."""
+def test_cancel_poll_failure_does_not_discard_an_unverified_job() -> None:
+    """If the state cannot be verified, leave the job running for a retry."""
     topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
     gateway = FakeTraffic(poll_status="running")
 
@@ -247,11 +247,14 @@ def test_cancel_poll_failure_still_stops_the_flow() -> None:
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
     job = service.jobs.get(job_id)
 
-    service.cancel(job_id)
+    with pytest.raises(APIError) as error:
+        service.cancel(job_id)
 
+    assert error.value.status_code == 500
+    assert "retry cancel" in error.value.message
     assert job is not None
-    assert job.status == "cancelled"
-    assert gateway.stopped == [job.flow]
+    assert job.status == "running"
+    assert gateway.stopped == []
 
 
 def test_traffic_cancel_failure_keeps_job_running() -> None:

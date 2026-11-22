@@ -408,7 +408,6 @@ async function jqCancel(id) {
       const current = findItem(jq.items, id);
       if (current && !isTerminal(current)) {
         jq.items = updateItem(jq.items, id, {
-          status: "error",
           error: error.message || "Cancel failed",
         });
         jqSave();
