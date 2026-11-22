@@ -33,22 +33,37 @@ GIB = 1024**3
 
 
 class FakeImages:
-    """Docker image collection with a set of missing image names."""
+    """Docker image collection with exact and repository-tagged references."""
 
-    def __init__(self, missing=()) -> None:
+    DEFAULT_TAGS = [
+        "mroy31/gonetem-frr:0.6.0",
+        "mroy31/gonetem-host:0.6.0",
+        "jariassuarez/sgnt:satellite",
+    ]
+
+    def __init__(self, missing=(), local_tags=None) -> None:
         self.missing = set(missing)
+        self.local_tags = list(self.DEFAULT_TAGS if local_tags is None else local_tags)
 
     def get(self, image):
-        if image in self.missing:
+        if image in self.missing or image not in self.local_tags:
             raise docker.errors.ImageNotFound(f"missing {image}")
         return object()
+
+    def list(self):
+        return [SimpleNamespace(tags=[tag]) for tag in self.local_tags]
 
 
 class FakeDockerClient:
     """Minimal Docker client for adapter tests."""
 
-    def __init__(self, missing=(), ping_error: Exception | None = None) -> None:
-        self.images = FakeImages(missing)
+    def __init__(
+        self,
+        missing=(),
+        ping_error: Exception | None = None,
+        local_tags=None,
+    ) -> None:
+        self.images = FakeImages(missing, local_tags)
         self.ping_error = ping_error
         self.closed = False
 
@@ -180,19 +195,62 @@ def test_all_checks_pass_with_injected_fakes(tmp_path, config_path) -> None:
     assert sockets[0].closed is True
 
 
-def test_missing_image_is_a_warning_with_a_pull_hint(tmp_path, config_path) -> None:
-    """Missing images are reported with the first image to pull."""
+def test_untagged_config_matches_a_tagged_local_image(tmp_path, config_path) -> None:
+    """A repository-only config entry matches the locally tagged 0.6.0 image."""
     doctor = _doctor(
         tmp_path,
         config_path,
-        docker_factory=lambda timeout: FakeDockerClient(missing={"mroy31/gonetem-frr"}),
+        docker_factory=lambda timeout: FakeDockerClient(
+            local_tags=[
+                "mroy31/gonetem-frr:0.6.0",
+                "mroy31/gonetem-host:0.6.0",
+                "jariassuarez/sgnt:satellite",
+            ]
+        ),
+    )
+
+    images = _by_id(doctor.environment_checks())["images"]
+
+    assert images["status"] == "ok"
+    assert "3 required" in images["message"]
+
+
+def test_missing_image_is_a_warning_with_a_gonetem_pull_hint(tmp_path, config_path) -> None:
+    """Missing untagged GoNetEm images point at gonetem-console pull."""
+    doctor = _doctor(
+        tmp_path,
+        config_path,
+        docker_factory=lambda timeout: FakeDockerClient(
+            local_tags=["mroy31/gonetem-host:0.6.0", "jariassuarez/sgnt:satellite"]
+        ),
     )
 
     images = _by_id(doctor.environment_checks())["images"]
 
     assert images["status"] == "warning"
     assert "mroy31/gonetem-frr" in images["message"]
-    assert images["hint"] == "Pull a missing image with: docker pull mroy31/gonetem-frr"
+    assert "gonetem-console pull" in images["hint"]
+
+
+def test_exact_tagged_image_must_match_that_tag(tmp_path, config_path) -> None:
+    """A configured tag is not satisfied by a different local tag."""
+    doctor = _doctor(
+        tmp_path,
+        config_path,
+        docker_factory=lambda timeout: FakeDockerClient(
+            local_tags=[
+                "mroy31/gonetem-frr:0.6.0",
+                "mroy31/gonetem-host:0.6.0",
+                "jariassuarez/sgnt:ground-station",
+            ]
+        ),
+    )
+
+    images = _by_id(doctor.environment_checks())["images"]
+
+    assert images["status"] == "warning"
+    assert "jariassuarez/sgnt:satellite" in images["message"]
+    assert images["hint"] == ("Pull a missing image with: docker pull jariassuarez/sgnt:satellite")
 
 
 def test_docker_unavailable_makes_image_checks_unknown(tmp_path, config_path) -> None:
