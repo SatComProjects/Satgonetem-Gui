@@ -103,6 +103,19 @@ def test_project_load_rejects_malformed_embedded_station_rows(client) -> None:
     assert "five comma-separated columns" in response.json()["error"]
 
 
+def test_project_load_rejects_non_dict_network_config(client) -> None:
+    """A malformed network_config section is a 400, not a core TypeError."""
+    document = {
+        "network_config": [],
+        "simulation_property": {},
+    }
+
+    response = _post_load(client, document)
+
+    assert response.status_code == 400
+    assert "network_config" in response.json()["error"]
+
+
 def test_project_load_rejects_duplicate_ground_file_basenames(client) -> None:
     """Two embedded files cannot restore to the same basename."""
     document = {

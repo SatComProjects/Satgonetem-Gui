@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from satgonetem_gui.state import ProjectResult
-from tests.factories import project_payload
+from tests.factories import ground_object, project_payload
 from tests.helpers import wait_for_project_state
 
 
@@ -39,6 +39,20 @@ def test_project_dependent_routes_return_404(client, method: str, path: str, bod
     response = client.request(method, path, json=body)
 
     assert response.status_code == 404
+
+
+def test_project_create_rejects_unreadable_data_file(client) -> None:
+    """A bad data_file is a 422 before the background build starts."""
+    ground = ground_object()
+    ground.pop("stations")
+    ground["data_file"] = "/etc/hosts"
+    payload = project_payload()
+    payload["ground_objects_properties_json"] = json.dumps([ground])
+
+    response = client.post("/api/project/create", json=payload)
+
+    assert response.status_code == 422
+    assert "data_file" in response.json()["error"]
 
 
 def test_routing_apply_rejects_unknown_method_before_service(client) -> None:

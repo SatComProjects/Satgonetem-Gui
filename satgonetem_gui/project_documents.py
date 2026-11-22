@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .ground_stations import validate_ground_station_text, validate_inline_stations
+from .storage import resolve_data_file
 
 
 class ProjectDocumentError(ValueError):
@@ -69,12 +70,21 @@ def _data_file_is_allowed(data_file: str, roots: list[Path]) -> bool:
 def validate_project_create_payload(
     shells: object,
     grounds: object,
+    data_search_dir: Path | None = None,
+    allowed_roots: Iterable[Path] = (),
 ) -> None:
     """Validate the nested shapes accepted by the project-create form.
 
     The request schema validates that the hidden fields contain JSON arrays;
     this function validates their elements before a background build starts, so
     malformed input is a 422 instead of a late project-state error.
+
+    Args:
+        shells: Parsed orbit-shell objects.
+        grounds: Parsed ground-object objects.
+        data_search_dir: Directory used to resolve relative ``data_file``
+            values. When omitted, referenced files are not checked.
+        allowed_roots: Additional directories where data files may live.
     """
     if not isinstance(shells, list) or not shells:
         raise ValueError("At least one orbit shell is required.")
@@ -120,6 +130,18 @@ def validate_project_create_payload(
             validate_inline_stations(stations)
         elif not isinstance(data_file, str) or not data_file.strip():
             raise ValueError("Ground object has no stations or data_file.")
+        elif data_search_dir is not None:
+            try:
+                resolve_data_file(
+                    data_file,
+                    data_search_dir,
+                    allowed_roots=allowed_roots,
+                )
+            except (OSError, ValueError) as exc:
+                raise ValueError(
+                    "Ground object data_file is not a readable station file: "
+                    f"{data_file!r}"
+                ) from exc
 
 
 def validate_project_document(
@@ -192,6 +214,11 @@ def validate_project_document(
     if not isinstance(simulation_property, dict):
         raise ProjectDocumentError(
             "Project file has an invalid simulation_property section."
+        )
+    network_config = document.get("network_config")
+    if network_config is not None and not isinstance(network_config, dict):
+        raise ProjectDocumentError(
+            "Project file has an invalid network_config section."
         )
     ground_objects = simulation_property.get("ground_objects_properties", [])
     if not isinstance(ground_objects, list):

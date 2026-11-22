@@ -69,7 +69,12 @@ class ProjectService:
         try:
             shells = json.loads(payload.walker_shells_json)
             grounds = json.loads(payload.ground_objects_properties_json)
-            validate_project_create_payload(shells, grounds)
+            validate_project_create_payload(
+                shells,
+                grounds,
+                data_search_dir=self.resources_dir,
+                allowed_roots=(self.settings.save_root,),
+            )
         except (json.JSONDecodeError, ValueError) as exc:
             raise APIError(
                 422,
