@@ -93,6 +93,7 @@ class FakeTraffic:
     def __init__(self, poll_status: str = "done") -> None:
         self.poll_status = poll_status
         self.stopped = []
+        self.released = []
         self.poll_calls = 0
 
     def start_iperf3(self, source, destination, request):
@@ -112,6 +113,9 @@ class FakeTraffic:
 
     def stop(self, flow):
         self.stopped.append(flow)
+
+    def release(self, flow):
+        self.released.append(flow)
 
 
 def _loaded_session() -> ProjectSession:
@@ -209,10 +213,32 @@ def test_traffic_start_and_status() -> None:
     service = TrafficService(topology, gateway)
 
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+    job = service.jobs.get(job_id)
+    flow = job.flow
 
     assert job_id.startswith("j")
     assert service.status(job_id) == {"status": "done", "results": {"ok": True}}
     assert gateway.poll_calls == 1
+    assert job.flow is None
+    assert gateway.released == [flow]
+
+
+def test_job_is_discarded_when_the_project_is_replaced() -> None:
+    """A job from the old topology cannot keep polling or showing results."""
+    topology = _ready_topology()
+    gateway = FakeTraffic(poll_status="running")
+    service = TrafficService(topology, gateway)
+    job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+    job = service.jobs.get(job_id)
+    flow = job.flow
+    topology.session.succeed(object(), "NewProject", "")
+
+    result = service.status(job_id)
+
+    assert result["status"] == "error"
+    assert "Project changed" in result["error"]
+    assert job.flow is None
+    assert gateway.released == [flow]
 
 
 def test_traffic_cancel_stops_flow_and_stays_cancelled() -> None:
@@ -222,12 +248,15 @@ def test_traffic_cancel_stops_flow_and_stays_cancelled() -> None:
     service = TrafficService(topology, gateway)
     job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
     job = service.jobs.get(job_id)
+    flow = job.flow
 
     service.cancel(job_id)
 
     assert job is not None
     assert job.status == "cancelled"
-    assert gateway.stopped == [job.flow]
+    assert gateway.stopped == [flow]
+    assert gateway.released == [flow]
+    assert job.flow is None
     assert gateway.poll_calls == 1
     assert service.status(job_id) == {"status": "cancelled"}
     assert gateway.poll_calls == 1

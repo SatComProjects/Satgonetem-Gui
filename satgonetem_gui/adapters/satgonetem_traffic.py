@@ -111,6 +111,12 @@ class SatGoNetemTrafficAdapter:
         if callable(stop):
             stop()
 
+    def release(self, flow: Any) -> None:
+        """Release the core result object retained by a finished flow."""
+        discard = getattr(flow, "discard_result", None)
+        if callable(discard):
+            discard()
+
     @staticmethod
     def _poll_iperf3(flow: Iperf3Flow) -> TrafficPoll:
         status = flow.status()

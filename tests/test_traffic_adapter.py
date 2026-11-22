@@ -146,6 +146,22 @@ def test_poll_rejects_unknown_kinds() -> None:
         SatGoNetemTrafficAdapter().poll("unknown", object())
 
 
+def test_release_discards_the_core_result() -> None:
+    """Finished flows release the raw core result object."""
+
+    class Flow:
+        def __init__(self):
+            self.discarded = 0
+
+        def discard_result(self):
+            self.discarded += 1
+
+    flow = Flow()
+    SatGoNetemTrafficAdapter().release(flow)
+
+    assert flow.discarded == 1
+
+
 def test_poll_unknown_flow_state_maps_to_a_terminal_error() -> None:
     """Unrecognized core states never leak as a non-terminal 'unknown'."""
     adapter = SatGoNetemTrafficAdapter()
