@@ -281,6 +281,17 @@ not import those dependency internals.
 - Added the detail/compare specification, Vitest chart-data/table/diff tests,
   and Playwright detail/compare coverage.
 
+## Phase 19 changes
+
+- Added a coverage snapshot service and adapter over the public
+  `get_coverage_percentage()` and `coverage_percentage_fast()` APIs, with
+  per-shell grouping, per-ground-station best elevation, truncation flags, and
+  a measured work cap.
+- Added `POST /api/analysis/coverage` and a generation/step/options-scoped
+  16-entry LRU cache.
+- Added the `/coverage` page, coverage specification, Vitest formatting, and
+  Playwright analyze/too-large-grid coverage.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -304,17 +315,19 @@ not import those dependency internals.
   wrapper, simulation formatting/action rules, addressability summaries/rules,
   experiment-history compaction/export/comparison, forwarding-path formatting,
   link formatting/filtering/width/usage colors, preflight/phase formatting,
-  project-workspace formatting, connectivity matrix formatting, experiment
-  status/summary/artifact/detail formatting and diffing, and escaping modules.
+  project-workspace formatting, connectivity matrix formatting, coverage
+  formatting/sorting, experiment status/summary/artifact/detail formatting and
+  diffing, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
   node expansion, dashboard counts, simulation panel accessibility,
   addressability endpoint refresh, history reopen/capture/export/delete/compare,
   forwarding-path rendering, link-inspector rendering, readiness checks,
   blocking creation, indeterminate build progress, workspace list/open/save,
-  connectivity start/heatmap/export, experiment start/list/artifact download,
-  detail/live metrics, comparison/diff, and the WebGL fallback. World View
-  WebGL rendering itself remains a manual desktop check.
+  connectivity start/heatmap/export, coverage analyze/too-large-grid,
+  experiment start/list/artifact download, detail/live metrics,
+  comparison/diff, and the WebGL fallback. World View WebGL rendering itself
+  remains a manual desktop check.
 
 ## Current measurements
 
@@ -325,11 +338,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **723 passed, 1 skipped** in about 46 s with coverage. Frontend:
-**114 Vitest tests**, **32 Playwright tests**.
+Result: **747 passed, 1 skipped** in about 53 s with coverage. Frontend:
+**118 Vitest tests**, **34 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**88.97%** over 4218 statements.
+**89.29%** over 4397 statements.
 
 ## Tooling decisions
 
