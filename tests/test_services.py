@@ -19,7 +19,7 @@ from satgonetem_gui.services.traffic_service import (
     TrafficJob,
     TrafficService,
 )
-from satgonetem_gui.state import ProjectSession, ProjectState, RuntimeState
+from satgonetem_gui.state import ProjectResult, ProjectSession, ProjectState, RuntimeState
 from tests.factories import project_payload
 
 
@@ -564,6 +564,64 @@ def test_project_load_retry_is_blocked_while_the_worker_runs(tmp_path) -> None:
 
         with pytest.raises(APIError) as conflict:
             await service.load("{}")
+        assert conflict.value.status_code == 409
+
+    asyncio.run(scenario())
+
+
+def test_project_load_is_blocked_while_a_build_thread_runs(tmp_path) -> None:
+    """A load cannot start while a timed-out build is still running."""
+    state = RuntimeState()
+    started = threading.Event()
+    release = threading.Event()
+    service = ProjectService(
+        state,
+        object(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+    )
+
+    def runner():
+        started.set()
+        release.wait(timeout=5)
+        return ProjectResult(object(), "LateProject", "")
+
+    assert state.project_tasks.start("Slow", "", "create", runner, timeout_seconds=5)
+    assert started.wait(timeout=2)
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.load("{}"))
+
+    assert error.value.status_code == 409
+    release.set()
+    thread = state.project_tasks.thread
+    assert thread is not None
+    thread.join(timeout=2)
+
+
+def test_project_create_is_blocked_while_a_load_worker_runs(tmp_path) -> None:
+    """A create cannot start while a timed-out load worker is still running."""
+
+    class SlowGateway:
+        def load(self, _content):
+            time.sleep(0.2)
+            return None
+
+    service = ProjectService(
+        RuntimeState(),
+        SlowGateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        load_timeout_seconds=0.05,
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(APIError) as timeout:
+            await service.load("{}")
+        assert timeout.value.status_code == 504
+
+        with pytest.raises(APIError) as conflict:
+            service.start_create(ProjectCreateRequest(**project_payload("New")))
         assert conflict.value.status_code == 409
 
     asyncio.run(scenario())

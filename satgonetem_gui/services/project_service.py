@@ -53,6 +53,15 @@ class ProjectService:
         """Return whether a replacement may start, checked under the session lock."""
         return self.network_running is None or not self.network_running()
 
+    def _load_is_running(self) -> bool:
+        """Return whether a previous load worker is still running."""
+        return self._load_worker is not None and not self._load_worker.done()
+
+    def _build_is_running(self) -> bool:
+        """Return whether a previous build thread is still running."""
+        thread = self.state.project_tasks.thread
+        return thread is not None and thread.is_alive()
+
     def _cleanup_ground_files(self, result: ProjectResult) -> None:
         """Delete managed station files the installed topology no longer uses."""
         try:
@@ -69,6 +78,11 @@ class ProjectService:
 
     def start_create(self, payload: ProjectCreateRequest) -> None:
         """Validate and dispatch a background project build."""
+        if self._load_is_running():
+            raise APIError(
+                409,
+                "A previous project load is still running in the background.",
+            )
         name = payload.name.strip()
         if not name:
             raise APIError(400, "Project name is required.")
@@ -131,7 +145,12 @@ class ProjectService:
 
     async def load(self, content: str) -> str:
         """Load a project from uploaded JSON and return its display name."""
-        if self._load_worker is not None and not self._load_worker.done():
+        if self._build_is_running():
+            raise APIError(
+                409,
+                "A previous project build is still running in the background.",
+            )
+        if self._load_is_running():
             raise APIError(
                 409,
                 "A previous project load is still running in the background.",
