@@ -2735,3 +2735,80 @@ def test_experiment_live_holds_the_network_operation_until_done(tmp_path) -> Non
 
     assert _wait_for_experiment(service, run_id)["status"] == "done"
     assert service.topology.session.network_operation is False
+
+
+def test_experiment_metrics_tails_valid_jsonl_samples(tmp_path) -> None:
+    """Metrics parsing skips malformed lines and returns the requested tail."""
+    gateway = FakeExperimentGateway()
+    service = _experiment_service(tmp_path, gateway)
+    run_id = service.start(_experiment_payload())
+    _wait_for_experiment(service, run_id)
+
+    run_dir = gateway.runs[0][1]
+    (run_dir / "metrics.jsonl").write_text(
+        '{"sim_time_s": 0.0}\nnot json\n[1, 2]\n\n{"sim_time_s": 1.0}\n{"sim_time_s": 2.0}\n',
+        encoding="utf-8",
+    )
+
+    result = service.metrics(run_id, tail=2)
+
+    assert result["ok"] is True
+    assert result["run_id"] == run_id
+    assert result["total"] == 3
+    assert result["samples"] == [{"sim_time_s": 1.0}, {"sim_time_s": 2.0}]
+
+
+def test_experiment_metrics_missing_file_is_empty(tmp_path) -> None:
+    """A run without a metrics artifact reports zero samples."""
+    gateway = FakeExperimentGateway()
+    service = _experiment_service(tmp_path, gateway)
+    run_id = service.start(_experiment_payload("dry_run"))
+    _wait_for_experiment(service, run_id)
+
+    result = service.metrics(run_id, tail=10)
+
+    assert result == {"ok": True, "run_id": run_id, "total": 0, "samples": []}
+
+
+def test_experiment_metrics_bounds_and_unknown_run(tmp_path) -> None:
+    """Tail bounds are enforced in the service and unknown ids are 404."""
+    gateway = FakeExperimentGateway()
+    service = _experiment_service(tmp_path, gateway)
+    run_id = service.start(_experiment_payload())
+    _wait_for_experiment(service, run_id)
+
+    with pytest.raises(ValueError):
+        service.metrics(run_id, tail=0)
+    with pytest.raises(ValueError):
+        service.metrics(run_id, tail=2001)
+    with pytest.raises(APIError) as error:
+        service.metrics("exp-missing", tail=10)
+    assert error.value.status_code == 404
+
+
+def test_experiment_summary_strips_server_paths(tmp_path) -> None:
+    """Run summaries never expose absolute server paths, in memory or on disk."""
+
+    class PathSummaryGateway(FakeExperimentGateway):
+        def run_scenario(self, path, run_dir, mode):
+            self.runs.append((path, run_dir, mode))
+            return {
+                "summary": {
+                    "run_dir": str(run_dir),
+                    "flows": {"count": 1},
+                },
+                "errors": [],
+            }
+
+    gateway = PathSummaryGateway()
+    service = _experiment_service(tmp_path, gateway)
+    run_id = service.start(_experiment_payload())
+    status = _wait_for_experiment(service, run_id)
+
+    assert "run_dir" not in status["summary"]
+    run_dir = gateway.runs[0][1]
+    assert "run_dir" not in json.loads((run_dir / "summary.json").read_text())
+    assert "run_dir" not in json.loads((run_dir / "provenance.json").read_text())
+
+    reloaded = _experiment_service(tmp_path, FakeExperimentGateway())
+    assert "run_dir" not in reloaded.status(run_id)["summary"]

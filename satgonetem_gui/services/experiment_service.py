@@ -27,6 +27,8 @@ MAX_CONCURRENT_RUNS = 2
 MAX_LIVE_RUNS = 1
 TERMINAL_TTL_SECONDS = 3600.0
 RUN_ID_PREFIX = "exp-"
+MAX_METRICS_TAIL = 2000
+DEFAULT_METRICS_TAIL = 300
 
 # Artifact filenames the API may expose. The catalog and the artifact route
 # both use this allowlist so a run directory can never be browsed arbitrarily.
@@ -283,6 +285,40 @@ class ExperimentService:
             "content_type": _CONTENT_TYPES.get(resolved.suffix.lower(), "application/octet-stream"),
         }
 
+    def metrics(self, run_id: str, tail: int = DEFAULT_METRICS_TAIL) -> dict[str, Any]:
+        """Return the newest parsed metric samples for one run."""
+        if tail < 1 or tail > MAX_METRICS_TAIL:
+            raise ValueError(f"Metrics tail must be between 1 and {MAX_METRICS_TAIL}.")
+
+        run_dir = self._resolve_run_dir(run_id)
+        if run_dir is None:
+            raise APIError(404, "Experiment run not found.")
+
+        # Dry runs have no usable metrics file; report an empty tail instead.
+        try:
+            content = (run_dir / "metrics.jsonl").read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            content = ""
+
+        samples: list[dict[str, Any]] = []
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                sample = json.loads(stripped)
+            except ValueError:
+                continue
+            if isinstance(sample, dict):
+                samples.append(sample)
+
+        return {
+            "ok": True,
+            "run_id": run_id,
+            "total": len(samples),
+            "samples": samples[-tail:],
+        }
+
     # ------------------------------------------------------------------
     # Registry
     # ------------------------------------------------------------------
@@ -369,11 +405,11 @@ class ExperimentService:
                 raise RuntimeError("Experiment gateway returned an invalid result.")
             raw_summary = result.get("summary")
             raw_errors = result.get("errors") or []
-            if not isinstance(raw_summary, dict):
+            summary = self._sanitize_summary(raw_summary)
+            if summary is None:
                 raise RuntimeError("Experiment gateway returned an invalid summary.")
             if not isinstance(raw_errors, list):
                 raw_errors = [str(raw_errors)]
-            summary = raw_summary
             errors = [str(error) for error in raw_errors]
             self._write_json(job.run_dir / "summary.json", summary)
             self._write_json(job.run_dir / "errors.json", errors)
@@ -513,7 +549,7 @@ class ExperimentService:
             return None
 
         finished = provenance.get("finished_at")
-        summary = self._read_json(run_dir / "summary.json")
+        summary = self._sanitize_summary(self._read_json(run_dir / "summary.json"))
         errors = self._read_json(run_dir / "errors.json")
         return {
             "run_id": run_id,
@@ -522,7 +558,7 @@ class ExperimentService:
             "status": status,
             "started_at": started_at,
             "finished_at": finished if isinstance(finished, str) else None,
-            "summary": summary if isinstance(summary, dict) else None,
+            "summary": summary,
             "errors": ([str(error) for error in errors] if isinstance(errors, list) else []),
             "artifacts": self._artifacts_for(run_dir),
         }
@@ -537,12 +573,19 @@ class ExperimentService:
                 "status": job.status,
                 "started_at": job.started_at,
                 "finished_at": job.finished_at,
-                "summary": job.summary,
+                "summary": self._sanitize_summary(job.summary),
                 "errors": list(job.errors),
                 "artifacts": [],
             }
         record["artifacts"] = self._artifacts_for(job.run_dir)
         return record
+
+    @staticmethod
+    def _sanitize_summary(summary: Any) -> dict[str, Any] | None:
+        """Return a summary copy without the server-side run directory path."""
+        if not isinstance(summary, dict):
+            return None
+        return {key: value for key, value in summary.items() if key != "run_dir"}
 
     @staticmethod
     def _artifacts_for(run_dir: Path) -> list[str]:
