@@ -155,6 +155,33 @@ class SatGoNetemTopologyAdapter:
             path.unlink(missing_ok=True)
             self._remove_restore_dirs(restore_prefix)
 
+    def cleanup_ground_files(self, topology: Any) -> None:
+        """Delete managed station files no longer referenced by the topology."""
+        simulation_property = getattr(topology, "simulation_property", None)
+        keep: set[Path] = set()
+        if simulation_property is not None:
+            for ground in simulation_property.ground_objects_properties:
+                data_file = getattr(ground, "data_file", None)
+                if not data_file:
+                    continue
+                try:
+                    keep.add(Path(data_file).resolve())
+                except (OSError, RuntimeError):
+                    continue
+
+        stable_dir = stable_ground_stations_dir(self.settings.save_root)
+        if not stable_dir.is_dir():
+            return
+        for candidate in stable_dir.iterdir():
+            if not candidate.is_file():
+                continue
+            try:
+                if candidate.resolve() in keep:
+                    continue
+            except (OSError, RuntimeError):
+                continue
+            candidate.unlink(missing_ok=True)
+
     def save(self, topology: Any) -> str:
         """Serialize a topology to JSON text."""
         self._require_ground_files(topology)

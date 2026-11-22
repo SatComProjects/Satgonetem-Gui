@@ -11,7 +11,7 @@ from ..errors import APIError
 from ..ground_stations import parse_ground_station_file
 from ..project_documents import validate_project_create_payload
 from ..schemas import ProjectCreateRequest
-from ..state import RuntimeState
+from ..state import ProjectResult, RuntimeState
 from ..storage import SavePathError, resolve_save_path, safe_project_filename
 from .ports import ProjectGateway
 
@@ -52,6 +52,13 @@ class ProjectService:
     def _network_is_stopped(self) -> bool:
         """Return whether a replacement may start, checked under the session lock."""
         return self.network_running is None or not self.network_running()
+
+    def _cleanup_ground_files(self, result: ProjectResult) -> None:
+        """Delete managed station files the installed topology no longer uses."""
+        try:
+            self.gateway.cleanup_ground_files(result.topology_manager)
+        except Exception:
+            logger.exception("Could not clean up stale ground-station files.")
 
     def presets(self) -> list[dict]:
         """Return the bundled ground-station presets."""
@@ -95,6 +102,7 @@ class ProjectService:
             runner=lambda: self.gateway.build(payload),
             timeout_seconds=PROJECT_BUILD_TIMEOUT_SECONDS,
             precondition=self._network_is_stopped,
+            on_success=self._cleanup_ground_files,
         )
         if not started:
             raise APIError(409, "A project operation is already running.")
@@ -186,6 +194,7 @@ class ProjectService:
             raise APIError(500, "Project load failed.") from exc
         if not installed:
             raise APIError(409, "Project load was superseded.")
+        self._cleanup_ground_files(result)
         return result.project_name
 
     async def save(self) -> dict:

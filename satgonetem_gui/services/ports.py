@@ -18,6 +18,8 @@ class ProjectGateway(Protocol):
 
     def config(self, topology: Any, save_path: str) -> dict[str, Any]: ...
 
+    def cleanup_ground_files(self, topology: Any) -> None: ...
+
 
 class TopologyReader(Protocol):
     """Read-only topology queries used by the dashboard and explorers."""

@@ -353,6 +353,20 @@ def test_build_cleans_up_station_files_when_build_fails(settings) -> None:
     assert list(stable_dir.glob("*.csv")) == []
 
 
+def test_cleanup_ground_files_keeps_only_referenced_files(settings) -> None:
+    """Files left by earlier builds are removed after a topology is installed."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    result = adapter.build(ProjectCreateRequest(**project_payload()))
+    referenced = _ground_data_file(result.topology_manager)
+    stale = referenced.parent / "stale-stations.csv"
+    stale.write_text("0,Oslo,59.91,10.75,0.01\n", encoding="utf-8")
+
+    adapter.cleanup_ground_files(result.topology_manager)
+
+    assert referenced.is_file()
+    assert not stale.exists()
+
+
 def test_config_and_save_reject_external_data_files(settings, tmp_path: Path) -> None:
     """Ground files outside the packaged and save roots cannot be read or saved."""
     adapter = SatGoNetemTopologyAdapter(settings)

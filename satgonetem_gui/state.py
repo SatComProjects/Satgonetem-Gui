@@ -256,6 +256,7 @@ class ProjectTaskManager:
         *,
         timeout_seconds: float | None = None,
         precondition: Callable[[], bool] | None = None,
+        on_success: Callable[[ProjectResult], None] | None = None,
     ) -> bool:
         """Reserve the session and run the build in a background thread."""
         with self._lock:
@@ -281,7 +282,7 @@ class ProjectTaskManager:
 
         thread = threading.Thread(
             target=self._run,
-            args=(operation, runner, token, timer),
+            args=(operation, runner, token, timer, on_success),
             name=f"project-{operation}",
             daemon=True,
         )
@@ -310,6 +311,7 @@ class ProjectTaskManager:
         runner: Callable[[], ProjectResult],
         token: Optional[int],
         timer: Optional[threading.Timer],
+        on_success: Callable[[ProjectResult], None] | None = None,
     ) -> None:
         try:
             try:
@@ -319,7 +321,7 @@ class ProjectTaskManager:
                 self.session.fail(_format_exception(exc), token=token)
             else:
                 try:
-                    self.session.succeed(
+                    installed = self.session.succeed(
                         result.topology_manager,
                         result.project_name,
                         result.save_path,
@@ -330,6 +332,15 @@ class ProjectTaskManager:
                         "Project %s returned an invalid result.", operation
                     )
                     self.session.fail(_format_exception(exc), token=token)
+                else:
+                    if installed and on_success is not None:
+                        try:
+                            on_success(result)
+                        except Exception:
+                            logger.exception(
+                                "Post-success cleanup failed for project %s.",
+                                operation,
+                            )
         except BaseException as exc:
             logger.exception("Project %s crashed unexpectedly.", operation)
             self.session.fail(_format_exception(exc), token=token)
