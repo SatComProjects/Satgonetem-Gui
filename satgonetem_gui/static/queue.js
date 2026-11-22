@@ -252,9 +252,10 @@ async function jqStartNow(id) {
     }
     return;
   }
-  if (!findItem(jq.items, id)) {
-    // The item was removed or cleared while the start request was in flight,
-    // so cancel the orphaned backend job instead of recreating the item.
+  const current = findItem(jq.items, id);
+  if (!current || isTerminal(current)) {
+    // The item was removed, cleared, or cancelled while the start request was
+    // in flight, so cancel the orphaned backend job instead of resurrecting it.
     cancelJob(data.job_id);
     return;
   }
