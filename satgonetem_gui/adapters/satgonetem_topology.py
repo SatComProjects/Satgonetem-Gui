@@ -40,6 +40,12 @@ logger = logging.getLogger(__name__)
 DATA_SEARCH_DIR = GROUND_STATIONS_DIR
 _CORE_INITIALIZED = False
 
+SPEED_OF_LIGHT_KM_PER_MS = 299.792458
+PATH_NOTE = (
+    "Computed over the current routing graph; this is a diagnostic path, "
+    "not the live forwarding table."
+)
+
 
 def initialize_core() -> None:
     """Apply the pinned core's performance patch once, outside module import."""
@@ -538,6 +544,74 @@ class SatGoNetemTopologyAdapter:
             "gonetem_is_on": topology.get_gonetem_status(),
             "routing_initiated": topology.get_routing_initiated(),
             "routing_method": topology.routing,
+        }
+
+    def routing_path(self, topology: Any, src: str, dst: str) -> dict[str, Any]:
+        """Return a diagnostic hop-by-hop path over the current routing graph."""
+        source = topology.get_node_by_name(src)
+        if source is None:
+            raise ValueError(f"Node not found: {src}")
+        target = topology.get_node_by_name(dst)
+        if target is None:
+            raise ValueError(f"Node not found: {dst}")
+        if source.id == target.id:
+            raise ValueError("Source and destination must differ.")
+
+        graph = topology.get_current_graph()
+        path = topology.get_path_between_nodes(source, target)
+        metadata: dict[str, Any] = {
+            "routing_method": getattr(topology, "routing", None),
+            "routing_initiated": bool(topology.get_routing_initiated()),
+            "preference": getattr(topology, "preference", None),
+            "path_source": "routing_graph",
+            "note": PATH_NOTE,
+        }
+        if not path:
+            return {
+                "src": src,
+                "dst": dst,
+                "found": False,
+                "hops": [],
+                "node_count": 0,
+                "total_distance_km": 0.0,
+                "total_delay_ms": 0.0,
+                **metadata,
+            }
+
+        hops: list[dict[str, Any]] = []
+        total_distance_km = 0.0
+        total_delay_ms = 0.0
+        for current, following in zip(path, path[1:]):
+            try:
+                edge = graph[current.id][following.id]
+            except KeyError as exc:
+                raise ValueError("Path is no longer present in the current routing graph.") from exc
+            distance_km = round(float(edge["distance_km"]), 2)
+            delay_ms = round(float(edge["distance_km"]) / SPEED_OF_LIGHT_KM_PER_MS, 2)
+            total_distance_km = round(total_distance_km + distance_km, 2)
+            total_delay_ms = round(total_delay_ms + delay_ms, 2)
+            hops.append(
+                {
+                    "source": current.name,
+                    "target": following.name,
+                    "type": edge.get("type"),
+                    "direction": edge.get("direction"),
+                    "distance_km": distance_km,
+                    "delay_ms": delay_ms,
+                    "cumulative_distance_km": total_distance_km,
+                    "cumulative_delay_ms": total_delay_ms,
+                }
+            )
+
+        return {
+            "src": src,
+            "dst": dst,
+            "found": True,
+            "hops": hops,
+            "node_count": len(path),
+            "total_distance_km": total_distance_km,
+            "total_delay_ms": total_delay_ms,
+            **metadata,
         }
 
     def apply_addressing(self, topology: Any) -> None:

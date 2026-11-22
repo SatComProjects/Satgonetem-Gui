@@ -1,6 +1,11 @@
 import { api, ApiError } from "./api.js?v=4";
 import { initSimulationControls } from "./simulation_controls.js?v=1";
 import {
+    linkKey,
+    pathLinkKeys,
+    pathSummary,
+} from "./path_model.js?v=1";
+import {
     describeGroundStation,
     describeSatellite,
     hasPosition,
@@ -43,6 +48,10 @@ const coverage = {
     opacity: 0.40,
     selectedSat: null,
 };
+
+let pathKeys = new Set();
+let lastLinks = [];
+let worldPathBusy = false;
 
 /**
  * Convert geographic coordinates to a Cesium Cartesian3 position.
@@ -390,19 +399,25 @@ function updateGroundStations(groundStations, connected) {
  * @param {Array} links
  */
 function updateLinks(links) {
+    lastLinks = Array.isArray(links) ? links : [];
     Object.values(linkCollections).forEach(col => col.removeAll());
 
-    links.forEach(lk => {
+    const hasPath = pathKeys.size > 0;
+    lastLinks.forEach(lk => {
         const ltype = classifyLink(lk);
         const col = linkCollections[ltype];
         const src = nodePositions.get(lk.src);
         const dst = nodePositions.get(lk.dst);
         if (!src || !dst) return;
 
+        const onPath = hasPath && pathKeys.has(linkKey(lk.src, lk.dst));
+        const dim = hasPath && !onPath;
         col.add({
             positions: [src, dst],
-            width: 1.0,
-            material: Cesium.Material.fromType("Color", { color: LINK_COLORS[ltype] }),
+            width: onPath ? 4.0 : 1.0,
+            material: Cesium.Material.fromType("Color", {
+                color: LINK_COLORS[ltype].withAlpha(dim ? 0.10 : onPath ? 1.0 : 0.75),
+            }),
         });
     });
 
@@ -483,6 +498,161 @@ function togglePanel() {
     if (header) header.setAttribute("aria-expanded", String(!isNowCollapsed));
 }
 
+function setWorldPathMsg(text, isError = false) {
+    const element = document.getElementById("world-path-msg");
+    if (!element) return;
+    element.textContent = text;
+    element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function fillWorldPathSelect(select, nodes) {
+    const previous = select.value;
+    select.replaceChildren();
+    for (const node of nodes) {
+        const option = document.createElement("option");
+        option.value = node.name;
+        option.textContent =
+            node.type === "ground_station" && node.city
+                ? `${node.name} (${node.city})`
+                : node.name;
+        select.appendChild(option);
+    }
+    if (nodes.some(node => node.name === previous)) {
+        select.value = previous;
+    }
+}
+
+async function loadWorldPathNodes() {
+    const source = document.getElementById("world-path-src");
+    const destination = document.getElementById("world-path-dst");
+    const trace = document.getElementById("world-path-trace");
+    const clear = document.getElementById("world-path-clear");
+    if (!source || !destination) return;
+
+    try {
+        const nodes = await api.getAll("/api/nodes");
+        const sorted = [...nodes].sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { numeric: true }),
+        );
+        fillWorldPathSelect(source, sorted);
+        fillWorldPathSelect(destination, sorted);
+        if (!source.value && sorted.length) {
+            const ground = sorted.find(node => node.type === "ground_station");
+            source.value = (ground || sorted[0]).name;
+        }
+        if (!destination.value && sorted.length) {
+            const satellite = sorted.find(node => node.type === "satellite");
+            destination.value = (satellite || sorted[1] || sorted[0]).name;
+        }
+        const enabled = sorted.length >= 2;
+        source.disabled = !enabled;
+        destination.disabled = !enabled;
+        if (trace) trace.disabled = worldPathBusy || !enabled;
+        if (clear) clear.disabled = worldPathBusy || !enabled;
+        if (!enabled) {
+            setWorldPathMsg("Load a project with at least two nodes to trace a path.");
+        }
+    } catch {
+        source.disabled = true;
+        destination.disabled = true;
+        if (trace) trace.disabled = true;
+        if (clear) clear.disabled = true;
+        setWorldPathMsg("Load a project to trace a path.");
+    }
+}
+
+function ensurePathLinkVisibility(hops) {
+    for (const hop of hops || []) {
+        if (hop.type === "GroundStationLink") {
+            vis.gsl = true;
+        } else if (hop.type === "InterSatelliteLink") {
+            const direction = String(hop.direction || "").toUpperCase();
+            if (direction === "ORBITAL") vis.orbital = true;
+            else if (direction === "ADJACENT") vis.adjacent = true;
+            else {
+                vis.orbital = true;
+                vis.adjacent = true;
+            }
+        }
+    }
+    const checkboxes = [
+        ["cb-gsl", "gsl"],
+        ["cb-orbital", "orbital"],
+        ["cb-adjacent", "adjacent"],
+    ];
+    for (const [id, key] of checkboxes) {
+        const checkbox = document.getElementById(id);
+        if (checkbox) checkbox.checked = vis[key];
+    }
+    applyVisibility();
+}
+
+async function traceWorldPath() {
+    if (worldPathBusy) return;
+    const source = document.getElementById("world-path-src");
+    const destination = document.getElementById("world-path-dst");
+    const trace = document.getElementById("world-path-trace");
+    const clear = document.getElementById("world-path-clear");
+    const summary = document.getElementById("world-path-summary");
+    if (!source || !destination || !source.value || !destination.value) {
+        setWorldPathMsg("Choose a source and destination.", true);
+        return;
+    }
+    if (source.value === destination.value) {
+        setWorldPathMsg("Choose two different nodes.", true);
+        return;
+    }
+
+    worldPathBusy = true;
+    if (trace) trace.disabled = true;
+    if (clear) clear.disabled = true;
+    if (summary) summary.textContent = "";
+    setWorldPathMsg("Tracing path...");
+
+    try {
+        const data = await api.get(
+            `/api/routing/path?src=${encodeURIComponent(source.value)}&dst=${encodeURIComponent(destination.value)}`,
+        );
+        pathKeys = data.found ? pathLinkKeys(data.hops) : new Set();
+        if (summary) summary.textContent = pathSummary(data);
+        if (data.found) {
+            ensurePathLinkVisibility(data.hops);
+            setWorldPathMsg(data.note || "");
+        } else {
+            setWorldPathMsg(data.note || "No path found.");
+        }
+    } catch (error) {
+        pathKeys = new Set();
+        if (summary) summary.textContent = "";
+        setWorldPathMsg(error.message || "Could not trace the path.", true);
+    } finally {
+        worldPathBusy = false;
+        const enabled = (source?.options.length || 0) >= 2;
+        if (trace) trace.disabled = !enabled;
+        if (clear) clear.disabled = !enabled;
+        if (lastLinks.length) updateLinks(lastLinks);
+        else viewer?.scene.requestRender();
+    }
+}
+
+function clearWorldPath() {
+    pathKeys = new Set();
+    const summary = document.getElementById("world-path-summary");
+    if (summary) summary.textContent = "";
+    setWorldPathMsg("");
+    if (lastLinks.length) updateLinks(lastLinks);
+    else viewer?.scene.requestRender();
+}
+
+function bindWorldPathControls() {
+    document
+        .getElementById("world-path-trace")
+        ?.addEventListener("click", traceWorldPath);
+    document
+        .getElementById("world-path-clear")
+        ?.addEventListener("click", clearWorldPath);
+}
+
 let pollTimer = null;
 
 function poll() {
@@ -494,6 +664,8 @@ function poll() {
 function startWorld() {
     initCesium();
     initSimulationControls({ poll: true });
+    bindWorldPathControls();
+    loadWorldPathNodes();
 
     const cbMap = [
         ["cb-satellites", "satellites"],

@@ -89,6 +89,36 @@ class FakeController:
         self.calls.append("stop_gonetem")
 
 
+class FakePathReader:
+    """Minimal routing-path reader for service tests."""
+
+    def __init__(self, response=None, error: Exception | None = None) -> None:
+        self.response = response
+        self.error = error
+        self.calls = []
+
+    def routing_path(self, topology, src, dst):
+        self.calls.append((src, dst))
+        if self.error is not None:
+            raise self.error
+        if self.response is not None:
+            return self.response
+        return {
+            "src": src,
+            "dst": dst,
+            "found": False,
+            "hops": [],
+            "node_count": 0,
+            "total_distance_km": 0.0,
+            "total_delay_ms": 0.0,
+            "routing_method": "static",
+            "routing_initiated": False,
+            "preference": None,
+            "path_source": "routing_graph",
+            "note": "Computed over the current routing graph.",
+        }
+
+
 class FakeSimulationController:
     """Minimal simulation controller for service tests."""
 
@@ -182,6 +212,38 @@ def _simulation_service(
     return SimulationService(topology, controller), controller
 
 
+def _path_payload(src: str = "Sat0", dst: str = "Sat1") -> dict:
+    """Return a complete routing-path response for pass-through tests."""
+    return {
+        "src": src,
+        "dst": dst,
+        "found": True,
+        "hops": [
+            {
+                "source": src,
+                "target": dst,
+                "type": "InterSatelliteLink",
+                "direction": "UP",
+                "distance_km": 1000.0,
+                "delay_ms": 3.34,
+                "cumulative_distance_km": 1000.0,
+                "cumulative_delay_ms": 3.34,
+            }
+        ],
+        "node_count": 2,
+        "total_distance_km": 1000.0,
+        "total_delay_ms": 3.34,
+        "routing_method": "static",
+        "routing_initiated": True,
+        "preference": "latency_no_preference",
+        "path_source": "routing_graph",
+        "note": (
+            "Computed over the current routing graph; this is a diagnostic "
+            "path, not the live forwarding table."
+        ),
+    }
+
+
 def test_topology_status_is_empty_without_a_project() -> None:
     """The dashboard can read an empty status before a project is loaded."""
     service = TopologyService(ProjectSession(), FakeReader())
@@ -221,6 +283,107 @@ def test_routing_apply_requires_gonetem() -> None:
         asyncio.run(service.apply("static"))
 
     assert error.value.status_code == 409
+
+
+def test_routing_path_returns_the_reader_response() -> None:
+    """The diagnostic path is returned from the path reader unchanged."""
+    topology = TopologyService(_loaded_session(), FakeReader())
+    reader = FakePathReader(_path_payload())
+    service = RoutingService(topology, FakeController(), reader=reader)
+
+    result = service.path("Sat0", "Sat1")
+
+    assert result == _path_payload()
+    assert reader.calls == [("Sat0", "Sat1")]
+
+
+def test_routing_path_without_a_route_is_not_found_but_not_an_error() -> None:
+    """Disconnected endpoints return found=False instead of raising."""
+    topology = TopologyService(_loaded_session(), FakeReader())
+    reader = FakePathReader()
+    service = RoutingService(topology, FakeController(), reader=reader)
+
+    result = service.path("Sat0", "Sat1")
+
+    assert result["found"] is False
+    assert result["hops"] == []
+    assert result["node_count"] == 0
+
+
+def test_routing_path_rejects_the_same_endpoint() -> None:
+    """A path needs two different endpoints."""
+    topology = TopologyService(_loaded_session(), FakeReader())
+    service = RoutingService(topology, FakeController(), reader=FakePathReader())
+
+    with pytest.raises(APIError) as error:
+        service.path("Sat0", "Sat0")
+
+    assert error.value.status_code == 422
+    assert "different" in error.value.message.lower()
+
+
+@pytest.mark.parametrize(
+    ("src", "dst"),
+    [("Gnd", "Sat0"), ("Sat0", "Gndabc"), ("", "Sat0")],
+)
+def test_routing_path_rejects_malformed_names(src: str, dst: str) -> None:
+    """Names outside the Sat/Gnd grammar are 404s before the reader runs."""
+    topology = TopologyService(_loaded_session(), FakeReader())
+    reader = FakePathReader()
+    service = RoutingService(topology, FakeController(), reader=reader)
+
+    with pytest.raises(APIError) as error:
+        service.path(src, dst)
+
+    assert error.value.status_code == 404
+    assert reader.calls == []
+
+
+def test_routing_path_maps_missing_nodes_to_404() -> None:
+    """A reader ValueError for a missing node is the common 404."""
+    topology = TopologyService(_loaded_session(), FakeReader())
+    reader = FakePathReader(error=ValueError("Node not found: Sat9"))
+    service = RoutingService(topology, FakeController(), reader=reader)
+
+    with pytest.raises(APIError) as error:
+        service.path("Sat0", "Sat9")
+
+    assert error.value.status_code == 404
+    assert "Node not found" in error.value.message
+
+
+def test_routing_path_maps_unexpected_reader_failures_to_500() -> None:
+    """Unexpected reader failures are logged and surface as a 500."""
+    topology = TopologyService(_loaded_session(), FakeReader())
+    reader = FakePathReader(error=RuntimeError("graph exploded"))
+    service = RoutingService(topology, FakeController(), reader=reader)
+
+    with pytest.raises(APIError) as error:
+        service.path("Sat0", "Sat1")
+
+    assert error.value.status_code == 500
+
+
+def test_routing_path_requires_a_project() -> None:
+    """The path cannot be computed before a project is loaded."""
+    topology = TopologyService(ProjectSession(), FakeReader())
+    service = RoutingService(topology, FakeController(), reader=FakePathReader())
+
+    with pytest.raises(APIError) as error:
+        service.path("Sat0", "Sat1")
+
+    assert error.value.status_code == 404
+
+
+def test_routing_path_without_a_reader_is_a_500() -> None:
+    """A service graph without a path reader fails explicitly."""
+    topology = TopologyService(_loaded_session(), FakeReader())
+    service = RoutingService(topology, FakeController())
+
+    with pytest.raises(APIError) as error:
+        service.path("Sat0", "Sat1")
+
+    assert error.value.status_code == 500
 
 
 def test_traffic_requires_a_project() -> None:

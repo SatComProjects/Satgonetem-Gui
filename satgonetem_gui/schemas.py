@@ -227,6 +227,37 @@ class RoutingStatusResponse(BaseModel):
     routing_method: str | None = None
 
 
+class PathHop(BaseModel):
+    """One hop of a diagnostic path over the current routing graph."""
+
+    source: str
+    target: str
+    type: str | None
+    direction: str | None
+    distance_km: float
+    delay_ms: float
+    cumulative_distance_km: float
+    cumulative_delay_ms: float
+
+
+class RoutingPathResponse(BaseModel):
+    """Diagnostic hop-by-hop path; not the live forwarding table."""
+
+    ok: bool = True
+    src: str
+    dst: str
+    found: bool
+    hops: list[PathHop]
+    node_count: int
+    total_distance_km: float
+    total_delay_ms: float
+    routing_method: str | None = None
+    routing_initiated: bool
+    preference: str | None = None
+    path_source: Literal["routing_graph"] = "routing_graph"
+    note: str
+
+
 class RoutingApplyRequest(BaseModel):
     """Requested routing method."""
 

@@ -43,6 +43,12 @@ class TopologyReader(Protocol):
     def gonetem_is_on(self, topology: Any) -> bool: ...
 
 
+class PathReader(Protocol):
+    """Diagnostic path queries over the current routing graph."""
+
+    def routing_path(self, topology: Any, src: str, dst: str) -> dict[str, Any]: ...
+
+
 class NetworkOperationError(RuntimeError):
     """Raised when a GoNetEm operation reports failure via a return code."""
 

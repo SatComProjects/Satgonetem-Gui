@@ -9,6 +9,42 @@
 
 <div id="nodes-msg" class="muted" style="margin-bottom: 16px;" aria-live="polite"></div>
 
+<section class="card path-card" id="path-card">
+  <div class="path-card-head">
+    <h3 class="card-title">Forwarding Path</h3>
+    <span class="path-source-note">Routing-graph snapshot · not the live forwarding table</span>
+  </div>
+  <form class="path-form" id="path-form">
+    <label>Source<select id="path-src" disabled></select></label>
+    <label>Destination<select id="path-dst" disabled></select></label>
+    <div class="path-form-actions">
+      <button type="submit" class="button small" id="path-trace" disabled>Trace path</button>
+      <button type="button" class="button small secondary" id="path-clear" disabled>Clear</button>
+    </div>
+  </form>
+  <p class="muted path-msg" id="path-msg" aria-live="polite"></p>
+  <p class="path-summary" id="path-summary"></p>
+  <div class="path-table-wrap" id="path-table-wrap" hidden>
+    <table class="path-table">
+      <thead>
+        <tr>
+          <th scope="col">Hop</th>
+          <th scope="col">Link</th>
+          <th scope="col">Type</th>
+          <th scope="col">Distance</th>
+          <th scope="col">Delay</th>
+          <th scope="col">Cumulative</th>
+        </tr>
+      </thead>
+      <tbody id="path-table-body"></tbody>
+    </table>
+  </div>
+  <div class="path-actions" id="path-actions" hidden>
+    <button type="button" class="button small secondary" id="path-copy">Copy path</button>
+    <button type="button" class="button small secondary" id="path-export">Export JSON</button>
+  </div>
+</section>
+
 <div class="nodes-grid">
 
   <section class="card" id="card-satellites">
@@ -27,5 +63,5 @@
 
 </div>
 
-<script type="module" src="/static/nodes.js?v=11"></script>
+<script type="module" src="/static/nodes.js?v=12"></script>
 {% endblock %}

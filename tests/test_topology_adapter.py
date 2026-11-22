@@ -722,3 +722,139 @@ def test_node_detail_exposes_addressability_for_satellites_only(settings) -> Non
 
     assert adapter.node_detail(topology, "Sat0")["addressable"] is True
     assert "addressable" not in adapter.node_detail(topology, "Gnd0")
+
+
+def _path_node(name: str, node_id: int) -> SimpleNamespace:
+    """Build a node stand-in with the identity fields the path reads."""
+    return SimpleNamespace(name=name, id=node_id)
+
+
+def _path_topology(
+    nodes: list[SimpleNamespace],
+    path: list[SimpleNamespace],
+    edges: dict,
+    *,
+    initiated: bool = False,
+    routing: str = "static",
+    preference: str | None = "latency_no_preference",
+) -> SimpleNamespace:
+    """Build a topology stand-in exposing the public routing-path surface."""
+    by_name = {node.name: node for node in nodes}
+    return SimpleNamespace(
+        routing=routing,
+        preference=preference,
+        get_node_by_name=by_name.get,
+        get_current_graph=lambda: edges,
+        get_path_between_nodes=lambda source, target: path,
+        get_routing_initiated=lambda: initiated,
+    )
+
+
+def test_routing_path_builds_hops_with_distance_and_delay(settings) -> None:
+    """Consecutive nodes become hops with propagation delay and running totals."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    ground = _path_node("Gnd10", 10)
+    sat0 = _path_node("Sat0", 0)
+    sat1 = _path_node("Sat1", 1)
+    edges = {
+        10: {
+            0: {
+                "type": "GroundStationLink",
+                "distance_km": 1500.0,
+            }
+        },
+        0: {
+            1: {
+                "type": "InterSatelliteLink",
+                "direction": "UP",
+                "distance_km": 3000.25,
+            }
+        },
+    }
+    topology = _path_topology([ground, sat0, sat1], [ground, sat0, sat1], edges, initiated=True)
+
+    result = adapter.routing_path(topology, "Gnd10", "Sat1")
+
+    assert result["src"] == "Gnd10"
+    assert result["dst"] == "Sat1"
+    assert result["found"] is True
+    assert result["node_count"] == 3
+    assert result["path_source"] == "routing_graph"
+    assert "not the live forwarding table" in result["note"]
+    assert result["routing_method"] == "static"
+    assert result["routing_initiated"] is True
+    assert result["preference"] == "latency_no_preference"
+    assert result["hops"] == [
+        {
+            "source": "Gnd10",
+            "target": "Sat0",
+            "type": "GroundStationLink",
+            "direction": None,
+            "distance_km": 1500.0,
+            "delay_ms": 5.0,
+            "cumulative_distance_km": 1500.0,
+            "cumulative_delay_ms": 5.0,
+        },
+        {
+            "source": "Sat0",
+            "target": "Sat1",
+            "type": "InterSatelliteLink",
+            "direction": "UP",
+            "distance_km": 3000.25,
+            "delay_ms": pytest.approx(10.01, abs=0.01),
+            "cumulative_distance_km": 4500.25,
+            "cumulative_delay_ms": pytest.approx(15.01, abs=0.01),
+        },
+    ]
+    assert result["total_distance_km"] == 4500.25
+    assert result["total_delay_ms"] == pytest.approx(15.01, abs=0.01)
+
+
+def test_routing_path_without_a_route_returns_an_empty_result(settings) -> None:
+    """No path is a valid diagnostic answer, not an error."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    sat0 = _path_node("Sat0", 0)
+    topology = _path_topology([sat0, _path_node("Sat1", 1)], [], {0: {}}, routing="dynamic-ospf")
+
+    result = adapter.routing_path(topology, "Sat0", "Sat1")
+
+    assert result["found"] is False
+    assert result["hops"] == []
+    assert result["node_count"] == 0
+    assert result["total_distance_km"] == 0.0
+    assert result["total_delay_ms"] == 0.0
+    assert result["routing_method"] == "dynamic-ospf"
+    assert result["routing_initiated"] is False
+    assert result["preference"] == "latency_no_preference"
+    assert result["path_source"] == "routing_graph"
+    assert "not the live forwarding table" in result["note"]
+
+
+def test_routing_path_rejects_identical_endpoints(settings) -> None:
+    """The same node twice cannot form a path."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    sat0 = _path_node("Sat0", 0)
+    topology = _path_topology([sat0], [sat0], {0: {}})
+
+    with pytest.raises(ValueError, match="differ"):
+        adapter.routing_path(topology, "Sat0", "Sat0")
+
+
+def test_routing_path_rejects_an_unknown_node(settings) -> None:
+    """An unknown endpoint is reported before the graph is read."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    topology = _path_topology([_path_node("Sat0", 0)], [], {0: {}})
+
+    with pytest.raises(ValueError, match="Node not found: Missing"):
+        adapter.routing_path(topology, "Sat0", "Missing")
+
+
+def test_routing_path_rejects_a_path_missing_from_the_graph(settings) -> None:
+    """A path whose edge vanished is a contract error, not a silent skip."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    sat0 = _path_node("Sat0", 0)
+    sat1 = _path_node("Sat1", 1)
+    topology = _path_topology([sat0, sat1], [sat0, sat1], {})
+
+    with pytest.raises(ValueError, match="no longer present"):
+        adapter.routing_path(topology, "Sat0", "Sat1")

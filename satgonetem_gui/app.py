@@ -142,7 +142,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         network_running=topology.network_running,
         stop_simulation=simulation.stop_current,
     )
-    routing = RoutingService(topology, topology_adapter)
+    routing = RoutingService(topology, topology_adapter, reader=topology_adapter)
     traffic = TrafficService(topology, traffic_adapter)
     return ApplicationServices(
         runtime=runtime,

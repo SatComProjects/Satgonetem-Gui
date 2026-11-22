@@ -193,6 +193,19 @@ not import those dependency internals.
   plus Playwright coverage for seeded history, live capture, exports, delete,
   compare, and a stubbed Chart.js contract.
 
+## Phase 12 changes
+
+- Added `PathReader` and `RoutingService.path` over the public
+  `get_path_between_nodes`/`get_current_graph` APIs; added
+  `GET /api/routing/path`.
+- Added a diagnostic hop DTO with link type, direction, propagation delay, and
+  cumulative totals, explicitly labeled as a routing-graph snapshot rather than
+  the live forwarding table.
+- Added the Node Explorer Forwarding Path card and World View path highlight,
+  with shared pure formatting/link-identity helpers in `path_model.js`.
+- Added Vitest coverage for path formatting/link keys and Playwright coverage
+  for the Nodes path table and missing-path state.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -214,13 +227,14 @@ not import those dependency internals.
   wheel into a clean target before importing the app.
 - Vitest covers the pure queue, ground-station selection, traffic payload, API
   wrapper, simulation formatting/action rules, addressability summaries/rules,
-  experiment-history compaction/export/comparison, and escaping modules.
+  experiment-history compaction/export/comparison, forwarding-path formatting,
+  and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
   node expansion, dashboard counts, simulation panel accessibility,
   addressability endpoint refresh, history reopen/capture/export/delete/compare,
-  and the WebGL fallback. World View WebGL rendering itself remains a manual
-  desktop check.
+  forwarding-path rendering, and the WebGL fallback. World View WebGL rendering
+  itself remains a manual desktop check.
 
 ## Current measurements
 
@@ -231,11 +245,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **499 passed, 1 skipped** in about 26 s with coverage. Frontend:
-**73 Vitest tests**, **18 Playwright tests**.
+Result: **524 passed, 1 skipped** in about 28 s with coverage. Frontend:
+**81 Vitest tests**, **20 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**89.88%** over 2404 statements.
+**90.13%** over 2479 statements.
 
 ## Tooling decisions
 

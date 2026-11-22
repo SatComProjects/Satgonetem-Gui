@@ -33,6 +33,7 @@ BLOCKING_ENDPOINTS = [
     topology.api_nodes,
     topology.api_node_detail,
     routing.api_routing_status,
+    routing.api_routing_path,
     traffic.api_traffic_nodes,
     traffic.api_traffic_iperf3,
     traffic.api_traffic_ping,

@@ -23,6 +23,15 @@ def api_routing_status(
     return schemas.RoutingStatusResponse(**services.routing.status())
 
 
+@router.get("/api/routing/path", response_model=schemas.RoutingPathResponse)
+def api_routing_path(
+    src: str,
+    dst: str,
+    services: ApplicationServices = Depends(get_services),
+) -> schemas.RoutingPathResponse:
+    return schemas.RoutingPathResponse(**services.routing.path(src, dst))
+
+
 @router.post("/api/routing/apply", response_model=schemas.OperationResponse)
 async def api_routing_apply(
     payload: schemas.RoutingApplyRequest,
