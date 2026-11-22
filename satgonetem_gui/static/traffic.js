@@ -1,7 +1,7 @@
 /** Traffic Generator UI controller. */
 import { api } from "./api.js";
 // Keep this queue.js version in sync with the script tag in templates/base.html.
-import { jqAdd, jqStartOne } from "./queue.js?v=10";
+import { jqAdd, jqStartNow, jqStartOne } from "./queue.js?v=11";
 import { buildTrafficPayload } from "./traffic_model.js";
 
 function byId(id) {
@@ -106,8 +106,9 @@ async function runNow() {
   }
   item.delay = 0;
   const id = jqAdd(item);
-  jqStartOne(id);
-  setMsg("Started.");
+  setMsg("Starting...");
+  const started = await jqStartNow(id);
+  setMsg(started ? "Started." : "Start failed; see the queue.", !started);
 }
 
 byId("tg-tool").addEventListener("change", toggleTool);

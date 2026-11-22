@@ -265,7 +265,7 @@ function jqStartOne(id) {
 async function jqStartNow(id) {
   clearTimer(id);
   const item = findItem(jq.items, id);
-  if (!item) return;
+  if (!item) return false;
   jq.items = updateItem(jq.items, id, {
     status: "starting",
     start_at: null,
@@ -286,14 +286,14 @@ async function jqStartNow(id) {
       jqSave();
       jqRender();
     }
-    return;
+    return false;
   }
   const current = findItem(jq.items, id);
   if (!current || isTerminal(current)) {
     // The item was removed, cleared, or cancelled while the start request was
     // in flight, so cancel the orphaned backend job instead of resurrecting it.
     cancelJob(data.job_id);
-    return;
+    return false;
   }
   jq.items = updateItem(jq.items, id, {
     status: "running",
@@ -304,6 +304,7 @@ async function jqStartNow(id) {
   jqSave();
   jqRender();
   jqTrack(id);
+  return true;
 }
 
 async function jqTrack(id) {
@@ -981,4 +982,4 @@ function fmtBytes(bytes) {
 
 queueInit();
 
-export { jqAdd, jqStartOne };
+export { jqAdd, jqStartNow, jqStartOne };
