@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import {
   buildStationMap,
   selectedStations,
+  selectionSummary,
   setPresetSelection,
   stationKey,
 } from "./ground_stations_model.js";
@@ -28,10 +29,26 @@ function updateCount() {
   selectedCount.textContent = `${selectedKeys.size + customStations.length} selected`;
 }
 
+function syncCheckAll() {
+  const summary = selectionSummary(
+    selectedKeys,
+    currentPresetName,
+    currentStations,
+  );
+  checkAllBox.checked = summary === "all";
+  checkAllBox.indeterminate = summary === "some";
+}
+
 function renderTable() {
   tbody.replaceChildren();
   if (currentStations.length === 0) {
     tableEmpty.style.display = "";
+    tableEmpty.textContent =
+      presets.length === 0
+        ? "No ground-station presets available."
+        : "No stations in this file.";
+    updateCount();
+    syncCheckAll();
     return;
   }
   tableEmpty.style.display = "none";
@@ -47,6 +64,7 @@ function renderTable() {
     checkbox.type = "checkbox";
     checkbox.dataset.key = key;
     checkbox.checked = checked;
+    checkbox.setAttribute("aria-label", `${station.name} station`);
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) {
         selectedKeys.add(key);
@@ -56,6 +74,7 @@ function renderTable() {
         row.classList.remove("row-selected");
       }
       updateCount();
+      syncCheckAll();
     });
     checkCell.appendChild(checkbox);
     row.appendChild(checkCell);
@@ -74,6 +93,7 @@ function renderTable() {
     tbody.appendChild(row);
   }
   updateCount();
+  syncCheckAll();
 }
 
 function loadPreset(index) {
@@ -181,9 +201,12 @@ async function loadPresets() {
       presetSelect.appendChild(option);
     }
     if (presets.length > 0) loadPreset(0);
+    else renderTable();
   } catch (error) {
     tableEmpty.style.display = "";
     tableEmpty.textContent = error.message || "Failed to load presets.";
+    checkAllBox.checked = false;
+    checkAllBox.indeterminate = false;
   }
 }
 

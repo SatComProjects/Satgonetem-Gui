@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildStationMap,
   selectedStations,
+  selectionSummary,
   stationKey,
 } from "../satgonetem_gui/static/ground_stations_model.js";
 
@@ -30,6 +31,21 @@ describe("ground station selection", () => {
       "Berlin",
       "Tokyo",
     ]);
+  });
+
+  it("summarizes all, some, and none for the header checkbox", () => {
+    expect(selectionSummary(new Set(), "alpha", presets[0].stations)).toBe("none");
+    expect(
+      selectionSummary(new Set(["alpha:0"]), "alpha", presets[0].stations),
+    ).toBe("some");
+    expect(
+      selectionSummary(
+        new Set(["alpha:0", "alpha:1"]),
+        "alpha",
+        presets[0].stations,
+      ),
+    ).toBe("all");
+    expect(selectionSummary(new Set(), "alpha", [])).toBe("none");
   });
 
   it("ignores stale selection keys", () => {
