@@ -5,8 +5,8 @@ import logging
 from contextlib import contextmanager
 
 from ..errors import APIError
-from .ports import NetworkController, NetworkOperationError
-from .topology_service import TopologyService
+from .ports import NetworkController, NetworkOperationError, PathReader
+from .topology_service import TopologyService, is_node_name
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +21,12 @@ class RoutingService:
         topology: TopologyService,
         controller: NetworkController,
         operation_timeout_seconds: float = NETWORK_OPERATION_TIMEOUT_SECONDS,
+        reader: PathReader | None = None,
     ) -> None:
         self.topology = topology
         self.controller = controller
         self.operation_timeout_seconds = operation_timeout_seconds
+        self.reader = reader
         self._operation_lock: asyncio.Lock | None = None
         self._operation_loop: asyncio.AbstractEventLoop | None = None
         self._worker: asyncio.Task | None = None
@@ -34,6 +36,29 @@ class RoutingService:
         status = self.controller.routing_status(self.topology.require_topology())
         status["addressing_applied"] = self.topology.addressing_applied
         return status
+
+    def path(self, src: str, dst: str) -> dict:
+        """Return a diagnostic path over the current routing graph.
+
+        Read-only: this bypasses the network-operation gate and reports a path
+        computed from the routing graph, not the live forwarding table.
+        """
+        if not is_node_name(src):
+            raise APIError(404, f"Node not found: {src}")
+        if not is_node_name(dst):
+            raise APIError(404, f"Node not found: {dst}")
+        if src == dst:
+            raise APIError(422, "Source and destination must be different.")
+        topology, _ = self.topology.context()
+        if self.reader is None:
+            raise APIError(500, "Routing path support is unavailable.")
+        try:
+            return self.reader.routing_path(topology, src, dst)
+        except (ValueError, KeyError) as exc:
+            raise APIError(404, str(exc)) from exc
+        except Exception as exc:
+            logger.exception("Failed to compute the routing path.")
+            raise APIError(500, "Failed to compute the routing path.") from exc
 
     def _require_current_project(self, generation: int) -> None:
         """Reject a completed operation whose project was replaced mid-flight."""

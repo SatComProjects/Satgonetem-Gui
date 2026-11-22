@@ -23,6 +23,7 @@ from tests.helpers import wait_for_project_state
         ("GET", "/api/nodes", None),
         ("GET", "/api/nodes/Sat0", None),
         ("GET", "/api/routing/status", None),
+        ("GET", "/api/routing/path?src=Sat0&dst=Sat1", None),
         ("POST", "/api/routing/apply", {}),
         ("POST", "/api/routing/delete", None),
         ("POST", "/api/gonetem/start", None),
