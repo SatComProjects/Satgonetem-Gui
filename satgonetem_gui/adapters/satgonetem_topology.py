@@ -311,9 +311,13 @@ class SatGoNetemTopologyAdapter:
         except Exception:
             logger.exception("Failed to read routing table for %s", name)
 
+        node_kind = str(getattr(node, "type", "")).lower()
+        is_ground = node_kind.startswith("ground") or (
+            not node_kind and name.startswith("Gnd")
+        )
         data: dict[str, Any] = {
             "name": node.name,
-            "type": "satellite" if name.startswith("Sat") else "ground_station",
+            "type": "ground_station" if is_ground else "satellite",
             "id": node.id,
             "position": {
                 "latitude": node.position.get("latitude"),
@@ -324,13 +328,13 @@ class SatGoNetemTopologyAdapter:
             "loopback": {"ipv4": getattr(node.loopback, "ipv4", "")},
             "routing_table": routing_table,
         }
-        if name.startswith("Sat"):
+        if is_ground:
+            data["city"] = getattr(node, "city", None)
+        else:
             data["default_qos_is_on"] = getattr(node, "default_qos_is_on", False)
             data["program_specific_qos_is_on"] = getattr(
                 node, "program_specific_qos_is_on", False
             )
-        else:
-            data["city"] = getattr(node, "city", None)
         return data
 
     def find_node(self, topology: Any, name: str) -> Any | None:
