@@ -7,9 +7,9 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | Feature | Description |
 |---------|-------------|
 | **Project Builder** | Define Walker orbit shells and ground stations through a guided form. |
-| **3D World View** | Interactive CesiumJS globe showing satellites, ground stations, links, and coverage in real time. |
+| **3D World View** | Interactive CesiumJS globe with a node inspector, link isolation, coverage, and simulation playback. |
 | **Simulation Controls** | Play, pause, step, reset, seek, and change the playback speed of the emulated constellation. |
-| **Node Explorer** | Browse all satellites and ground stations with detailed status and per-node links. |
+| **Node Explorer** | Search, filter, sort, favorite, and inspect satellites and ground stations with per-node links. |
 | **Link Metrics** | Inspect link delay, capacity, and active state; Globe link width scales with capacity. |
 | **Readiness Checks** | Preflight storage, Docker, image, and GoNetEm checks plus a rough container/memory estimate. |
 | **Project Workspace** | List, reopen, save in place, duplicate, and delete projects under the configured save root. |
@@ -107,7 +107,7 @@ package.json            # Frontend test/tooling manifest
 | Path | Page |
 |------|------|
 | `/` | Dashboard — constellation statistics, simulation playback, GoNetem status, routing controls |
-| `/world` | 3D Globe — real-time satellite and ground station visualisation with simulation playback and path highlighting |
+| `/world` | 3D Globe — visualisation, node inspector, link isolation, playback, and path highlighting |
 | `/nodes` | Node Explorer — search, filter, sort, favorite, inspect, trace paths, check health, and export |
 | `/traffic` | Traffic Generator — presets, endpoint swap, queued jobs, history, and replay |
 | `/new_project` | New Project — build a constellation from scratch |
@@ -239,6 +239,15 @@ city, or type, and supports a favorites-only view. Favorite node names are kept
 in browser-local storage and survive reloads. Filtering and sorting do not
 change the five-second poll, path tracing, addressability controls, detail
 expansion, or topology health card.
+
+## World View Node Inspector
+
+Clicking a satellite or ground station in World View opens an accessible side
+panel with its coordinates, incident link counts by category, neighbors, and
+the nearest peers by great-circle distance. **Isolate links** dims every link
+not incident to the selected node until it is turned off or the panel is
+closed. `/world?node=Sat12` deep-links to a node, and Node Explorer's detail
+panel links back to World View.
 
 ## Topology Export and Health
 
