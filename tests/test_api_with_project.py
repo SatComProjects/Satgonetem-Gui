@@ -52,6 +52,14 @@ def test_ground_stations_endpoint(project_client) -> None:
     assert stations[0]["position"]["altitude"] == pytest.approx(0.034)
 
 
+def test_topology_lists_support_bounded_pagination(project_client) -> None:
+    """List endpoints accept a bounded limit/offset window."""
+    response = project_client.get("/api/satellites?limit=2&offset=1")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+
+
 def test_links_endpoint(project_client) -> None:
     """Inter-satellite and ground-station links are both present."""
     response = project_client.get("/api/links")
