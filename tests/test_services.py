@@ -192,7 +192,7 @@ def test_traffic_start_and_status() -> None:
 
 
 def test_traffic_cancel_stops_flow_and_stays_cancelled() -> None:
-    """Cancel calls stop, marks the job terminal, and avoids future polling."""
+    """Cancel polls once, calls stop, and avoids future polling."""
     topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
     gateway = FakeTraffic(poll_status="running")
     service = TrafficService(topology, gateway)
@@ -204,8 +204,49 @@ def test_traffic_cancel_stops_flow_and_stays_cancelled() -> None:
     assert job is not None
     assert job.status == "cancelled"
     assert gateway.stopped == [job.flow]
+    assert gateway.poll_calls == 1
     assert service.status(job_id) == {"status": "cancelled"}
-    assert gateway.poll_calls == 0
+    assert gateway.poll_calls == 1
+
+
+def test_cancel_before_poll_preserves_completed_results() -> None:
+    """Cancel polls first so a finished flow keeps its results."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    gateway = FakeTraffic(poll_status="done")
+    service = TrafficService(topology, gateway)
+    job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+    job = service.jobs.get(job_id)
+
+    with pytest.raises(APIError) as error:
+        service.cancel(job_id)
+
+    assert error.value.status_code == 409
+    assert error.value.message == "Job is already finished."
+    assert job is not None
+    assert job.status == "done"
+    assert job.results == {"ok": True}
+    assert gateway.poll_calls >= 1
+    assert gateway.stopped == []
+
+
+def test_cancel_poll_failure_still_stops_the_flow() -> None:
+    """A failed pre-cancel poll is logged and does not block stopping."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    gateway = FakeTraffic(poll_status="running")
+
+    def fail_poll(_kind, _flow):
+        raise RuntimeError("poll failed")
+
+    gateway.poll = fail_poll
+    service = TrafficService(topology, gateway)
+    job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+    job = service.jobs.get(job_id)
+
+    service.cancel(job_id)
+
+    assert job is not None
+    assert job.status == "cancelled"
+    assert gateway.stopped == [job.flow]
 
 
 def test_traffic_cancel_failure_keeps_job_running() -> None:
@@ -285,9 +326,9 @@ def test_registry_prunes_expired_terminal_jobs() -> None:
 
 
 def test_capacity_rejection_stops_the_unregistered_flow() -> None:
-    """A flow that cannot be registered is stopped instead of leaking."""
+    """A running job keeps its slot, so the unregistered flow is stopped."""
     topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
-    gateway = FakeTraffic()
+    gateway = FakeTraffic(poll_status="running")
     jobs = JobRegistry(max_jobs=1)
     jobs.create("ping", object(), "a", "b")
     service = TrafficService(topology, gateway, jobs)
@@ -296,7 +337,61 @@ def test_capacity_rejection_stops_the_unregistered_flow() -> None:
         service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
 
     assert error.value.status_code == 429
+    assert gateway.poll_calls == 1
     assert len(gateway.stopped) == 1
+
+
+def test_lazy_reclaim_polls_finished_jobs_when_the_registry_is_full() -> None:
+    """A full registry polls running jobs once and retries job creation."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    gateway = FakeTraffic(poll_status="done")
+    registry = JobRegistry(max_jobs=1)
+    service = TrafficService(topology, gateway, registry)
+
+    first_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+    second_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+
+    assert first_id != second_id
+    assert registry.get(first_id) is None
+    assert registry.get(second_id) is not None
+    assert gateway.poll_calls == 1
+    assert gateway.stopped == []
+
+
+def test_traffic_service_preserves_an_injected_empty_registry() -> None:
+    """An empty registry is falsy but must not be replaced by the service."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    registry = JobRegistry(max_jobs=1)
+
+    service = TrafficService(topology, FakeTraffic(), registry)
+
+    assert service.jobs is registry
+    assert service.jobs.max_jobs == 1
+
+
+def test_status_treats_an_unknown_gateway_state_as_a_terminal_error() -> None:
+    """An unrecognized poll state becomes a terminal error, not 'unknown'."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    gateway = FakeTraffic(poll_status="unknown")
+    service = TrafficService(topology, gateway)
+    job_id = service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
+
+    result = service.status(job_id)
+
+    assert result == {"status": "error", "error": "Unknown flow state."}
+    assert service.jobs.get(job_id).terminal is True
+    assert service.status(job_id) == result
+    assert gateway.poll_calls == 1
+
+
+def test_registry_running_returns_a_snapshot_of_active_jobs() -> None:
+    """Only non-terminal jobs are returned for lazy reclaim."""
+    registry = JobRegistry()
+    running = registry.create("ping", object(), "a", "b")
+    finished = registry.create("ping", object(), "a", "b")
+    finished.transition("done")
+
+    assert registry.running() == [running]
 
 
 def test_strategy_registry_covers_all_tools() -> None:

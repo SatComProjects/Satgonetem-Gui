@@ -132,6 +132,11 @@ class JobRegistry:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def running(self) -> list[TrafficJob]:
+        """Return a snapshot of jobs that have not reached a terminal state."""
+        with self._lock:
+            return [job for job in self._jobs.values() if not job.terminal]
+
     def prune(self) -> None:
         """Remove terminal jobs older than the TTL."""
         with self._lock:
@@ -167,11 +172,9 @@ class TrafficService:
     ) -> None:
         self.topology = topology
         self.gateway = gateway
-        self.jobs = jobs or JobRegistry()
+        self.jobs = jobs if jobs is not None else JobRegistry()
         self.strategies = {
-            "iperf3": TrafficStrategy(
-                "iperf3", Iperf3Request, gateway.start_iperf3
-            ),
+            "iperf3": TrafficStrategy("iperf3", Iperf3Request, gateway.start_iperf3),
             "ping": TrafficStrategy("ping", PingRequest, gateway.start_ping),
             "hping3": TrafficStrategy("hping3", Hping3Request, gateway.start_hping3),
         }
@@ -204,7 +207,7 @@ class TrafficService:
             raise APIError(500, f"Failed to start {kind} flow.") from exc
 
         try:
-            job = self.jobs.create(kind, flow, request.src, request.dst)
+            job = self._create_job(kind, flow, request)
         except JobCapacityError as exc:
             try:
                 self.gateway.stop(flow)
@@ -213,8 +216,25 @@ class TrafficService:
             raise APIError(429, str(exc)) from exc
         return job.job_id
 
+    def _create_job(self, kind: str, flow: Any, request: Any) -> TrafficJob:
+        """Create a job, reclaiming finished jobs once when the registry is full."""
+        try:
+            return self.jobs.create(kind, flow, request.src, request.dst)
+        except JobCapacityError:
+            self._poll_running_jobs()
+            return self.jobs.create(kind, flow, request.src, request.dst)
+
+    def _poll_running_jobs(self) -> None:
+        """Poll every running job once so unpolled finished jobs become evictable."""
+        for job in self.jobs.running():
+            try:
+                self.status(job.job_id)
+            except APIError:
+                logger.debug("Lazy poll failed for traffic job %s.", job.job_id)
+
     def status(self, job_id: str) -> dict:
         """Poll one job and apply one terminal-state transition."""
+        self.jobs.prune()
         job = self.jobs.get(job_id)
         if job is None:
             raise APIError(404, "Job not found.")
@@ -229,15 +249,19 @@ class TrafficService:
                 raise APIError(500, "Error polling traffic job status.") from exc
             if poll.status == "running":
                 return {"status": "running"}
-            job.transition(
-                poll.status,
-                results=poll.results,
-                error=poll.error,
-            )
+            if poll.status in TERMINAL_STATUSES:
+                job.transition(
+                    poll.status,
+                    results=poll.results,
+                    error=poll.error,
+                )
+            else:
+                job.transition("error", error="Unknown flow state.")
             return job.snapshot()
 
     def cancel(self, job_id: str) -> None:
-        """Stop a running flow and mark it cancelled."""
+        """Poll once, then stop a still-running flow and mark it cancelled."""
+        self.jobs.prune()
         job = self.jobs.get(job_id)
         if job is None:
             raise APIError(404, "Job not found.")
@@ -247,6 +271,21 @@ class TrafficService:
                 return
             if job.status in TERMINAL_STATUSES:
                 raise APIError(409, "Job is already finished.")
+            try:
+                poll = self.gateway.poll(job.kind, job.flow)
+            except Exception:
+                logger.exception("Error polling traffic job status before cancel.")
+            else:
+                if poll.status != "running":
+                    if poll.status in TERMINAL_STATUSES:
+                        job.transition(
+                            poll.status,
+                            results=poll.results,
+                            error=poll.error,
+                        )
+                    else:
+                        job.transition("error", error="Unknown flow state.")
+                    raise APIError(409, "Job is already finished.")
             try:
                 self.gateway.stop(job.flow)
             except Exception as exc:

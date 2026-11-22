@@ -5,6 +5,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+_IPERF_SUM_KEYS = (
+    "sum",
+    "sum_received",
+    "sum_sent",
+    "sum_bidir",
+    "sum_bidir_reverse",
+)
+
 
 def clean_numeric(value: Any) -> Any:
     """Convert a scalar to a JSON-safe number, preserving None.
@@ -29,6 +37,44 @@ def clean_numeric(value: Any) -> Any:
         return converted
     except (TypeError, ValueError):
         return str(value) if value is not None else None
+
+
+def clean_json(value: Any) -> Any:
+    """Recursively clean a value so ``json.dumps(..., allow_nan=False)`` works.
+
+    Mappings and sequences are traversed; every scalar passes through
+    :func:`clean_numeric`, which replaces NaN and +/-Infinity with None.
+    """
+    if isinstance(value, dict):
+        return {str(key): clean_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [clean_json(item) for item in value]
+    return clean_numeric(value)
+
+
+def _serialize_iperf3_interval(interval: dict[str, Any]) -> dict[str, Any]:
+    """Build one chart-friendly interval entry; callers handle malformed input."""
+    entry: dict[str, Any] = {"t": 0.0, "sum": {}, "sums": {}, "streams": []}
+    timestamp = 0.0
+    for key in _IPERF_SUM_KEYS:
+        if key in interval:
+            timestamp = float(interval[key].get("end", interval[key].get("start", 0.0)))
+            break
+    if timestamp == 0.0 and interval.get("streams"):
+        stream = interval["streams"][0]
+        timestamp = float(stream.get("end", stream.get("start", 0.0)))
+    entry["t"] = timestamp
+
+    for key in _IPERF_SUM_KEYS:
+        if key in interval:
+            entry["sums"][key] = dict(interval[key])
+
+    primary = interval.get("sum") or interval.get("sum_received") or interval.get("sum_sent") or {}
+    entry["sum"] = dict(primary)
+
+    for stream in interval.get("streams", []):
+        entry["streams"].append(dict(stream))
+    return entry
 
 
 def serialize_iperf3_results(
@@ -65,89 +111,44 @@ def serialize_iperf3_results(
         data["avg_loss_percent"] = result.avg_loss_percent
         data["total_out_of_order"] = result.total_out_of_order
 
-    try:
-        for interval in intervals:
-            entry: dict[str, Any] = {"t": 0.0, "sum": {}, "sums": {}, "streams": []}
-            timestamp = 0.0
-            for key in (
-                "sum",
-                "sum_received",
-                "sum_sent",
-                "sum_bidir",
-                "sum_bidir_reverse",
-            ):
-                if key in interval:
-                    timestamp = float(
-                        interval[key].get("end", interval[key].get("start", 0.0))
-                    )
-                    break
-            if timestamp == 0.0 and interval.get("streams"):
-                stream = interval["streams"][0]
-                timestamp = float(stream.get("end", stream.get("start", 0.0)))
-            entry["t"] = timestamp
-
-            for key in (
-                "sum",
-                "sum_received",
-                "sum_sent",
-                "sum_bidir",
-                "sum_bidir_reverse",
-            ):
-                if key in interval:
-                    entry["sums"][key] = {
-                        name: clean_numeric(value)
-                        for name, value in interval[key].items()
-                    }
-
-            primary = (
-                interval.get("sum")
-                or interval.get("sum_received")
-                or interval.get("sum_sent")
-                or {}
-            )
-            entry["sum"] = {
-                name: clean_numeric(value) for name, value in primary.items()
-            }
-
-            for stream in interval.get("streams", []):
-                entry["streams"].append(
-                    {name: clean_numeric(value) for name, value in stream.items()}
-                )
-            data["intervals"].append(entry)
-    except Exception:
-        logger.exception("Failed to serialize iperf3 intervals.")
-    return data
+    for interval in intervals or []:
+        try:
+            data["intervals"].append(_serialize_iperf3_interval(interval))
+        except Exception:
+            logger.exception("Skipping malformed iperf3 interval.")
+    return clean_json(data)
 
 
 def serialize_ping_results(result: Any) -> dict[str, Any]:
     """Extract summary data from a ping result object."""
-    return {
-        "packets_transmitted": result.packets_transmitted,
-        "packets_received": result.packets_received,
-        "packet_loss_percent": result.packet_loss_percent,
-        "reachable": result.reachable,
-        "rtt_min_ms": result.rtt_min_ms,
-        "rtt_avg_ms": result.rtt_avg_ms,
-        "rtt_max_ms": result.rtt_max_ms,
-        "rtt_mdev_ms": result.rtt_mdev_ms,
-    }
+    return clean_json(
+        {
+            "packets_transmitted": result.packets_transmitted,
+            "packets_received": result.packets_received,
+            "packet_loss_percent": result.packet_loss_percent,
+            "reachable": result.reachable,
+            "rtt_min_ms": result.rtt_min_ms,
+            "rtt_avg_ms": result.rtt_avg_ms,
+            "rtt_max_ms": result.rtt_max_ms,
+            "rtt_mdev_ms": result.rtt_mdev_ms,
+        }
+    )
 
 
 def serialize_hping3_results(result: Any) -> dict[str, Any]:
     """Extract chart-friendly data from an hping3 result object."""
-    return {
-        "payload_bytes": result.payload_bytes,
-        "seq": result.seq,
-        "rtt_ms": [
-            None if (isinstance(value, float) and value != value) else value
-            for value in result.rtt_ms
-        ],
-        "cumulative_mbit": result.cumulative_mbit,
-        "packets_transmitted": result.packets_transmitted,
-        "packets_received": result.packets_received,
-        "packet_loss_percent": result.packet_loss_percent,
-        "rtt_min_ms": result.rtt_min_ms,
-        "rtt_avg_ms": result.rtt_avg_ms,
-        "rtt_max_ms": result.rtt_max_ms,
-        "reachable": result.reachable,
-    }
+    return clean_json(
+        {
+            "payload_bytes": result.payload_bytes,
+            "seq": result.seq,
+            "rtt_ms": result.rtt_ms,
+            "cumulative_mbit": result.cumulative_mbit,
+            "packets_transmitted": result.packets_transmitted,
+            "packets_received": result.packets_received,
+            "packet_loss_percent": result.packet_loss_percent,
+            "rtt_min_ms": result.rtt_min_ms,
+            "rtt_avg_ms": result.rtt_avg_ms,
+            "rtt_max_ms": result.rtt_max_ms,
+            "reachable": result.reachable,
+        }
+    )
