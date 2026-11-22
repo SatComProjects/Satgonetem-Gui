@@ -2,6 +2,7 @@
 
 {% block head %}
   <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/simulation.css">
 {% endblock %}
 
 {% block content %}
@@ -53,23 +54,7 @@
 
   <section class="card" id="card-simulation">
     <h3 class="card-title">Simulation</h3>
-    <dl class="stat-list">
-      <div class="stat-row">
-        <dt>Status</dt>
-        <dd>
-          <span class="status-dot" id="dot-running"></span>
-          <span id="label-running">Idle</span>
-        </dd>
-      </div>
-      <div class="stat-row">
-        <dt>Current Step</dt>
-        <dd><span id="val-step">-</span></dd>
-      </div>
-      <div class="stat-row">
-        <dt>Current Time</dt>
-        <dd><span id="val-time">-</span></dd>
-      </div>
-    </dl>
+    {% include "_simulation_panel.html" %}
   </section>
 
   <section class="card" id="card-routing-status">
@@ -123,5 +108,5 @@
 
 </div>
 
-<script type="module" src="/static/dashboard.js?v=10"></script>
+<script type="module" src="/static/dashboard.js?v=11"></script>
 {% endblock %}

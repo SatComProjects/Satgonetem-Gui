@@ -2,6 +2,7 @@
 
 import os
 import socket
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -15,10 +16,11 @@ from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
 from .config import Settings, load_settings
 from .errors import install_error_handlers
 from .resources import GROUND_STATIONS_DIR
-from .routes import pages, projects, routing, topology, traffic
+from .routes import pages, projects, routing, simulation, topology, traffic
 from .services.container import ApplicationServices
 from .services.project_service import ProjectService
 from .services.routing_service import RoutingService
+from .services.simulation_service import SimulationService
 from .services.topology_service import TopologyService
 from .services.traffic_service import TrafficService
 from .state import RuntimeState
@@ -121,12 +123,14 @@ def build_services(settings: Settings) -> ApplicationServices:
     traffic_adapter = SatGoNetemTrafficAdapter()
 
     topology = TopologyService(runtime.project, topology_adapter)
+    simulation = SimulationService(topology, topology_adapter)
     project = ProjectService(
         runtime,
         topology_adapter,
         settings,
         GROUND_STATIONS_DIR,
         network_running=topology.network_running,
+        stop_simulation=simulation.stop_current,
     )
     routing = RoutingService(topology, topology_adapter)
     traffic = TrafficService(topology, traffic_adapter)
@@ -136,7 +140,15 @@ def build_services(settings: Settings) -> ApplicationServices:
         topology=topology,
         routing=routing,
         traffic=traffic,
+        simulation=simulation,
     )
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Stop the simulation loop when the application shuts down."""
+    yield
+    await app.state.services.simulation.shutdown()
 
 
 def create_app(
@@ -147,7 +159,7 @@ def create_app(
     settings = settings or load_settings()
     services = services or build_services(settings)
 
-    app = FastAPI(title="SatGoNetem GUI")
+    app = FastAPI(title="SatGoNetem GUI", lifespan=_lifespan)
     allowed_hosts = _allowed_hosts(settings)
     _install_request_guards(app, allowed_hosts)
     install_error_handlers(app)
@@ -162,5 +174,6 @@ def create_app(
     app.include_router(projects.router)
     app.include_router(topology.router)
     app.include_router(routing.router)
+    app.include_router(simulation.router)
     app.include_router(traffic.router)
     return app

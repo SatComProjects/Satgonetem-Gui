@@ -32,14 +32,22 @@ class ProjectService:
         resources_dir: Path,
         network_running: Callable[[], bool] | None = None,
         load_timeout_seconds: float = PROJECT_LOAD_TIMEOUT_SECONDS,
+        stop_simulation: Callable[[], None] | None = None,
     ) -> None:
         self.state = state
         self.gateway = gateway
         self.settings = settings
         self.resources_dir = resources_dir
         self.network_running = network_running
+        self.stop_simulation = stop_simulation
         self.load_timeout_seconds = load_timeout_seconds
         self._load_worker: asyncio.Task | None = None
+
+    def _stop_simulation_before_replacement(self) -> None:
+        """Stop a running loop before the loaded topology is replaced."""
+        if self.stop_simulation is None or not self.state.project.loaded:
+            return
+        self.stop_simulation()
 
     def _guard_replacement(self) -> None:
         """Refuse to replace a project while containers are still running."""
@@ -109,11 +117,15 @@ class ProjectService:
 
         self._guard_replacement()
 
+        def runner() -> ProjectResult:
+            self._stop_simulation_before_replacement()
+            return self.gateway.build(payload)
+
         started = self.state.project_tasks.start(
             name=name,
             save_path=str(payload.save_path or "").strip(),
             operation="create",
-            runner=lambda: self.gateway.build(payload),
+            runner=runner,
             timeout_seconds=PROJECT_BUILD_TIMEOUT_SECONDS,
             precondition=self._network_is_stopped,
             on_success=self._cleanup_ground_files,
@@ -165,9 +177,11 @@ class ProjectService:
             raise APIError(409, "A project operation is already running.")
         token = self.state.project.token
 
-        worker = asyncio.create_task(
-            asyncio.to_thread(self.gateway.load, content)
-        )
+        def load_project() -> ProjectResult:
+            self._stop_simulation_before_replacement()
+            return self.gateway.load(content)
+
+        worker = asyncio.create_task(asyncio.to_thread(load_project))
         self._load_worker = worker
 
         def clear(_task: asyncio.Task) -> None:

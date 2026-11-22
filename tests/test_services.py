@@ -12,6 +12,7 @@ from satgonetem_gui.schemas import Iperf3Request, PingRequest, ProjectCreateRequ
 from satgonetem_gui.services.ports import NetworkOperationError, TrafficPoll
 from satgonetem_gui.services.project_service import ProjectService
 from satgonetem_gui.services.routing_service import RoutingService
+from satgonetem_gui.services.simulation_service import SimulationService
 from satgonetem_gui.services.topology_service import TopologyService
 from satgonetem_gui.services.traffic_service import (
     JobCapacityError,
@@ -87,6 +88,40 @@ class FakeController:
         self.calls.append("stop_gonetem")
 
 
+class FakeSimulationController:
+    """Minimal simulation controller for service tests."""
+
+    def __init__(self, running: bool = False, failure: str | None = None) -> None:
+        self.calls = []
+        self.running = running
+        self.failure = failure
+
+    def simulation_running(self, topology) -> bool:
+        return self.running
+
+    def start_simulation(self, topology) -> None:
+        self.calls.append("start")
+        self.running = True
+
+    def stop_simulation(self, topology) -> None:
+        self.calls.append("stop")
+        self.running = False
+
+    def step_simulation(self, topology) -> None:
+        self.calls.append("step")
+
+    def reset_simulation(self, topology) -> None:
+        self.calls.append("reset")
+
+    def seek_simulation(self, topology, step: int) -> None:
+        self.calls.append(("seek", step))
+        if self.failure == "seek":
+            raise ValueError("step out of range")
+
+    def change_simulation_speed(self, topology, direction: str) -> None:
+        self.calls.append(("speed", direction))
+
+
 class FakeTraffic:
     """Minimal traffic gateway for service tests."""
 
@@ -133,6 +168,17 @@ def _ready_topology() -> TopologyService:
     topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
     topology.set_addressing_applied(True)
     return topology
+
+
+def _simulation_service(
+    controller: FakeSimulationController | None = None,
+    session: ProjectSession | None = None,
+) -> tuple[SimulationService, FakeSimulationController]:
+    """Return a simulation service with a fake controller."""
+    session = session if session is not None else _loaded_session()
+    controller = controller if controller is not None else FakeSimulationController()
+    topology = TopologyService(session, FakeReader())
+    return SimulationService(topology, controller), controller
 
 
 def test_topology_status_is_empty_without_a_project() -> None:
@@ -1020,3 +1066,339 @@ def test_routing_stop_failure_keeps_addressing() -> None:
 
     assert error.value.status_code == 500
     assert topology.addressing_applied is True
+
+
+@pytest.mark.parametrize("operation", ["start", "stop", "step", "reset", "seek", "speed"])
+def test_simulation_operations_require_a_project(operation: str) -> None:
+    """Transport controls cannot run before a project is loaded."""
+    controller = FakeSimulationController()
+    topology = TopologyService(ProjectSession(), FakeReader())
+    service = SimulationService(topology, controller)
+
+    async def call() -> None:
+        if operation == "seek":
+            await service.seek(4)
+        elif operation == "speed":
+            await service.change_speed("faster")
+        else:
+            await getattr(service, operation)()
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(call())
+
+    assert error.value.status_code == 404
+    assert controller.calls == []
+
+
+def test_simulation_service_forwards_each_operation() -> None:
+    """Each service method calls exactly one controller operation."""
+    service, controller = _simulation_service()
+
+    async def scenario() -> None:
+        await service.start()
+        await service.stop()
+        await service.step()
+        await service.reset()
+        await service.seek(7)
+        await service.change_speed("faster")
+
+    asyncio.run(scenario())
+
+    assert controller.calls == [
+        "start",
+        "stop",
+        "step",
+        "reset",
+        ("seek", 7),
+        ("speed", "faster"),
+    ]
+
+
+@pytest.mark.parametrize("operation", ["step", "reset", "seek"])
+def test_simulation_position_changes_require_a_pause(operation: str) -> None:
+    """Step, reset, and seek are rejected while the loop is running."""
+    controller = FakeSimulationController(running=True)
+    service, _ = _simulation_service(controller)
+
+    async def call() -> None:
+        if operation == "seek":
+            await service.seek(4)
+        else:
+            await getattr(service, operation)()
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(call())
+
+    assert error.value.status_code == 409
+    assert "pause" in error.value.message.lower()
+    assert controller.calls == []
+
+
+def test_simulation_start_stop_and_speed_are_allowed_while_running() -> None:
+    """Start, stop, and playback changes do not require a paused loop."""
+    controller = FakeSimulationController(running=True)
+    service, _ = _simulation_service(controller)
+
+    async def scenario() -> None:
+        await service.start()
+        await service.stop()
+        await service.change_speed("slower")
+
+    asyncio.run(scenario())
+
+    assert controller.calls == ["start", "stop", ("speed", "slower")]
+
+
+def test_simulation_seek_out_of_range_maps_422() -> None:
+    """A seek target the adapter rejects is a client error."""
+    controller = FakeSimulationController(failure="seek")
+    service, _ = _simulation_service(controller)
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.seek(999))
+
+    assert error.value.status_code == 422
+    assert "out of range" in error.value.message
+
+
+def test_simulation_stop_current_is_a_noop_without_a_project() -> None:
+    """Shutdown and replacement must not touch a controller without a project."""
+    controller = FakeSimulationController()
+    topology = TopologyService(ProjectSession(), FakeReader())
+    service = SimulationService(topology, controller)
+
+    service.stop_current()
+
+    assert controller.calls == []
+
+
+def test_simulation_stop_current_uses_the_loaded_topology() -> None:
+    """Lifecycle teardown stops the loop for the installed project."""
+    service, controller = _simulation_service()
+
+    service.stop_current()
+
+    assert controller.calls == ["stop"]
+
+
+def test_simulation_shutdown_never_raises() -> None:
+    """A failing stop during shutdown is logged, not propagated."""
+
+    class FailingSimulationController(FakeSimulationController):
+        def stop_simulation(self, topology) -> None:
+            raise RuntimeError("stop failed")
+
+    service, _ = _simulation_service(FailingSimulationController())
+
+    asyncio.run(service.shutdown())
+
+
+def test_simulation_operation_gate_rejects_an_in_flight_network_operation() -> None:
+    """A transport control cannot overlap routing/container work."""
+    session = _loaded_session()
+    service, controller = _simulation_service(session=session)
+    assert session.begin_network_operation() is True
+    try:
+        with pytest.raises(APIError) as error:
+            asyncio.run(service.start())
+    finally:
+        session.end_network_operation()
+
+    assert error.value.status_code == 409
+    assert "project operation" in error.value.message.lower()
+    assert controller.calls == []
+
+
+def test_simulation_rejects_a_project_changed_mid_operation() -> None:
+    """A completed control must not report success on a replaced project."""
+    session = _loaded_session()
+
+    class ReplacingSimulationController(FakeSimulationController):
+        def step_simulation(self, topology) -> None:
+            super().step_simulation(topology)
+            session.succeed(object(), "NewProject", "")
+
+    service, _ = _simulation_service(ReplacingSimulationController(), session)
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.step())
+
+    assert error.value.status_code == 409
+    assert "Project changed" in error.value.message
+
+
+def test_simulation_network_failure_maps_500() -> None:
+    """A controller failure is reported with a user-facing message."""
+
+    class FailingSimulationController(FakeSimulationController):
+        def start_simulation(self, topology) -> None:
+            raise NetworkOperationError("loop failed to start")
+
+    service, _ = _simulation_service(FailingSimulationController())
+
+    with pytest.raises(APIError) as error:
+        asyncio.run(service.start())
+
+    assert error.value.status_code == 500
+    assert "loop failed to start" in error.value.message
+
+
+def test_simulation_timeout_keeps_the_worker_guard() -> None:
+    """A timed-out control keeps its worker so a retry cannot overlap it."""
+    release = threading.Event()
+
+    class BlockingSimulationController(FakeSimulationController):
+        def start_simulation(self, topology) -> None:
+            release.wait(timeout=5)
+            super().start_simulation(topology)
+
+    topology = TopologyService(_loaded_session(), FakeReader())
+    controller = BlockingSimulationController()
+    service = SimulationService(
+        topology,
+        controller,
+        operation_timeout_seconds=0.05,
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(APIError) as timeout:
+            await service.start()
+        assert timeout.value.status_code == 504
+
+        with pytest.raises(APIError) as conflict:
+            await service.step()
+        assert conflict.value.status_code == 409
+
+        release.set()
+        await asyncio.sleep(0.1)
+        await service.stop()
+
+    asyncio.run(scenario())
+
+    assert controller.calls == ["start", "stop"]
+
+
+def test_project_create_stops_the_simulation_loop_before_building(tmp_path) -> None:
+    """Replacing a project must not leave the old loop running."""
+    calls = []
+
+    class Gateway:
+        def build(self, payload):
+            calls.append("build")
+            return ProjectResult(object(), payload.name, "")
+
+        def cleanup_ground_files(self, _topology):
+            pass
+
+    state = RuntimeState()
+    service = ProjectService(
+        state,
+        Gateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        stop_simulation=lambda: calls.append("stop_simulation"),
+    )
+
+    service.start_create(ProjectCreateRequest(**project_payload("First")))
+    state.project_tasks.thread.join(timeout=5)
+
+    assert calls == ["build"]
+
+
+def test_project_create_stops_a_running_loop_before_building(tmp_path) -> None:
+    """A loaded project's loop is stopped before its replacement is built."""
+    calls = []
+    state = RuntimeState()
+    state.project.succeed(object(), "Existing", "")
+
+    class Gateway:
+        def build(self, payload):
+            calls.append("build")
+            return ProjectResult(object(), payload.name, "")
+
+        def cleanup_ground_files(self, _topology):
+            pass
+
+    service = ProjectService(
+        state,
+        Gateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        stop_simulation=lambda: calls.append("stop_simulation"),
+    )
+
+    service.start_create(ProjectCreateRequest(**project_payload("Replacement")))
+    state.project_tasks.thread.join(timeout=5)
+
+    assert calls == ["stop_simulation", "build"]
+
+
+def test_project_load_stops_the_simulation_loop_before_loading(tmp_path) -> None:
+    """A load stops the old loop before the replacement topology is read."""
+    calls = []
+    state = RuntimeState()
+    state.project.succeed(object(), "Existing", "")
+
+    class Gateway:
+        def load(self, _content):
+            calls.append("load")
+            return ProjectResult(object(), "Loaded", "")
+
+    service = ProjectService(
+        state,
+        Gateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        stop_simulation=lambda: calls.append("stop_simulation"),
+    )
+
+    assert asyncio.run(service.load("{}")) == "Loaded"
+    assert calls == ["stop_simulation", "load"]
+
+
+def test_project_load_skips_stopping_when_nothing_is_loaded(tmp_path) -> None:
+    """A first load has no simulation loop to stop."""
+    calls = []
+
+    class Gateway:
+        def load(self, _content):
+            calls.append("load")
+            return ProjectResult(object(), "Loaded", "")
+
+    service = ProjectService(
+        RuntimeState(),
+        Gateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        stop_simulation=lambda: calls.append("stop_simulation"),
+    )
+
+    assert asyncio.run(service.load("{}")) == "Loaded"
+    assert calls == ["load"]
+
+
+def test_project_create_fails_when_the_simulation_cannot_stop(tmp_path) -> None:
+    """A failed stop fails the project operation instead of being swallowed."""
+    state = RuntimeState()
+    state.project.succeed(object(), "Existing", "")
+
+    class Gateway:
+        def build(self, payload):
+            return ProjectResult(object(), payload.name, "")
+
+    def fail_stop() -> None:
+        raise RuntimeError("simulation stop failed")
+
+    service = ProjectService(
+        state,
+        Gateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        stop_simulation=fail_stop,
+    )
+
+    service.start_create(ProjectCreateRequest(**project_payload("Replacement")))
+    state.project_tasks.thread.join(timeout=5)
+
+    assert state.project.state is ProjectState.ERROR
+    assert "simulation stop failed" in (state.project.error or "")

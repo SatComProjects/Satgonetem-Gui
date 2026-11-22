@@ -49,6 +49,9 @@ class TopologyService:
                 "simulation_updating": False,
                 "current_step": None,
                 "current_time": None,
+                "total_steps": None,
+                "simulation_rate": None,
+                "last_simulation_error": None,
             }
         status = self.reader.status(topology)
         status["constellation_loaded"] = self.session.loaded

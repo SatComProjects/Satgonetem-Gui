@@ -24,6 +24,12 @@ from tests.helpers import wait_for_project_state
         ("POST", "/api/routing/delete", None),
         ("POST", "/api/gonetem/start", None),
         ("POST", "/api/gonetem/stop", None),
+        ("POST", "/api/simulation/start", None),
+        ("POST", "/api/simulation/stop", None),
+        ("POST", "/api/simulation/step", None),
+        ("POST", "/api/simulation/reset", None),
+        ("POST", "/api/simulation/seek", {"step": 0}),
+        ("POST", "/api/simulation/speed", {"direction": "faster"}),
         ("GET", "/api/traffic/nodes", None),
         ("POST", "/api/traffic/iperf3", {"src": "Sat0", "dst": "Sat1"}),
         ("POST", "/api/traffic/ping", {"src": "Sat0", "dst": "Sat1"}),
@@ -77,6 +83,9 @@ def test_status_without_project_has_empty_counts(client) -> None:
         "simulation_updating": False,
         "current_step": None,
         "current_time": None,
+        "total_steps": None,
+        "simulation_rate": None,
+        "last_simulation_error": None,
     }
 
 

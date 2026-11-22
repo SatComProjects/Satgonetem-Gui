@@ -4,6 +4,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Widgets/widgets.css"
       integrity="sha384-ghEeMdcWWzRv/BPeUcX835vcKDGrxvROXisl/Btpv3GeekBUXTSPVcFJpI1Tcrgp"
       crossorigin="anonymous">
+<link rel="stylesheet" href="/static/simulation.css">
 <script src="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Cesium.js"
         integrity="sha384-u6lI9nKeZ0sgcSQty6qC4XQHU/ZG7JJ8PfRvtUQTH83OstsiEivIu3F9k012EB3W"
         crossorigin="anonymous"></script>
@@ -292,7 +293,12 @@
 
     </div>
   </div>
+
+  <section class="sim-overlay" id="sim-overlay" aria-labelledby="sim-overlay-title">
+    <h3 class="sim-overlay-title" id="sim-overlay-title">Simulation</h3>
+    {% include "_simulation_panel.html" %}
+  </section>
 </div>
 
-<script type="module" src="/static/world_boot.js?v=9"></script>
+<script type="module" src="/static/world_boot.js?v=10"></script>
 {% endblock %}

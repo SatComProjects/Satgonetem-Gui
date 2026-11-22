@@ -173,6 +173,21 @@ class StatusResponse(BaseModel):
     simulation_updating: bool
     current_step: int | None = None
     current_time: str | None = None
+    total_steps: int | None = None
+    simulation_rate: float | None = None
+    last_simulation_error: str | None = None
+
+
+class SimulationSpeedRequest(BaseModel):
+    """Playback direction for the simulation loop."""
+
+    direction: Literal["faster", "slower"]
+
+
+class SimulationSeekRequest(BaseModel):
+    """Absolute step target for the simulation clock."""
+
+    step: int = Field(ge=0)
 
 
 class RoutingStatusResponse(BaseModel):
