@@ -62,7 +62,7 @@ def _data_file_is_allowed(data_file: str, roots: list[Path]) -> bool:
         except (OSError, RuntimeError):
             continue
         if _is_within(resolved, roots):
-            return True
+            return resolved.is_file()
     return False
 
 
@@ -154,6 +154,7 @@ def validate_project_document(
     ground_files = document.get("ground_files", {})
     if not isinstance(ground_files, dict):
         raise ProjectDocumentError("Project file has an invalid ground_files section.")
+    basenames: set[str] = set()
     for original_path, file_info in ground_files.items():
         if not isinstance(original_path, str) or not original_path:
             raise ProjectDocumentError(
@@ -169,6 +170,12 @@ def validate_project_document(
                 "Project ground file basename is not a plain file name: "
                 f"{basename!r}"
             )
+        if basename in basenames:
+            raise ProjectDocumentError(
+                "Project ground file basenames must be unique: "
+                f"{basename!r}"
+            )
+        basenames.add(basename)
         file_content = file_info.get("content")
         if not isinstance(file_content, str):
             raise ProjectDocumentError(
