@@ -131,13 +131,20 @@ async function pollStatus() {
   }
 }
 
+let routingRefreshFailed = false;
+
 async function pollRoutingStatus() {
   if (routingInFlight) return;
   routingInFlight = true;
   try {
     const data = await api.get("/api/routing/status");
     if (data.ok) applyRoutingStatus(data);
+    if (routingRefreshFailed) {
+      routingRefreshFailed = false;
+      showRoutingMsg("");
+    }
   } catch (err) {
+    routingRefreshFailed = true;
     showRoutingMsg(
       "Routing status refresh failed: " + (err.message || "network error"),
       true,
