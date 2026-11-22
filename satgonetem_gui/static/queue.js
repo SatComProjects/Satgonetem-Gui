@@ -17,6 +17,23 @@ const MAX_POLL_FAILURES = 5;
 
 const jq = { items: [], timers: {} };
 let lastFocused = null;
+const activeCharts = [];
+
+function createChart(canvas, config) {
+  const chart = new Chart(canvas, config);
+  activeCharts.push(chart);
+  return chart;
+}
+
+function destroyCharts() {
+  for (const chart of activeCharts.splice(0)) {
+    try {
+      chart.destroy();
+    } catch {
+      /* a detached chart is already harmless */
+    }
+  }
+}
 
 function byId(id) {
   return document.getElementById(id);
@@ -405,6 +422,7 @@ function openModal(title, body) {
   const modal = byId("results-modal");
   const titleElement = byId("results-title");
   const bodyElement = byId("results-body");
+  destroyCharts();
   if (titleElement) titleElement.textContent = title;
   if (bodyElement) bodyElement.innerHTML = body;
   if (modal) {
@@ -417,6 +435,7 @@ function openModal(title, body) {
 function closeResults() {
   const modal = byId("results-modal");
   if (modal) modal.style.display = "none";
+  destroyCharts();
   if (lastFocused && typeof lastFocused.focus === "function") {
     lastFocused.focus();
   }
@@ -724,7 +743,7 @@ function plotIperf3(item) {
       const overlays = isTcp
         ? flowDatasets(perCwnd, "Flow CWND")
         : flowDatasets(perThroughput, "Flow Mbps");
-      new Chart(mainChart, {
+      createChart(mainChart, {
         type: "line",
         data: {
           labels: times,
@@ -740,7 +759,7 @@ function plotIperf3(item) {
         perAux,
         isUdp ? "Flow Loss %" : "Flow Retrans",
       );
-      new Chart(auxChart, {
+      createChart(auxChart, {
         type: "line",
         data: {
           labels: times,
@@ -761,7 +780,7 @@ function plotIperf3(item) {
     if (secondaryChart && window.Chart) {
       if (isTcp) {
         const overlays = flowDatasets(perRtt, "Flow RTT");
-        new Chart(secondaryChart, {
+        createChart(secondaryChart, {
           type: "line",
           data: {
             labels: times,
@@ -778,7 +797,7 @@ function plotIperf3(item) {
         });
       } else {
         const overlays = flowDatasets(perJitter, "Flow Jitter");
-        new Chart(secondaryChart, {
+        createChart(secondaryChart, {
           type: "line",
           data: {
             labels: times,
@@ -798,7 +817,7 @@ function plotIperf3(item) {
 
     const cumulativeChart = byId("chart-cum");
     if (cumulativeChart && window.Chart) {
-      new Chart(cumulativeChart, {
+      createChart(cumulativeChart, {
         type: "line",
         data: {
           labels: times,
@@ -819,7 +838,7 @@ function plotIperf3(item) {
       const throughputChart = byId("chart-tput-tcp");
       if (throughputChart && window.Chart) {
         const overlays = flowDatasets(perThroughput, "Flow Mbps");
-        new Chart(throughputChart, {
+        createChart(throughputChart, {
           type: "line",
           data: {
             labels: times,
@@ -912,7 +931,7 @@ function plotHping3(item) {
 function newChart(canvasId, type, labels, datasets) {
   const canvas = byId(canvasId);
   if (!canvas || !window.Chart) return null;
-  return new Chart(canvas, {
+  return createChart(canvas, {
     type,
     data: { labels, datasets },
     options: {
