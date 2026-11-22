@@ -701,6 +701,76 @@ def test_routing_mutations_are_serialized() -> None:
     assert max_active == 1
 
 
+def test_cancelled_routing_operation_keeps_the_lock_until_the_worker_ends() -> None:
+    """Cancellation must not let a second controller call overlap the worker."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    started = threading.Event()
+    release = threading.Event()
+    active = 0
+    max_active = 0
+
+    class BlockingController(FakeController):
+        def apply_addressing(self, target):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            started.set()
+            release.wait(timeout=5)
+            super().apply_addressing(target)
+            active -= 1
+
+    service = RoutingService(topology, BlockingController())
+
+    async def scenario() -> None:
+        first = asyncio.create_task(service.apply("static"))
+        await asyncio.to_thread(started.wait, 2)
+        first.cancel()
+        await asyncio.sleep(0.05)
+        second = asyncio.create_task(service.apply("static"))
+        await asyncio.sleep(0.1)
+        assert not second.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        await second
+
+    asyncio.run(scenario())
+
+    assert max_active == 1
+
+
+def test_routing_timeout_blocks_overlapping_operations_until_the_worker_ends() -> None:
+    """A timed-out worker keeps its guard so a retry cannot overlap it."""
+    topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
+    release = threading.Event()
+
+    class BlockingController(FakeController):
+        def apply_addressing(self, target):
+            release.wait(timeout=5)
+            super().apply_addressing(target)
+
+    service = RoutingService(
+        topology,
+        BlockingController(),
+        operation_timeout_seconds=0.05,
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(APIError) as error:
+            await service.apply("static")
+        assert error.value.status_code == 504
+
+        with pytest.raises(APIError) as conflict:
+            await service.apply("static")
+        assert conflict.value.status_code == 409
+
+        release.set()
+        await asyncio.sleep(0.1)
+        await service.apply("static")
+
+    asyncio.run(scenario())
+
+
 def test_routing_status_does_not_use_gonetem_as_addressing() -> None:
     """A running container network does not imply addressing was applied."""
     topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
