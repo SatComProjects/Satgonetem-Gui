@@ -50,6 +50,7 @@ class ProjectSession:
     pending_name: Optional[str] = None
     error: Optional[str] = None
     addressing_applied: bool = False
+    _generation: int = 0
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @property
@@ -63,6 +64,12 @@ class ProjectSession:
         """Return True when a topology is currently available."""
         with self._lock:
             return self.topology_manager is not None
+
+    @property
+    def generation(self) -> int:
+        """Return the installed-project generation for operation guards."""
+        with self._lock:
+            return self._generation
 
     def begin(
         self,
@@ -95,6 +102,7 @@ class ProjectSession:
             self.pending_name = None
             self.error = None
             self.addressing_applied = False
+            self._generation += 1
 
     def fail(self, error: str) -> None:
         """Mark an operation failed while preserving any previously loaded project."""
@@ -149,6 +157,7 @@ class ProjectSession:
             self.pending_name = None
             self.error = None
             self.addressing_applied = False
+            self._generation += 1
 
 
 def _format_exception(exc: BaseException) -> str:

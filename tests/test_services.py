@@ -1,6 +1,7 @@
 """Unit tests for service orchestration with fake gateways."""
 
 import asyncio
+import threading
 
 import pytest
 
@@ -425,6 +426,38 @@ def test_routing_apply_delete_and_stop_track_addressing() -> None:
     topology.set_addressing_applied(True)
     asyncio.run(service.stop_gonetem())
     assert topology.addressing_applied is False
+
+
+def test_routing_apply_does_not_mark_a_replaced_project() -> None:
+    """A project swap during apply must not write state onto the new session."""
+    session = _loaded_session()
+    topology = TopologyService(session, FakeReader(gonetem=True))
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingController(FakeController):
+        def apply_addressing(self, target):
+            started.set()
+            release.wait(timeout=5)
+            super().apply_addressing(target)
+
+    service = RoutingService(topology, BlockingController())
+
+    async def scenario() -> APIError:
+        task = asyncio.create_task(service.apply("static"))
+        await asyncio.to_thread(started.wait, 2)
+        session.succeed(object(), "NewProject", "")
+        release.set()
+        with pytest.raises(APIError) as error:
+            await task
+        return error.value
+
+    error = asyncio.run(scenario())
+
+    assert error.status_code == 409
+    assert "Project changed" in error.message
+    assert session.project_name == "NewProject"
+    assert session.addressing_applied is False
 
 
 def test_routing_status_does_not_use_gonetem_as_addressing() -> None:

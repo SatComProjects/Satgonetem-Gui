@@ -27,15 +27,29 @@ class RoutingService:
         status["addressing_applied"] = self.topology.addressing_applied
         return status
 
+    def _require_current_project(self, generation: int) -> None:
+        """Reject a completed operation whose project was replaced mid-flight."""
+        if self.topology.generation != generation:
+            raise APIError(
+                409,
+                "Project changed during the routing operation. Retry on the "
+                "current project.",
+            )
+
     async def apply(self, method: str) -> None:
         """Apply addressing, then initialize the requested routing method."""
         topology = self.topology.require_topology()
+        generation = self.topology.generation
         if not self.topology.gonetem_is_on():
             raise APIError(409, "GoNetEm is not running. Start containers first.")
         try:
             await asyncio.to_thread(self.controller.apply_addressing, topology)
+            self._require_current_project(generation)
             self.topology.set_addressing_applied(True)
             await asyncio.to_thread(self.controller.init_routing, topology, method)
+            self._require_current_project(generation)
+        except APIError:
+            raise
         except NetworkOperationError as exc:
             logger.exception("Network operation failed while applying routing.")
             raise APIError(500, str(exc)) from exc
@@ -45,11 +59,14 @@ class RoutingService:
 
     async def delete(self) -> None:
         """Delete installed routing state."""
+        topology = self.topology.require_topology()
+        generation = self.topology.generation
         try:
             await asyncio.to_thread(
                 self.controller.delete_routing,
-                self.topology.require_topology(),
+                topology,
             )
+            self._require_current_project(generation)
             self.topology.set_addressing_applied(False)
         except APIError:
             raise
@@ -62,11 +79,14 @@ class RoutingService:
 
     async def start_gonetem(self) -> None:
         """Start the emulated network containers."""
+        topology = self.topology.require_topology()
+        generation = self.topology.generation
         try:
             await asyncio.to_thread(
                 self.controller.start_gonetem,
-                self.topology.require_topology(),
+                topology,
             )
+            self._require_current_project(generation)
         except APIError:
             raise
         except NetworkOperationError as exc:
@@ -78,11 +98,14 @@ class RoutingService:
 
     async def stop_gonetem(self) -> None:
         """Stop the emulated network containers."""
+        topology = self.topology.require_topology()
+        generation = self.topology.generation
         try:
             await asyncio.to_thread(
                 self.controller.stop_gonetem,
-                self.topology.require_topology(),
+                topology,
             )
+            self._require_current_project(generation)
             self.topology.set_addressing_applied(False)
         except APIError:
             raise

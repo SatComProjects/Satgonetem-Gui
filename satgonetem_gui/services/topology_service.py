@@ -89,6 +89,11 @@ class TopologyService:
         return self.reader.gonetem_is_on(self.require_topology())
 
     @property
+    def generation(self) -> int:
+        """Return the current project generation for stale-operation guards."""
+        return self.session.generation
+
+    @property
     def addressing_applied(self) -> bool:
         """Return whether IP addressing was applied to the current project."""
         return self.session.addressing_applied
