@@ -103,3 +103,15 @@ def test_resolve_save_path_treats_a_new_directory_name_as_a_directory(tmp_path: 
     path = resolve_save_path(str(root / "new-shell"), "My Project", root)
 
     assert path == root / "new-shell" / f"{safe_project_filename('My Project')}.json"
+
+
+def test_resolve_save_path_keeps_an_existing_suffixless_file(tmp_path: Path) -> None:
+    """An existing file without a suffix is a save target, not a directory."""
+    root = tmp_path / "projects"
+    root.mkdir()
+    target = root / "constellation"
+    target.write_text("{}", encoding="utf-8")
+
+    path = resolve_save_path(str(target), "Constellation", root)
+
+    assert path == target

@@ -127,6 +127,6 @@ def resolve_save_path(
     except ValueError as exc:
         raise SavePathError(f"Save path must be inside {root}") from exc
 
-    if candidate.is_dir() or candidate.suffix == "":
+    if candidate.is_dir() or (not candidate.exists() and candidate.suffix == ""):
         candidate = candidate / f"{safe_project_filename(project_name)}.json"
     return candidate
