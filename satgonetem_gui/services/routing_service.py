@@ -20,6 +20,8 @@ class RoutingService:
     ) -> None:
         self.topology = topology
         self.controller = controller
+        self._operation_lock: asyncio.Lock | None = None
+        self._operation_loop: asyncio.AbstractEventLoop | None = None
 
     def status(self) -> dict:
         """Return routing and addressing state, including explicit address state."""
@@ -36,8 +38,20 @@ class RoutingService:
                 "current project.",
             )
 
+    def _operation_lock_for_loop(self) -> asyncio.Lock:
+        """Return a lock owned by the current event loop (tests use several)."""
+        loop = asyncio.get_running_loop()
+        if self._operation_lock is None or self._operation_loop is not loop:
+            self._operation_lock = asyncio.Lock()
+            self._operation_loop = loop
+        return self._operation_lock
+
     async def apply(self, method: str) -> None:
         """Apply addressing, then initialize the requested routing method."""
+        async with self._operation_lock_for_loop():
+            await self._apply(method)
+
+    async def _apply(self, method: str) -> None:
         topology = self.topology.require_topology()
         generation = self.topology.generation
         if not self.topology.gonetem_is_on():
@@ -59,6 +73,10 @@ class RoutingService:
 
     async def delete(self) -> None:
         """Delete installed routing state."""
+        async with self._operation_lock_for_loop():
+            await self._delete()
+
+    async def _delete(self) -> None:
         topology = self.topology.require_topology()
         generation = self.topology.generation
         try:
@@ -79,6 +97,10 @@ class RoutingService:
 
     async def start_gonetem(self) -> None:
         """Start the emulated network containers."""
+        async with self._operation_lock_for_loop():
+            await self._start_gonetem()
+
+    async def _start_gonetem(self) -> None:
         topology = self.topology.require_topology()
         generation = self.topology.generation
         try:
@@ -98,6 +120,10 @@ class RoutingService:
 
     async def stop_gonetem(self) -> None:
         """Stop the emulated network containers."""
+        async with self._operation_lock_for_loop():
+            await self._stop_gonetem()
+
+    async def _stop_gonetem(self) -> None:
         topology = self.topology.require_topology()
         generation = self.topology.generation
         try:

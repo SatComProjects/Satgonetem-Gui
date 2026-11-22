@@ -494,6 +494,41 @@ def test_routing_apply_does_not_mark_a_replaced_project() -> None:
     assert session.addressing_applied is False
 
 
+def test_routing_mutations_are_serialized() -> None:
+    """Concurrent apply/delete/start/stop calls cannot overlap."""
+    session = _loaded_session()
+    topology = TopologyService(session, FakeReader(gonetem=True))
+    started = threading.Event()
+    release = threading.Event()
+    active = 0
+    max_active = 0
+
+    class SerialController(FakeController):
+        def apply_addressing(self, target):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            started.set()
+            release.wait(timeout=5)
+            super().apply_addressing(target)
+            active -= 1
+
+    service = RoutingService(topology, SerialController())
+
+    async def scenario() -> None:
+        first = asyncio.create_task(service.apply("static"))
+        await asyncio.to_thread(started.wait, 2)
+        second = asyncio.create_task(service.apply("static"))
+        await asyncio.sleep(0.05)
+        assert not second.done()
+        release.set()
+        await asyncio.gather(first, second)
+
+    asyncio.run(scenario())
+
+    assert max_active == 1
+
+
 def test_routing_status_does_not_use_gonetem_as_addressing() -> None:
     """A running container network does not imply addressing was applied."""
     topology = TopologyService(_loaded_session(), FakeReader(gonetem=True))
