@@ -78,6 +78,8 @@ class RoutingService:
         def clear(_task: asyncio.Task) -> None:
             if self._worker is worker:
                 self._worker = None
+            if not worker.cancelled():
+                worker.exception()
 
         worker.add_done_callback(clear)
         try:

@@ -133,6 +133,47 @@ def test_task_manager_times_out_and_ignores_stale_success() -> None:
     assert session.project_name is None
 
 
+def test_task_manager_refuses_a_retry_while_the_timeout_thread_runs() -> None:
+    """A retry must not overlap a build that the timeout left running."""
+    session = ProjectSession()
+    started = threading.Event()
+    release = threading.Event()
+    manager = ProjectTaskManager(session)
+
+    def runner() -> ProjectResult:
+        started.set()
+        release.wait(timeout=5)
+        return ProjectResult(object(), "LateProject", "")
+
+    assert manager.start("Slow", "", "create", runner, timeout_seconds=0.05)
+    assert started.wait(timeout=2)
+    deadline = time.monotonic() + 2
+    while session.state is not ProjectState.ERROR and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+    assert session.state is ProjectState.ERROR
+    assert manager.start("Retry", "", "create", runner) is False
+
+    release.set()
+    thread = manager.thread
+    assert thread is not None
+    thread.join(timeout=2)
+
+
+def test_task_manager_marks_a_malformed_result_as_error() -> None:
+    """A runner result without the expected fields cannot wedge CREATING."""
+    session = ProjectSession()
+    manager = ProjectTaskManager(session)
+
+    assert manager.start("Bad", "", "create", lambda: object())
+    thread = manager.thread
+    assert thread is not None
+    thread.join(timeout=2)
+
+    assert session.state is ProjectState.ERROR
+    assert "topology_manager" in (session.error or "")
+
+
 def test_new_project_clears_addressing_state() -> None:
     """Addressing belongs to one loaded project, not the process."""
     session = ProjectSession()

@@ -536,6 +536,34 @@ def test_project_load_timeout_marks_the_session_failed(tmp_path) -> None:
     assert service.state.project.token is None
 
 
+def test_project_load_retry_is_blocked_while_the_worker_runs(tmp_path) -> None:
+    """A timed-out load worker keeps a guard so a retry cannot overlap it."""
+
+    class SlowGateway:
+        def load(self, _content):
+            time.sleep(0.2)
+            return None
+
+    service = ProjectService(
+        RuntimeState(),
+        SlowGateway(),
+        Settings("127.0.0.1", 8000, tmp_path),
+        tmp_path,
+        load_timeout_seconds=0.05,
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(APIError) as error:
+            await service.load("{}")
+        assert error.value.status_code == 504
+
+        with pytest.raises(APIError) as conflict:
+            await service.load("{}")
+        assert conflict.value.status_code == 409
+
+    asyncio.run(scenario())
+
+
 def test_project_load_cancellation_marks_the_session_failed(tmp_path) -> None:
     """Cancelling the request releases the creating state."""
     started = threading.Event()

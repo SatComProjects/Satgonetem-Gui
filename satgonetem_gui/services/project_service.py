@@ -39,6 +39,7 @@ class ProjectService:
         self.resources_dir = resources_dir
         self.network_running = network_running
         self.load_timeout_seconds = load_timeout_seconds
+        self._load_worker: asyncio.Task | None = None
 
     def _guard_replacement(self) -> None:
         """Refuse to replace a project while containers are still running."""
@@ -122,6 +123,11 @@ class ProjectService:
 
     async def load(self, content: str) -> str:
         """Load a project from uploaded JSON and return its display name."""
+        if self._load_worker is not None and not self._load_worker.done():
+            raise APIError(
+                409,
+                "A previous project load is still running in the background.",
+            )
         self._guard_replacement()
         if not self.state.project.begin(
             name="",
@@ -132,9 +138,21 @@ class ProjectService:
             raise APIError(409, "A project operation is already running.")
         token = self.state.project.token
 
+        worker = asyncio.create_task(
+            asyncio.to_thread(self.gateway.load, content)
+        )
+        self._load_worker = worker
+
+        def clear(_task: asyncio.Task) -> None:
+            if self._load_worker is worker:
+                self._load_worker = None
+            if not worker.cancelled():
+                worker.exception()
+
+        worker.add_done_callback(clear)
         try:
             result = await asyncio.wait_for(
-                asyncio.to_thread(self.gateway.load, content),
+                asyncio.shield(worker),
                 timeout=self.load_timeout_seconds,
             )
         except asyncio.CancelledError:
@@ -153,12 +171,21 @@ class ProjectService:
             self.state.project.fail(message, token=token)
             raise APIError(500, "Project load failed.") from exc
 
-        self.state.project.succeed(
-            result.topology_manager,
-            result.project_name,
-            result.save_path,
-            token=token,
-        )
+        try:
+            installed = self.state.project.succeed(
+                result.topology_manager,
+                result.project_name,
+                result.save_path,
+                token=token,
+            )
+        except Exception as exc:
+            logger.exception("Project load returned an invalid result.")
+            self.state.project.fail(
+                str(exc).strip() or exc.__class__.__name__, token=token
+            )
+            raise APIError(500, "Project load failed.") from exc
+        if not installed:
+            raise APIError(409, "Project load was superseded.")
         return result.project_name
 
     async def save(self) -> dict:

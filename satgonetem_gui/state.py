@@ -258,6 +258,9 @@ class ProjectTaskManager:
         precondition: Callable[[], bool] | None = None,
     ) -> bool:
         """Reserve the session and run the build in a background thread."""
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                return False
         if not self.session.begin(
             name,
             save_path=save_path,
@@ -315,12 +318,21 @@ class ProjectTaskManager:
                 logger.exception("Project %s failed.", operation)
                 self.session.fail(_format_exception(exc), token=token)
             else:
-                self.session.succeed(
-                    result.topology_manager,
-                    result.project_name,
-                    result.save_path,
-                    token=token,
-                )
+                try:
+                    self.session.succeed(
+                        result.topology_manager,
+                        result.project_name,
+                        result.save_path,
+                        token=token,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "Project %s returned an invalid result.", operation
+                    )
+                    self.session.fail(_format_exception(exc), token=token)
+        except BaseException as exc:
+            logger.exception("Project %s crashed unexpectedly.", operation)
+            self.session.fail(_format_exception(exc), token=token)
         finally:
             if timer is not None:
                 timer.cancel()
