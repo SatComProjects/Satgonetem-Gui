@@ -248,7 +248,16 @@ function updateSatellites(satellites) {
     satellites.forEach(sat => {
         const p = sat.position || {};
         if (!hasPosition(p)) {
-            if (satEntities[sat.name]) satEntities[sat.name].show = false;
+            if (satEntities[sat.name]) {
+                viewer.entities.remove(satEntities[sat.name]);
+                delete satEntities[sat.name];
+            }
+            nodePositions.delete(sat.name);
+            delete satPositions[sat.name];
+            if (coverageEntities[sat.name]) {
+                viewer.entities.remove(coverageEntities[sat.name].entity);
+                delete coverageEntities[sat.name];
+            }
             return;
         }
         const pos = toCartesian(p.latitude, p.longitude, p.altitude);
@@ -303,7 +312,11 @@ function updateGroundStations(groundStations, connected) {
     groundStations.forEach(gs => {
         const p = gs.position || {};
         if (!hasPosition(p)) {
-            if (gsEntities[gs.name]) gsEntities[gs.name].show = false;
+            if (gsEntities[gs.name]) {
+                viewer.entities.remove(gsEntities[gs.name]);
+                delete gsEntities[gs.name];
+            }
+            nodePositions.delete(gs.name);
             return;
         }
         const pos = toCartesian(p.latitude, p.longitude, p.altitude);
