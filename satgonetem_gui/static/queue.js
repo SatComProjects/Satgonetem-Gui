@@ -23,10 +23,16 @@ function byId(id) {
 }
 
 function jqSave() {
+  const message = byId("jq-storage-msg");
   try {
-    localStorage.setItem(JQ_KEY, JSON.stringify(jq.items));
+    const items = jq.items.map(({ results: _results, ...rest }) => rest);
+    localStorage.setItem(JQ_KEY, JSON.stringify(items));
+    if (message) message.textContent = "";
   } catch {
-    /* storage may be unavailable */
+    if (message) {
+      message.textContent =
+        "Queue state could not be saved in this browser; active jobs stay tracked in this tab.";
+    }
   }
 }
 
@@ -320,7 +326,10 @@ async function jqTrack(id) {
       jqRender();
       return;
     }
-    jq.items = updateItem(jq.items, id, { poll_failures: 0 });
+    if (current.poll_failures) {
+      jq.items = updateItem(jq.items, id, { poll_failures: 0 });
+      jqSave();
+    }
     schedule(id, 1000, () => jqTrack(id));
   } catch (error) {
     const current = findItem(jq.items, id);
