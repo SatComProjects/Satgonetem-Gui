@@ -1,7 +1,9 @@
 """Filesystem path resolution and save-root policy."""
 
 import hashlib
+import os
 import re
+import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -130,3 +132,156 @@ def resolve_save_path(
     if candidate.is_dir() or (not candidate.exists() and candidate.suffix == ""):
         candidate = candidate / f"{safe_project_filename(project_name)}.json"
     return candidate
+
+
+_WORKSPACE_ID_RE = re.compile(r"^[0-9a-f]{16}$")
+_WORKSPACE_SCAN_LIMIT = 5000
+
+
+def workspace_project_id(relative_path: str) -> str:
+    """Return an opaque, stable id for a workspace-relative project path."""
+    return hashlib.sha256(relative_path.encode("utf-8")).hexdigest()[:16]
+
+
+def workspace_relative(path: Path, save_root: Path) -> str:
+    """Return a POSIX path relative to the workspace root.
+
+    Raises:
+        SavePathError: If the path resolves outside the save root.
+    """
+    root = Path(save_root).expanduser().resolve()
+    try:
+        resolved = Path(path).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise SavePathError("Workspace path is invalid.") from exc
+    try:
+        relative = resolved.relative_to(root)
+    except ValueError as exc:
+        raise SavePathError("Workspace path must be inside the save root.") from exc
+    return relative.as_posix()
+
+
+def workspace_filename(name: str) -> str:
+    """Return the JSON filename used for a project name in the workspace."""
+    return f"{safe_project_filename(name)}.json"
+
+
+def validate_workspace_target(path: Path, save_root: Path) -> Path:
+    """Resolve and contain an existing or new workspace project target.
+
+    Returns:
+        The resolved target path.
+
+    Raises:
+        SavePathError: If the target is outside the save root, resolves through
+            an escaping symlink, or is not a JSON file.
+    """
+    root = Path(save_root).expanduser().resolve()
+    raw = Path(path).expanduser().absolute()
+    try:
+        raw_parts = raw.relative_to(root).parts
+    except ValueError:
+        raw_parts = ()
+    current = root
+    for part in raw_parts:
+        current = current / part
+        if current.is_symlink():
+            raise SavePathError("Workspace target must not be a symlink.")
+
+    candidate = Path(path).expanduser()
+    try:
+        candidate = candidate.resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise SavePathError("Workspace path is invalid.") from exc
+    if candidate == root or not _is_within(candidate, root):
+        raise SavePathError("Workspace path must be inside the save root.")
+    if candidate.suffix.lower() != ".json":
+        raise SavePathError("Workspace project files must be JSON.")
+    return candidate
+
+
+def _workspace_json_files(save_root: Path) -> list[Path]:
+    """Collect visible, non-symlinked JSON files below the save root."""
+    root = Path(save_root).expanduser().resolve()
+    if not root.is_dir():
+        return []
+
+    pending = [root]
+    files: list[Path] = []
+    while pending:
+        directory = pending.pop()
+        try:
+            entries = list(os.scandir(directory))
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.name.startswith(".") or entry.is_symlink():
+                continue
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(Path(entry.path))
+                elif entry.is_file(follow_symlinks=False):
+                    name = entry.name.lower()
+                    if name.endswith(".json") and not name.endswith(".tmp"):
+                        files.append(Path(entry.path))
+            except OSError:
+                continue
+    return files
+
+
+def iter_workspace_project_files(save_root: Path, limit: int = 500) -> list[Path]:
+    """Return contained workspace project files, newest modification first.
+
+    Hidden directories/files, symlinks, and temporary ``.tmp`` files are
+    skipped. Unreadable entries are ignored instead of failing the listing.
+    """
+    root = Path(save_root).expanduser().resolve()
+    records: list[tuple[float, Path]] = []
+    for path in _workspace_json_files(root):
+        try:
+            resolved = path.resolve()
+            if not _is_within(resolved, root):
+                continue
+            modified = resolved.stat().st_mtime
+        except (OSError, RuntimeError):
+            continue
+        records.append((modified, resolved))
+
+    records.sort(key=lambda record: (-record[0], record[1].as_posix()))
+    effective_limit = max(0, int(limit))
+    return [path for _, path in records[:effective_limit]]
+
+
+def resolve_workspace_project(save_root: Path, project_id: str) -> Path | None:
+    """Resolve an opaque project id to a contained workspace file.
+
+    Returns ``None`` for a malformed id or when no safe file matches.
+    """
+    if not isinstance(project_id, str) or not _WORKSPACE_ID_RE.fullmatch(project_id):
+        return None
+    root = Path(save_root).expanduser().resolve()
+    for path in iter_workspace_project_files(root, limit=_WORKSPACE_SCAN_LIMIT):
+        if workspace_project_id(workspace_relative(path, root)) == project_id:
+            return path
+    return None
+
+
+def write_workspace_project(path: Path, content: str) -> None:
+    """Atomically replace a workspace project file with ``content``."""
+    target = Path(path).expanduser()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temp_name = tempfile.mkstemp(
+        dir=target.parent,
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+    )
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, target)
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise

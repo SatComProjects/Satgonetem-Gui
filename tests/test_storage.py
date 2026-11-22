@@ -1,14 +1,23 @@
 """Tests for path resolution and save-root containment."""
 
+import os
+import re
 from pathlib import Path
 
 import pytest
 
 from satgonetem_gui.storage import (
     SavePathError,
+    iter_workspace_project_files,
     resolve_data_file,
     resolve_save_path,
+    resolve_workspace_project,
     safe_project_filename,
+    validate_workspace_target,
+    workspace_filename,
+    workspace_project_id,
+    workspace_relative,
+    write_workspace_project,
 )
 
 
@@ -131,3 +140,158 @@ def test_resolve_save_path_keeps_an_existing_suffixless_file(tmp_path: Path) -> 
     path = resolve_save_path(str(target), "Constellation", root)
 
     assert path == target
+
+
+def test_workspace_project_id_is_opaque_and_stable() -> None:
+    """Ids are a deterministic 16-hex digest that does not reveal the path."""
+    identifier = workspace_project_id("nested/Alpha Project.json")
+
+    assert identifier == workspace_project_id("nested/Alpha Project.json")
+    assert re.fullmatch(r"[0-9a-f]{16}", identifier)
+    assert identifier != workspace_project_id("nested/Beta.json")
+    assert "Alpha" not in identifier
+
+
+def test_workspace_relative_uses_a_posix_relative_path(tmp_path: Path) -> None:
+    """Nested project files report a root-relative POSIX path."""
+    root = tmp_path / "projects"
+    nested = root / "nested"
+    nested.mkdir(parents=True)
+
+    assert workspace_relative(nested / "one.json", root) == "nested/one.json"
+
+
+def test_workspace_relative_rejects_paths_outside_the_root(tmp_path: Path) -> None:
+    """A resolved path outside the root is not a workspace-relative path."""
+    root = tmp_path / "projects"
+    root.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(SavePathError):
+        workspace_relative(outside, root)
+
+
+def test_workspace_filename_is_safe_and_always_json() -> None:
+    """The filename derives from the sanitized project name."""
+    filename = workspace_filename("../../My Project")
+
+    assert filename.endswith(".json")
+    assert "/" not in filename
+    assert ".." not in filename
+    assert filename == workspace_filename("../../My Project")
+
+
+def test_iter_workspace_project_files_filters_and_orders(tmp_path: Path) -> None:
+    """Hidden, symlinked, and temporary files are skipped; newest comes first."""
+    root = tmp_path / "projects"
+    nested = root / "nested"
+    nested.mkdir(parents=True)
+    (root / ".cache").mkdir()
+    old = root / "old.json"
+    old.write_text("{}", encoding="utf-8")
+    new = nested / "new.json"
+    new.write_text("{}", encoding="utf-8")
+    (root / ".hidden.json").write_text("{}", encoding="utf-8")
+    (root / ".cache" / "cached.json").write_text("{}", encoding="utf-8")
+    (root / "draft.json.tmp").write_text("{}", encoding="utf-8")
+    (root / "upload.tmp").write_text("{}", encoding="utf-8")
+    os.utime(old, (1_000.0, 1_000.0))
+    os.utime(new, (2_000.0, 2_000.0))
+
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}", encoding="utf-8")
+    (root / "linked.json").symlink_to(outside)
+    linked_dir = root / "linked-directory"
+    linked_dir.symlink_to(tmp_path, target_is_directory=True)
+    (tmp_path / "escaped.json").write_text("{}", encoding="utf-8")
+
+    files = iter_workspace_project_files(root)
+
+    assert files == [new.resolve(), old.resolve()]
+
+
+def test_iter_workspace_project_files_honors_the_limit(tmp_path: Path) -> None:
+    """Only the newest files are returned when a limit is provided."""
+    root = tmp_path / "projects"
+    root.mkdir()
+    for index in range(3):
+        path = root / f"project-{index}.json"
+        path.write_text("{}", encoding="utf-8")
+        os.utime(path, (1_000.0 + index, 1_000.0 + index))
+
+    files = iter_workspace_project_files(root, limit=2)
+
+    assert [path.name for path in files] == ["project-2.json", "project-1.json"]
+    assert iter_workspace_project_files(root, limit=0) == []
+
+
+def test_iter_workspace_project_files_handles_a_missing_root(tmp_path: Path) -> None:
+    """An absent save root is an empty workspace, not an error."""
+    assert iter_workspace_project_files(tmp_path / "missing") == []
+
+
+def test_resolve_workspace_project_matches_only_safe_ids(tmp_path: Path) -> None:
+    """Ids resolve within the safe file set; traversal and junk return None."""
+    root = tmp_path / "projects"
+    nested = root / "nested"
+    nested.mkdir(parents=True)
+    target = nested / "Alpha.json"
+    target.write_text("{}", encoding="utf-8")
+    identifier = workspace_project_id(workspace_relative(target, root))
+
+    assert resolve_workspace_project(root, identifier) == target.resolve()
+    assert resolve_workspace_project(root, "0" * 16) is None
+    assert resolve_workspace_project(root, "A" * 16) is None
+    assert resolve_workspace_project(root, "../../etc") is None
+    assert resolve_workspace_project(root, "../" + identifier) is None
+
+
+def test_validate_workspace_target_keeps_targets_inside_the_root(tmp_path: Path) -> None:
+    """Contained JSON targets pass; traversal, outside, and non-JSON fail."""
+    root = tmp_path / "projects"
+    root.mkdir()
+    inside = root / "nested" / "project.json"
+
+    assert validate_workspace_target(inside, root) == inside.resolve()
+
+    with pytest.raises(SavePathError):
+        validate_workspace_target(tmp_path / "outside.json", root)
+    with pytest.raises(SavePathError):
+        validate_workspace_target(root / ".." / "escape.json", root)
+    with pytest.raises(SavePathError):
+        validate_workspace_target(root / "notes.txt", root)
+    with pytest.raises(SavePathError):
+        validate_workspace_target(root, root)
+
+
+def test_validate_workspace_target_rejects_an_escaping_symlink(tmp_path: Path) -> None:
+    """A symlink inside the root cannot redirect a write outside it."""
+    root = tmp_path / "projects"
+    root.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}", encoding="utf-8")
+    link = root / "linked.json"
+    link.symlink_to(outside)
+    inside = root / "inside.json"
+    inside.write_text("{}", encoding="utf-8")
+    inside_link = root / "inside-link.json"
+    inside_link.symlink_to(inside)
+
+    with pytest.raises(SavePathError):
+        validate_workspace_target(link, root)
+    with pytest.raises(SavePathError):
+        validate_workspace_target(inside_link, root)
+
+
+def test_write_workspace_project_replaces_content_without_leaving_temp_files(
+    tmp_path: Path,
+) -> None:
+    """Writes are atomic and replace existing content."""
+    target = tmp_path / "projects" / "project.json"
+
+    write_workspace_project(target, "first")
+    write_workspace_project(target, "second")
+
+    assert target.read_text(encoding="utf-8") == "second"
+    assert [path.name for path in target.parent.iterdir()] == ["project.json"]

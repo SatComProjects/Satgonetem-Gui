@@ -275,6 +275,11 @@ class ProjectSession:
         with self._lock:
             self.addressing_applied = applied
 
+    def set_save_path(self, path: str) -> None:
+        """Record the workspace file that backs the loaded project."""
+        with self._lock:
+            self.save_path = path
+
     def reset(self) -> None:
         """Clear all project state. Intended for tests and startup."""
         with self._lock:

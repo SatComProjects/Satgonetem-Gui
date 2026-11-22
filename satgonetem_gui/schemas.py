@@ -140,6 +140,51 @@ class ProjectSaveResponse(BaseModel):
     filename: str
 
 
+class ProjectSummary(BaseModel):
+    """One project file in the workspace catalog."""
+
+    id: str
+    name: str
+    filename: str
+    modified_at: str
+    size_bytes: int
+    satellites: int | None = None
+    ground_stations: int | None = None
+    shells: int | None = None
+    valid: bool
+
+
+class ProjectListResponse(BaseModel):
+    """Workspace catalog listing with non-fatal file warnings."""
+
+    ok: bool = True
+    projects: list[ProjectSummary]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ProjectSaveToRequest(BaseModel):
+    """Save the loaded project into the workspace under a new name."""
+
+    name: str = Field(min_length=1, max_length=128)
+    overwrite: bool = False
+
+
+class ProjectDuplicateRequest(BaseModel):
+    """Duplicate a workspace project under a new name."""
+
+    name: str = Field(min_length=1, max_length=128)
+
+
+class ProjectSavedResponse(BaseModel):
+    """Result of a workspace save or duplicate."""
+
+    ok: bool = True
+    id: str
+    name: str
+    filename: str
+    overwritten: bool = False
+
+
 class SatelliteResponse(BaseModel):
     """Satellite identity and position."""
 
@@ -195,6 +240,27 @@ class LinkResponse(BaseModel):
     delay_ms: float
     capacity_kbps: int
     is_active: bool
+
+
+class LinkUsageEntry(BaseModel):
+    """One sampled link's bandwidth usage and nominal capacity."""
+
+    src: str
+    dst: str
+    type: str | None = None
+    value_bps: int
+    capacity_kbps: int | None = None
+    utilization: float | None = None
+
+
+class LinkUsageResponse(BaseModel):
+    """Live link usage sample, or a safe unavailable state."""
+
+    ok: bool = True
+    available: bool
+    sampled_at: str | None = None
+    links: list[LinkUsageEntry]
+    note: str | None = None
 
 
 class StatusResponse(BaseModel):
