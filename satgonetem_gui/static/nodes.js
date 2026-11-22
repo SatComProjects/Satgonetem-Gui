@@ -1,7 +1,17 @@
 /** Node Explorer page controller. */
 import { api } from "./api.js?v=4";
 import { escapeHtml } from "./escape.js";
-import { cacheEntry, isFresh, staleCacheKeys } from "./nodes_model.js?v=2";
+import {
+  FAVORITES_KEY,
+  cacheEntry,
+  filterNodes,
+  isFresh,
+  nodeCountText,
+  normalizeFavorites,
+  sortNodes,
+  staleCacheKeys,
+  toggleFavorite,
+} from "./nodes_model.js?v=3";
 import {
   formatCapacityKbps,
   formatLinkDelay,
@@ -21,6 +31,9 @@ import {
 const POLL_INTERVAL_MS = 5000;
 const detailCache = new Map();
 let topologyLinks = [];
+let allNodes = [];
+let favorites = loadFavorites();
+let searchTimer = null;
 let lastPathData = null;
 let pathBusy = false;
 let pathSelectsEnabled = false;
@@ -150,12 +163,13 @@ async function toggleNode(name) {
   if (!row || !detail) return;
 
   const expanded = detail.style.display === "block";
+  const toggle = row.querySelector(".node-toggle");
   const cached = detailCache.get(name);
   if (!expanded && !isFresh(cached)) {
     detail.innerHTML = '<div class="muted">Loading...</div>';
     detail.style.display = "block";
     row.classList.add("expanded");
-    row.setAttribute("aria-expanded", "true");
+    toggle?.setAttribute("aria-expanded", "true");
     try {
       const data = await api.get(`/api/nodes/${encodeURIComponent(name)}`);
       detailCache.set(name, cacheEntry(data.node));
@@ -172,22 +186,63 @@ async function toggleNode(name) {
   }
   detail.style.display = expanded ? "none" : "block";
   row.classList.toggle("expanded", !expanded);
-  row.setAttribute("aria-expanded", String(!expanded));
+  toggle?.setAttribute("aria-expanded", String(!expanded));
 }
 
 function buildNodeRow(node) {
   const name = escapeHtml(node.name);
+  const active = favorites.includes(node.name);
   let label = name;
   if (node.type === "ground_station" && node.city) {
     label += ` (${escapeHtml(node.city)})`;
   }
   return (
-    `<div class="node-row" id="row-${name}" data-node-name="${name}" role="button" tabindex="0" aria-expanded="false" aria-controls="detail-${name}">` +
+    `<div class="node-row" id="row-${name}" data-node-name="${name}">` +
+    `<button type="button" class="node-toggle" data-action="toggle" aria-expanded="false" aria-controls="detail-${name}">` +
     '<span class="node-chevron">&#9654;</span>' +
     `<span class="node-label">${label}</span>` +
+    "</button>" +
+    `<button type="button" class="node-fav" data-action="favorite" data-node-name="${name}" aria-pressed="${active}" aria-label="${active ? "Remove" : "Add"} ${name} favorite">${active ? "★" : "☆"}</button>` +
     "</div>" +
     `<div class="node-detail-wrapper" id="detail-${name}" style="display:none;"></div>`
   );
+}
+
+function loadFavorites() {
+  try {
+    return normalizeFavorites(
+      JSON.parse(localStorage.getItem(FAVORITES_KEY) || "null"),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function persistFavorites() {
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    return true;
+  } catch {
+    showMsg("Favorites could not be saved in this browser.", true);
+    return false;
+  }
+}
+
+function toggleNodeFavorite(button) {
+  const name = button.dataset.nodeName;
+  if (!name) return;
+  favorites = toggleFavorite(favorites, name);
+  if (!persistFavorites()) return;
+  const active = favorites.includes(name);
+  button.setAttribute("aria-pressed", String(active));
+  button.textContent = active ? "★" : "☆";
+  button.setAttribute(
+    "aria-label",
+    `${active ? "Remove" : "Add"} ${name} favorite`,
+  );
+  if (el("node-favorites-only")?.checked) {
+    renderNodes(allNodes, { force: true });
+  }
 }
 
 async function toggleAddressable(button) {
@@ -228,21 +283,27 @@ async function toggleAddressable(button) {
 
 function initNodeList(container) {
   container.addEventListener("click", (event) => {
+    const favorite = event.target.closest('[data-action="favorite"]');
+    if (favorite && container.contains(favorite)) {
+      event.preventDefault();
+      toggleNodeFavorite(favorite);
+      return;
+    }
     const toggle = event.target.closest('[data-action="toggle-addressable"]');
     if (!toggle || !container.contains(toggle)) return;
     event.preventDefault();
     toggleAddressable(toggle);
   });
   container.addEventListener("click", (event) => {
+    const toggleButton = event.target.closest('[data-action="toggle"]');
+    if (toggleButton && container.contains(toggleButton)) {
+      const row = toggleButton.closest(".node-row");
+      if (row) toggleNode(row.dataset.nodeName);
+      return;
+    }
+    if (event.target.closest("button")) return;
     const row = event.target.closest(".node-row");
     if (!row || !container.contains(row)) return;
-    toggleNode(row.dataset.nodeName);
-  });
-  container.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    const row = event.target.closest(".node-row");
-    if (!row || !container.contains(row)) return;
-    event.preventDefault();
     toggleNode(row.dataset.nodeName);
   });
 }
@@ -302,22 +363,78 @@ function syncNodeList(container, nodes, emptyMessage) {
   }
 }
 
-function renderNodes(nodes) {
-  const satellites = [];
-  const stations = [];
-  for (const node of nodes) {
-    if (node.type === "satellite") satellites.push(node);
-    else stations.push(node);
-  }
+function currentFilters() {
+  return {
+    query: el("node-search")?.value || "",
+    type: el("node-type-filter")?.value || "all",
+    sort: el("node-sort")?.value || "name",
+    favoritesOnly: Boolean(el("node-favorites-only")?.checked),
+  };
+}
+
+function renderNodes(nodes, { force = false } = {}) {
+  allNodes = Array.isArray(nodes) ? nodes : [];
+  const filters = currentFilters();
+  const filtered = filterNodes(allNodes, {
+    query: filters.query,
+    type: filters.type,
+    favoritesOnly: filters.favoritesOnly,
+    favorites,
+  });
+  const satellites = sortNodes(
+    filtered.filter((node) => node.type === "satellite"),
+    filters.sort,
+  );
+  const stations = sortNodes(
+    filtered.filter((node) => node.type !== "satellite"),
+    filters.sort,
+  );
+  const satellitesCard = el("card-satellites");
+  const stationsCard = el("card-ground-stations");
+  if (satellitesCard) satellitesCard.hidden = filters.type === "ground_station";
+  if (stationsCard) stationsCard.hidden = filters.type === "satellite";
+
   for (const name of staleCacheKeys(
     detailCache.keys(),
-    nodes.map((node) => node.name),
+    allNodes.map((node) => node.name),
   )) {
     detailCache.delete(name);
   }
-  syncNodeList(el("satellites-list"), satellites, "No satellites.");
-  syncNodeList(el("ground-stations-list"), stations, "No ground stations.");
-  populatePathSelects(nodes);
+  if (force) {
+    el("satellites-list")?.replaceChildren();
+    el("ground-stations-list")?.replaceChildren();
+  }
+  const filteredView =
+    filters.query.trim() || filters.type !== "all" || filters.favoritesOnly;
+  syncNodeList(
+    el("satellites-list"),
+    satellites,
+    filteredView ? "No matching satellites." : "No satellites.",
+  );
+  syncNodeList(
+    el("ground-stations-list"),
+    stations,
+    filteredView ? "No matching ground stations." : "No ground stations.",
+  );
+  const count = el("node-count");
+  if (count) count.textContent = nodeCountText(filtered.length, allNodes.length);
+  populatePathSelects(allNodes);
+}
+
+function bindNodeFilters() {
+  el("node-search")?.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => renderNodes(allNodes, { force: true }), 120);
+  });
+  el("node-type-filter")?.addEventListener("change", () =>
+    renderNodes(allNodes, { force: true }),
+  );
+  el("node-sort")?.addEventListener("change", () =>
+    renderNodes(allNodes, { force: true }),
+  );
+  el("node-favorites-only")?.addEventListener("change", () =>
+    renderNodes(allNodes, { force: true }),
+  );
 }
 
 function setPathMsg(text, isError = false) {
@@ -559,6 +676,7 @@ async function loadNodes() {
 }
 
 bindPathControls();
+bindNodeFilters();
 initNodeList(el("satellites-list"));
 initNodeList(el("ground-stations-list"));
 loadNodes();
