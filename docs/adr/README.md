@@ -35,6 +35,7 @@ Add a link to each new record here.
 - [0002 — Session-scoped satellite addressability](0002-session-scoped-addressability.md)
 - [0003 — Client-side experiment history](0003-client-side-experiment-history.md)
 - [0004 — Diagnostic forwarding paths](0004-diagnostic-forwarding-path.md)
+- [0005 — Link metrics scope and deferred utilization](0005-link-metrics-scope.md)
 
 ## Related documents
 

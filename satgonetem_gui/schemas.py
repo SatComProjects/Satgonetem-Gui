@@ -180,13 +180,16 @@ class GroundStationResponse(BaseModel):
 
 
 class LinkResponse(BaseModel):
-    """One topology link."""
+    """One topology link and its current metric snapshot."""
 
     src: str
     dst: str
     type: str
     direction: str
     distance_km: float
+    delay_ms: float
+    capacity_kbps: int
+    is_active: bool
 
 
 class StatusResponse(BaseModel):

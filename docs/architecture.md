@@ -206,6 +206,19 @@ not import those dependency internals.
 - Added Vitest coverage for path formatting/link keys and Playwright coverage
   for the Nodes path table and missing-path state.
 
+## Phase 13 changes
+
+- Extended `LinkResponse` with propagation delay, `get_capacity()` capacity, and
+  active state.
+- Added the Node Explorer per-node Links table with peer, type, direction,
+  distance, delay, capacity, and state.
+- Sized World View links logarithmically by capacity and colored inactive links
+  red; the forwarding-path width override still takes precedence.
+- Added `links_model.js`, Vitest coverage for formatting/filtering/width, and a
+  Playwright node-link inspector flow.
+- Deferred utilization until the core's `/tmp/interfaces` monitor contract is
+  verified or replaced.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -228,13 +241,13 @@ not import those dependency internals.
 - Vitest covers the pure queue, ground-station selection, traffic payload, API
   wrapper, simulation formatting/action rules, addressability summaries/rules,
   experiment-history compaction/export/comparison, forwarding-path formatting,
-  and escaping modules.
+  link formatting/filtering/width, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
   node expansion, dashboard counts, simulation panel accessibility,
   addressability endpoint refresh, history reopen/capture/export/delete/compare,
-  forwarding-path rendering, and the WebGL fallback. World View WebGL rendering
-  itself remains a manual desktop check.
+  forwarding-path rendering, link-inspector rendering, and the WebGL fallback.
+  World View WebGL rendering itself remains a manual desktop check.
 
 ## Current measurements
 
@@ -245,11 +258,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **524 passed, 1 skipped** in about 28 s with coverage. Frontend:
-**81 Vitest tests**, **20 Playwright tests**.
+Result: **527 passed, 1 skipped** in about 51 s with coverage. Frontend:
+**87 Vitest tests**, **21 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**90.13%** over 2479 statements.
+**90.14%** over 2482 statements.
 
 ## Tooling decisions
 

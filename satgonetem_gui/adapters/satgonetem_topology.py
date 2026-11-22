@@ -354,7 +354,7 @@ class SatGoNetemTopologyAdapter:
         ]
 
     def links(self, topology: Any) -> list[dict[str, Any]]:
-        """Return topology links."""
+        """Return topology links with current delay, capacity, and state."""
         return [
             {
                 "src": link.source.name,
@@ -362,6 +362,9 @@ class SatGoNetemTopologyAdapter:
                 "type": link.type,
                 "direction": link.direction,
                 "distance_km": round(link.distance / 1000.0, 2),
+                "delay_ms": round(link.distance / 299_792_458 * 1000, 2),
+                "capacity_kbps": int(link.get_capacity()),
+                "is_active": bool(link.is_active),
             }
             for link in topology.links.values()
         ]

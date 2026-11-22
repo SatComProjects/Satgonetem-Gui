@@ -12,6 +12,7 @@ QUEUE_IMPORT = "./queue.js?v=23"
 QUEUE_MODEL_IMPORT = "./queue_model.js?v=3"
 HISTORY_MODEL_IMPORT = "./history_model.js?v=1"
 PATH_MODEL_IMPORT = "./path_model.js?v=1"
+LINKS_MODEL_IMPORT = "./links_model.js?v=1"
 WORLD_TEMPLATE = PACKAGE / "templates" / "world.html"
 SIMULATION_CONTROLS = PACKAGE / "static" / "simulation_controls.js"
 SIMULATION_MODEL_IMPORT = "./simulation_model.js?v=1"
@@ -24,6 +25,12 @@ def test_path_controllers_import_the_versioned_model() -> None:
     """Node Explorer and World View share one cache-busted path model."""
     for path in (NODES_MODULE, WORLD_MODULE):
         assert f'"{PATH_MODEL_IMPORT}"' in path.read_text(encoding="utf-8")
+
+
+def test_link_controllers_import_the_versioned_model() -> None:
+    """Node Explorer and World View share one cache-busted link model."""
+    for path in (NODES_MODULE, WORLD_MODULE):
+        assert f'"{LINKS_MODEL_IMPORT}"' in path.read_text(encoding="utf-8")
 
 
 def test_queue_imports_the_versioned_history_and_queue_models() -> None:
