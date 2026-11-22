@@ -98,17 +98,28 @@ function addToQueue() {
   setMsg("Added to queue.");
 }
 
+let runNowBusy = false;
+
 async function runNow() {
+  if (runNowBusy) return;
   const item = buildTrafficPayload(formFields());
   if (!item.payload.src || !item.payload.dst) {
     setMsg("Select source and destination.", true);
     return;
   }
-  item.delay = 0;
-  const id = jqAdd(item);
-  setMsg("Starting...");
-  const started = await jqStartNow(id);
-  setMsg(started ? "Started." : "Start failed; see the queue.", !started);
+  runNowBusy = true;
+  const button = byId("tg-run-now");
+  if (button) button.disabled = true;
+  try {
+    item.delay = 0;
+    const id = jqAdd(item);
+    setMsg("Starting...");
+    const started = await jqStartNow(id);
+    setMsg(started ? "Started." : "Start failed; see the queue.", !started);
+  } finally {
+    runNowBusy = false;
+    if (button) button.disabled = false;
+  }
 }
 
 byId("tg-tool").addEventListener("change", toggleTool);
