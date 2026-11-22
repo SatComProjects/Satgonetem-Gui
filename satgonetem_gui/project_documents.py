@@ -205,6 +205,11 @@ def validate_project_document(
             )
         if data_file in ground_files:
             continue
+        if not Path(data_file).expanduser().is_absolute():
+            raise ProjectDocumentError(
+                "Project ground object data_file must be absolute unless it "
+                f"is embedded in ground_files: {data_file!r}"
+            )
         if not _data_file_is_allowed(data_file, roots):
             raise ProjectDocumentError(
                 "Project ground object data_file is outside the allowed "
