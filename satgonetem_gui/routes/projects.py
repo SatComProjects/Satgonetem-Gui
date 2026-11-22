@@ -8,19 +8,23 @@ from ..services.container import ApplicationServices
 
 router = APIRouter(tags=["projects"])
 
+# Blocking service calls are declared with ``def`` so FastAPI runs them in its
+# threadpool instead of on the event loop. Only handlers awaiting an async
+# service method (``load``/``save`` via ``asyncio.to_thread``) stay ``async def``.
+
 
 @router.get(
     "/api/ground_stations/presets",
     response_model=list[schemas.GroundStationPreset],
 )
-async def api_ground_station_presets(
+def api_ground_station_presets(
     services: ApplicationServices = Depends(get_services),
 ) -> list[dict]:
     return services.project.presets()
 
 
 @router.post("/api/project/create", response_model=schemas.OperationResponse)
-async def api_project_create(
+def api_project_create(
     payload: schemas.ProjectCreateRequest,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.OperationResponse:
@@ -29,14 +33,14 @@ async def api_project_create(
 
 
 @router.get("/api/project/status", response_model=schemas.ProjectStatusResponse)
-async def api_project_status(
+def api_project_status(
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.ProjectStatusResponse:
     return schemas.ProjectStatusResponse(**services.project.status())
 
 
 @router.get("/api/project/exists", response_model=schemas.ProjectExistsResponse)
-async def api_project_exists(
+def api_project_exists(
     name: str,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.ProjectExistsResponse:
@@ -44,7 +48,7 @@ async def api_project_exists(
 
 
 @router.get("/api/project/config", response_model=schemas.ProjectConfigResponse)
-async def api_project_config(
+def api_project_config(
     name: str,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.ProjectConfigResponse:

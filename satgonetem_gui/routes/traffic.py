@@ -8,16 +8,19 @@ from ..services.container import ApplicationServices
 
 router = APIRouter(tags=["traffic"])
 
+# Blocking service calls are declared with ``def`` so FastAPI runs them in its
+# threadpool instead of on the event loop.
+
 
 @router.get("/api/traffic/nodes", response_model=schemas.TrafficNodesResponse)
-async def api_traffic_nodes(
+def api_traffic_nodes(
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.TrafficNodesResponse:
     return schemas.TrafficNodesResponse(nodes=services.traffic.nodes())
 
 
 @router.post("/api/traffic/iperf3", response_model=schemas.TrafficStartResponse)
-async def api_traffic_iperf3(
+def api_traffic_iperf3(
     payload: schemas.Iperf3Request,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.TrafficStartResponse:
@@ -26,7 +29,7 @@ async def api_traffic_iperf3(
 
 
 @router.post("/api/traffic/ping", response_model=schemas.TrafficStartResponse)
-async def api_traffic_ping(
+def api_traffic_ping(
     payload: schemas.PingRequest,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.TrafficStartResponse:
@@ -35,7 +38,7 @@ async def api_traffic_ping(
 
 
 @router.post("/api/traffic/hping3", response_model=schemas.TrafficStartResponse)
-async def api_traffic_hping3(
+def api_traffic_hping3(
     payload: schemas.Hping3Request,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.TrafficStartResponse:
@@ -44,7 +47,7 @@ async def api_traffic_hping3(
 
 
 @router.get("/api/traffic/status", response_model=schemas.TrafficStatusResponse)
-async def api_traffic_status(
+def api_traffic_status(
     job_id: str,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.TrafficStatusResponse:
@@ -52,7 +55,7 @@ async def api_traffic_status(
 
 
 @router.post("/api/traffic/cancel", response_model=schemas.OperationResponse)
-async def api_traffic_cancel(
+def api_traffic_cancel(
     payload: schemas.TrafficCancelRequest,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.OperationResponse:
