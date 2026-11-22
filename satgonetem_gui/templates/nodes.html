@@ -2,6 +2,7 @@
 
 {% block head %}
   <link rel="stylesheet" href="/static/nodes.css">
+  <link rel="stylesheet" href="/static/topology_health.css">
 {% endblock %}
 
 {% block content %}
@@ -45,6 +46,24 @@
   </div>
 </section>
 
+<section class="card topo-card" id="topology-card" aria-labelledby="topology-card-title">
+  <div class="topo-card-head">
+    <div>
+      <h3 class="card-title" id="topology-card-title">Topology Health</h3>
+      <p class="muted topo-card-hint">Structural checks and portable graph exports.</p>
+    </div>
+    <div class="topo-export-actions" role="group" aria-label="Topology exports">
+      <button type="button" class="button small secondary" id="topology-export-json" data-topology-export="json" disabled>Export JSON</button>
+      <button type="button" class="button small secondary" id="topology-export-dot" data-topology-export="dot" disabled>Export DOT</button>
+      <button type="button" class="button small secondary" id="topology-export-graphml" data-topology-export="graphml" disabled>Export GraphML</button>
+    </div>
+  </div>
+  <p class="muted topo-msg" id="topology-health-msg" aria-live="polite"></p>
+  <p class="topo-summary" id="topology-health-summary"></p>
+  <ul class="topo-checks" id="topology-health-checks"></ul>
+  <p class="muted" id="topology-health-empty" hidden>No structural findings.</p>
+</section>
+
 <div class="nodes-grid">
 
   <section class="card" id="card-satellites">
@@ -64,4 +83,5 @@
 </div>
 
 <script type="module" src="/static/nodes.js?v=13"></script>
+<script type="module" src="/static/topology_health.js?v=1"></script>
 {% endblock %}

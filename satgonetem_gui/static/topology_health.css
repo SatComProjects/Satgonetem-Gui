@@ -1,0 +1,227 @@
+/* Topology health and portable exports ----------------------------------- */
+
+.topo-card {
+  margin-bottom: 20px;
+  background-image: linear-gradient(
+    90deg,
+    rgba(251, 191, 36, 0.5),
+    rgba(61, 169, 252, 0.4) 40%,
+    rgba(61, 169, 252, 0) 80%
+  );
+  background-repeat: no-repeat;
+  background-position: top left;
+  background-size: 100% 2px;
+}
+
+.topo-card-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px 20px;
+  margin-bottom: 12px;
+}
+
+.topo-card-head .card-title {
+  margin: 0;
+}
+
+.topo-card-hint {
+  margin: 3px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.topo-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.topo-export-actions .button {
+  flex: 0 0 auto;
+  background: #101823;
+  border-color: var(--border-subtle);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.topo-export-actions .button:hover {
+  background: #162130;
+  color: var(--text);
+}
+
+.topo-export-actions .button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.topo-export-actions .button:disabled:hover {
+  background: #101823;
+  color: var(--muted);
+}
+
+.topo-card button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.topo-msg {
+  min-height: 1.2em;
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.topo-msg.error {
+  color: var(--bad);
+}
+
+.topo-summary {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.topo-summary:empty {
+  display: none;
+}
+
+.topo-checks {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.topo-checks:empty {
+  margin-top: 0;
+}
+
+.topo-checks[hidden] {
+  display: none;
+}
+
+.topo-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "badge body count";
+  align-items: start;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.topo-check:last-child {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.topo-check-badge {
+  grid-area: badge;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.75rem;
+  padding: 2px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: rgba(125, 142, 163, 0.1);
+  color: var(--unknown);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topo-check[data-severity="warning"] .topo-check-badge {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: var(--warning-border);
+  color: var(--warning);
+}
+
+.topo-check[data-severity="info"] .topo-check-badge {
+  background: rgba(61, 169, 252, 0.12);
+  border-color: rgba(61, 169, 252, 0.35);
+  color: var(--accent);
+}
+
+.topo-check-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.topo-check-body strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.topo-check-items {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.topo-check-count {
+  grid-area: count;
+  align-self: center;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#topology-health-empty {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+}
+
+#topology-health-empty[hidden] {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .topo-card-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .topo-export-actions {
+    justify-content: flex-start;
+  }
+
+  .topo-export-actions .button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 460px) {
+  .topo-check {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "badge count"
+      "body body";
+    gap: 6px 12px;
+  }
+
+  .topo-check-count {
+    justify-self: end;
+  }
+}

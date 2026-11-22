@@ -27,6 +27,8 @@ CONNECTIVITY_MODULE = PACKAGE / "static" / "connectivity.js"
 CONNECTIVITY_MODEL_IMPORT = "./connectivity_model.js?v=1"
 COVERAGE_MODULE = PACKAGE / "static" / "coverage.js"
 COVERAGE_MODEL_IMPORT = "./coverage_model.js?v=1"
+TOPOLOGY_HEALTH_MODULE = PACKAGE / "static" / "topology_health.js"
+TOPOLOGY_HEALTH_MODEL_IMPORT = "./topology_health_model.js?v=1"
 EXPERIMENTS_MODULE = PACKAGE / "static" / "experiments.js"
 EXPERIMENTS_MODEL_IMPORT = "./experiments_model.js?v=2"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
@@ -48,6 +50,11 @@ def test_link_controllers_import_the_versioned_model() -> None:
 def test_experiments_page_imports_the_versioned_model() -> None:
     """The experiment page uses one cache-busted formatting model."""
     assert f'"{EXPERIMENTS_MODEL_IMPORT}"' in EXPERIMENTS_MODULE.read_text(encoding="utf-8")
+
+
+def test_topology_health_imports_the_versioned_model() -> None:
+    """The health card uses one cache-busted formatting model."""
+    assert f'"{TOPOLOGY_HEALTH_MODEL_IMPORT}"' in TOPOLOGY_HEALTH_MODULE.read_text(encoding="utf-8")
 
 
 def test_coverage_page_imports_the_versioned_model() -> None:
