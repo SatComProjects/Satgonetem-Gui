@@ -1,5 +1,5 @@
 import { api } from "./api.js?v=4";
-import { mergeStations, removeStationAt } from "./ground_stations_model.js?v=2";
+import { mergeStations, removeStationAt } from "./ground_stations_model.js?v=3";
 import {
   normalizeProjectName,
   validateGroundNumbers,

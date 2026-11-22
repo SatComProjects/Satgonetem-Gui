@@ -38,6 +38,7 @@ describe("ground station selection", () => {
 
   it("rejects station names the core parser cannot represent", () => {
     expect(validateStationName("Berlin")).toBeNull();
+    expect(validateStationName("Berlin|Mitte")).toBeNull();
     expect(validateStationName("Berlin, DE")).toMatch("commas");
     expect(validateStationName('Berlin "Mitte"')).toMatch("quotes");
     expect(validateStationName("Berlin\nMitte")).toMatch("newlines");
