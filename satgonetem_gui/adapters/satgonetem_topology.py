@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,12 @@ from satgonetem.services.topology_satcom import NetworkConfig, TopologyManager
 from satgonetem.utils.satcom_fix import apply_satcom_fix
 
 from ..config import Settings
-from ..ground_stations import parse_ground_station_file, write_stations_to_temp
+from ..ground_stations import (
+    parse_ground_station_file,
+    stable_ground_stations_dir,
+    write_stations_to_temp,
+)
+from ..project_documents import validate_project_document
 from ..resources import GROUND_STATIONS_DIR
 from ..schemas import ProjectCreateRequest
 from ..services.ports import NetworkOperationError
@@ -47,64 +53,91 @@ class SatGoNetemTopologyAdapter:
         grounds_raw = json.loads(payload.ground_objects_properties_json)
         shells = [WalkerShellProperty(**shell) for shell in shells_raw]
 
-        ground_props = []
-        for ground in grounds_raw:
-            ground = dict(ground)
-            if ground.get("stations"):
-                ground["data_file"] = str(
-                    write_stations_to_temp(ground.pop("stations"))
-                )
-            else:
-                ground.pop("stations", None)
-                data_file = ground.get("data_file")
-                if not data_file:
-                    raise ValueError("Ground object has no stations or data_file.")
-                ground["data_file"] = str(
-                    resolve_data_file(data_file, DATA_SEARCH_DIR)
-                )
-            ground_props.append(GroundObjectProperty(**ground))
+        created_ground_files: list[Path] = []
+        try:
+            ground_props = []
+            for ground in grounds_raw:
+                ground = dict(ground)
+                if ground.get("stations"):
+                    path = write_stations_to_temp(
+                        ground.pop("stations"),
+                        directory=stable_ground_stations_dir(self.settings.save_root),
+                    )
+                    created_ground_files.append(path)
+                    ground["data_file"] = str(path)
+                else:
+                    ground.pop("stations", None)
+                    data_file = ground.get("data_file")
+                    if not data_file:
+                        raise ValueError(
+                            "Ground object has no stations or data_file."
+                        )
+                    ground["data_file"] = str(
+                        resolve_data_file(
+                            data_file,
+                            DATA_SEARCH_DIR,
+                            allowed_roots=(self.settings.save_root,),
+                        )
+                    )
+                ground_props.append(GroundObjectProperty(**ground))
 
-        name = payload.name.strip()
-        simulation_property = SimulationProperty(
-            simulation_name=name,
-            start_date=payload.start_date,
-            end_date=payload.end_date,
-            walker_shells=shells,
-            ground_objects_properties=ground_props,
-        )
-
-        topology = TopologyManager.from_satcom(simulation_property)
-        topology._apply_network_config(
-            NetworkConfig(
-                project_name=name,
-                update_time=payload.update_time,
-                isl_link_capacity=payload.isl_capacity,
-                gnd_link_capacity=payload.gs_capacity,
+            name = payload.name.strip()
+            simulation_property = SimulationProperty(
+                simulation_name=name,
+                start_date=payload.start_date,
+                end_date=payload.end_date,
+                walker_shells=shells,
+                ground_objects_properties=ground_props,
             )
-        )
-        topology.set_status(True)
 
-        save_target = resolve_save_path(
-            payload.save_path,
-            name,
-            self.settings.save_root,
-        )
-        if save_target is not None:
-            save_target.parent.mkdir(parents=True, exist_ok=True)
-            topology.to_file(str(save_target))
+            topology = TopologyManager.from_satcom(simulation_property)
+            topology._apply_network_config(
+                NetworkConfig(
+                    project_name=name,
+                    update_time=payload.update_time,
+                    isl_link_capacity=payload.isl_capacity,
+                    gnd_link_capacity=payload.gs_capacity,
+                )
+            )
+            topology.set_status(True)
 
-        return ProjectResult(
-            topology_manager=topology,
-            project_name=name,
-            save_path=str(payload.save_path or "").strip(),
-        )
+            save_target = resolve_save_path(
+                payload.save_path,
+                name,
+                self.settings.save_root,
+            )
+            if save_target is not None:
+                save_target.parent.mkdir(parents=True, exist_ok=True)
+                topology.to_file(str(save_target))
+
+            return ProjectResult(
+                topology_manager=topology,
+                project_name=name,
+                save_path=str(payload.save_path or "").strip(),
+            )
+        except Exception:
+            for path in created_ground_files:
+                path.unlink(missing_ok=True)
+            raise
 
     def load(self, content: str) -> ProjectResult:
-        """Load a saved topology from raw JSON."""
+        """Load a saved topology from raw JSON.
+
+        The uploaded document is validated before the core can write any
+        embedded ground file. Core-restored files are then copied into the
+        managed save-root directory so backups and later saves stay portable.
+        """
+        validate_project_document(
+            content,
+            (DATA_SEARCH_DIR, self.settings.save_root),
+        )
+
         path = Path(tempfile.gettempdir()) / f"satgonetem_load_{os.urandom(8).hex()}.json"
+        restore_prefix = f"{path.stem}_ground_files_"
         try:
             path.write_text(content, encoding="utf-8")
             topology = TopologyManager.from_file(str(path))
+            self._migrate_restored_ground_files(topology, restore_prefix)
             topology.set_status(True)
             return ProjectResult(
                 topology_manager=topology,
@@ -113,9 +146,11 @@ class SatGoNetemTopologyAdapter:
             )
         finally:
             path.unlink(missing_ok=True)
+            self._remove_restore_dirs(restore_prefix)
 
     def save(self, topology: Any) -> str:
         """Serialize a topology to JSON text."""
+        self._require_ground_files(topology)
         path = Path(tempfile.gettempdir()) / f"satgonetem_save_{os.urandom(8).hex()}.json"
         try:
             topology.to_file(str(path))
@@ -142,12 +177,17 @@ class SatGoNetemTopologyAdapter:
             if not data_file:
                 continue
             try:
-                ground["stations"] = parse_ground_station_file(Path(data_file))
-            except Exception:
-                logger.exception(
-                    "Could not read ground station file for project config: %s",
+                resolved = resolve_data_file(
                     data_file,
+                    DATA_SEARCH_DIR,
+                    allowed_roots=(self.settings.save_root,),
                 )
+                ground["stations"] = parse_ground_station_file(resolved)
+            except (OSError, ValueError) as exc:
+                raise ValueError(
+                    "Could not read ground station file: "
+                    f"{data_file!r}"
+                ) from exc
         return config
 
     def status(self, topology: Any) -> dict[str, Any]:
@@ -378,6 +418,92 @@ class SatGoNetemTopologyAdapter:
         topology.stop_gonetem()
         if topology.get_gonetem_status():
             raise NetworkOperationError("GoNetEm failed to stop.")
+
+    def _require_ground_files(self, topology: Any) -> None:
+        """Fail before core serialization when a referenced data file is unusable.
+
+        The core silently omits data files it cannot read, which produces a
+        backup that cannot be restored. Preflight every path instead.
+        """
+        simulation_property = getattr(topology, "simulation_property", None)
+        if simulation_property is None:
+            return
+        for ground in simulation_property.ground_objects_properties:
+            data_file = getattr(ground, "data_file", None)
+            if not data_file:
+                continue
+            try:
+                resolved = resolve_data_file(
+                    data_file,
+                    DATA_SEARCH_DIR,
+                    allowed_roots=(self.settings.save_root,),
+                )
+            except (OSError, ValueError) as exc:
+                raise ValueError(
+                    "Ground station data file is unavailable: "
+                    f"{data_file!r}"
+                ) from exc
+            if resolved != Path(data_file):
+                ground.data_file = str(resolved)
+
+    def _migrate_restored_ground_files(
+        self,
+        topology: Any,
+        restore_prefix: str,
+    ) -> None:
+        """Move core-restored files into the managed save-root directory."""
+        restore_dirs = [
+            candidate
+            for candidate in Path(tempfile.gettempdir()).glob(f"{restore_prefix}*")
+            if candidate.is_dir()
+        ]
+        if not restore_dirs:
+            return
+
+        simulation_property = getattr(topology, "simulation_property", None)
+        if simulation_property is None:
+            return
+
+        stable_dir = stable_ground_stations_dir(self.settings.save_root)
+        stable_dir.mkdir(parents=True, exist_ok=True)
+        copied: list[Path] = []
+        try:
+            for ground in simulation_property.ground_objects_properties:
+                data_file = getattr(ground, "data_file", None)
+                if not data_file:
+                    continue
+                source = Path(data_file)
+                if not any(
+                    source.resolve().is_relative_to(directory.resolve())
+                    for directory in restore_dirs
+                ):
+                    continue
+                if not source.is_file():
+                    raise ValueError(
+                        "Restored ground station file is missing: "
+                        f"{data_file!r}"
+                    )
+                descriptor, name = tempfile.mkstemp(
+                    dir=stable_dir,
+                    prefix=f"{source.stem}-",
+                    suffix=source.suffix or ".csv",
+                )
+                os.close(descriptor)
+                target = Path(name)
+                copied.append(target)
+                shutil.copyfile(source, target)
+                ground.data_file = str(target)
+        except Exception:
+            for target in copied:
+                target.unlink(missing_ok=True)
+            raise
+
+    @staticmethod
+    def _remove_restore_dirs(restore_prefix: str) -> None:
+        """Remove the core's temporary ground-file restore directories."""
+        for directory in Path(tempfile.gettempdir()).glob(f"{restore_prefix}*"):
+            if directory.is_dir():
+                shutil.rmtree(directory, ignore_errors=True)
 
     @staticmethod
     def _sync_positions(topology: Any) -> None:

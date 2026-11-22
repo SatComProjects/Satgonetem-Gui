@@ -8,9 +8,12 @@ from ..services.container import ApplicationServices
 
 router = APIRouter(tags=["topology"])
 
+# Blocking service reads are declared with ``def`` so FastAPI runs them in its
+# threadpool instead of on the event loop.
+
 
 @router.get("/api/satellites", response_model=list[schemas.SatelliteResponse])
-async def api_satellites(
+def api_satellites(
     services: ApplicationServices = Depends(get_services),
 ) -> list[dict]:
     return services.topology.satellites()
@@ -20,35 +23,35 @@ async def api_satellites(
     "/api/ground_stations",
     response_model=list[schemas.GroundStationResponse],
 )
-async def api_ground_stations(
+def api_ground_stations(
     services: ApplicationServices = Depends(get_services),
 ) -> list[dict]:
     return services.topology.ground_stations()
 
 
 @router.get("/api/status", response_model=schemas.StatusResponse)
-async def api_status(
+def api_status(
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.StatusResponse:
     return schemas.StatusResponse(**services.topology.status())
 
 
 @router.get("/api/links", response_model=list[schemas.LinkResponse])
-async def api_links(
+def api_links(
     services: ApplicationServices = Depends(get_services),
 ) -> list[dict]:
     return services.topology.links()
 
 
 @router.get("/api/nodes", response_model=list[schemas.NodeSummary])
-async def api_nodes(
+def api_nodes(
     services: ApplicationServices = Depends(get_services),
 ) -> list[dict]:
     return services.topology.nodes()
 
 
 @router.get("/api/nodes/{name}", response_model=schemas.NodeDetailResponse)
-async def api_node_detail(
+def api_node_detail(
     name: str,
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.NodeDetailResponse:

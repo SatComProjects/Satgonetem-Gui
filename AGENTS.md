@@ -305,8 +305,10 @@ cycles.
 ### Cross-repository changes
 
 - The GUI consumes SatGoNetem from the pinned Git tag in `pyproject.toml`
-  (`v0.2.0` at the time of writing) and records the resolved revision in
-  `uv.lock`.
+  (`v0.3.1`, resolved commit `55d4da59cdd9cbe921430ea0a200e32f1d3297ed`) and
+  records the resolved revision in `uv.lock`. The runtime dependency is a PEP
+  508 direct URL so built wheel metadata carries the pin, and
+  `[tool.uv.sources]` pins the same tag for `uv` resolution.
 - If a GUI feature needs new core capability, land and test the core change in
   the `satgonetem` repository first, produce a release tag, then bump the pin
   and lock file here and update the adapter contract tests.

@@ -51,15 +51,26 @@ describe("queue model", () => {
     expect(isTerminal(findItem(items, "q1"))).toBe(false);
   });
 
+  it("starts new items with no poll failures", () => {
+    const items = addItem([], fields, "q1");
+
+    expect(items[0].poll_failures).toBe(0);
+  });
+
   it("normalizes persisted items defensively", () => {
     const items = normalizeStoredItems([
       { id: "q1", kind: "ping", payload: {}, status: "done" },
+      { id: "q2", kind: "ping", poll_failures: 3 },
+      { id: "q3", kind: "ping", poll_failures: "bad" },
       { bad: true },
       null,
     ]);
 
-    expect(items).toHaveLength(1);
+    expect(items).toHaveLength(3);
     expect(items[0].id).toBe("q1");
     expect(items[0].results).toBeNull();
+    expect(items[0].poll_failures).toBe(0);
+    expect(items[1].poll_failures).toBe(3);
+    expect(items[2].poll_failures).toBe(0);
   });
 });

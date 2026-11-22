@@ -17,20 +17,25 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 ## Requirements
 
 - Python >= 3.10 (CI runs 3.12)
-- Node >= 24 for the frontend test suite
-- SatGoNetEm **v0.2.0** (pinned Git tag)
+- Node >= 24 for the frontend tooling and test suites
+- SatGoNetEm **v0.3.1** (pinned Git tag)
 - A modern web browser with WebGL support (for the 3D globe; unsupported
   browsers get a fallback message)
 
 ## Installation
 
-The supported development path uses [uv](https://github.com/astral-sh/uv):
+The supported development path uses [uv](https://github.com/astral-sh/uv) with
+the committed lock file:
 
 ```bash
-uv sync --extra dev
+uv sync --locked --extra dev
 ```
 
-For a plain virtual environment, install the project instead:
+SatGoNetEm enters through a PEP 508 direct URL pinned to the `v0.3.1` tag in
+`pyproject.toml`; `uv.lock` records the resolved commit.
+
+For a plain virtual environment, `pip` resolves the same direct Git URL, which
+requires `git` and network access:
 
 ```bash
 python -m venv .venv
@@ -130,7 +135,7 @@ uvicorn satgonetem_gui.app:app --reload --host 127.0.0.1 --port 8000
 Install the development tools and run the Python suite:
 
 ```bash
-uv sync --extra dev
+uv sync --locked --extra dev
 uv run pytest
 uv run ruff check .
 uv run ruff format --check tests

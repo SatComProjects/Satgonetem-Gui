@@ -1,6 +1,11 @@
 """Contract tests for the real satgonetem topology adapter."""
 
+import json
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from satgonetem_gui.adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from satgonetem_gui.schemas import ProjectCreateRequest
@@ -187,3 +192,124 @@ def test_adapter_routing_status_omits_fake_addressing(settings) -> None:
 
     assert status["gonetem_is_on"] is True
     assert "addressing_applied" not in status
+
+
+def _ground_data_file(topology) -> Path:
+    """Return the first ground object's data file for a built topology."""
+    ground = topology.simulation_property.ground_objects_properties[0]
+    return Path(ground.data_file)
+
+
+def test_build_writes_inline_stations_under_save_root(settings) -> None:
+    """Inline station CSV files live in the managed save-root directory."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    result = adapter.build(ProjectCreateRequest(**project_payload()))
+
+    data_file = _ground_data_file(result.topology_manager)
+
+    assert data_file.parent == settings.save_root / ".satgonetem" / "ground_stations"
+    assert data_file.resolve().is_relative_to(settings.save_root.resolve())
+    assert data_file.is_file()
+
+
+def test_config_and_save_fail_loudly_when_station_file_is_missing(settings) -> None:
+    """A deleted station file raises instead of silently returning no stations."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    result = adapter.build(ProjectCreateRequest(**project_payload()))
+    _ground_data_file(result.topology_manager).unlink()
+
+    with pytest.raises(ValueError, match="Could not read ground station file"):
+        adapter.config(result.topology_manager, "")
+    with pytest.raises(ValueError, match="Ground station data file is unavailable"):
+        adapter.save(result.topology_manager)
+
+
+def test_build_rejects_comma_in_station_name_before_core(settings) -> None:
+    """Custom station names with commas produce a clear adapter error."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    payload = project_payload()
+    grounds = json.loads(payload["ground_objects_properties_json"])
+    grounds[0]["stations"][0]["name"] = "Berlin, DE"
+    payload["ground_objects_properties_json"] = json.dumps(grounds)
+
+    with pytest.raises(ValueError, match="must not contain commas or newlines"):
+        adapter.build(ProjectCreateRequest(**payload))
+
+
+def test_build_cleans_up_station_files_when_build_fails(settings) -> None:
+    """A failed build does not leave managed station files behind."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    payload = project_payload(save_path="../outside.json")
+
+    with pytest.raises(ValueError):
+        adapter.build(ProjectCreateRequest(**payload))
+
+    stable_dir = settings.save_root / ".satgonetem" / "ground_stations"
+    assert list(stable_dir.glob("*.csv")) == []
+
+
+def test_config_and_save_reject_external_data_files(settings, tmp_path: Path) -> None:
+    """Ground files outside the packaged and save roots cannot be read or saved."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    result = adapter.build(ProjectCreateRequest(**project_payload()))
+    external = tmp_path / "external-stations.csv"
+    external.write_text("0,Oslo,59.91,10.75,0.01\n", encoding="utf-8")
+    result.topology_manager.simulation_property.ground_objects_properties[0].data_file = str(
+        external
+    )
+
+    with pytest.raises(ValueError, match="Could not read ground station file"):
+        adapter.config(result.topology_manager, "")
+    with pytest.raises(ValueError, match="Ground station data file is unavailable"):
+        adapter.save(result.topology_manager)
+
+
+def test_load_accepts_embedded_files_from_another_machine(settings) -> None:
+    """A backup whose original data_file is outside the roots still loads."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    result = adapter.build(ProjectCreateRequest(**project_payload()))
+    original = _ground_data_file(result.topology_manager)
+    document = json.loads(adapter.save(result.topology_manager))
+    original_key = str(original)
+    outside_key = "/old/machine/ground_stations.csv"
+    document["simulation_property"]["ground_objects_properties"][0]["data_file"] = outside_key
+    document["ground_files"][outside_key] = document["ground_files"].pop(original_key)
+
+    loaded = adapter.load(json.dumps(document))
+
+    config = adapter.config(loaded.topology_manager, "")
+    assert config["ground_objects_properties"][0]["stations"][0]["name"] == "Berlin"
+    migrated = _ground_data_file(loaded.topology_manager)
+    assert migrated.resolve().is_relative_to(settings.save_root.resolve())
+    assert migrated.is_file()
+
+
+def test_load_migrates_restored_files_and_backups_remain_restorable(settings) -> None:
+    """Loaded projects keep stations in the save root and round-trip backups."""
+    adapter = SatGoNetemTopologyAdapter(settings)
+    result = adapter.build(ProjectCreateRequest(**project_payload()))
+    original = _ground_data_file(result.topology_manager)
+    content = adapter.save(result.topology_manager)
+    original.unlink()
+
+    restore_dirs_before = {
+        path for path in Path(tempfile.gettempdir()).glob("*_ground_files_*") if path.is_dir()
+    }
+    loaded = adapter.load(content)
+    restore_dirs_after = {
+        path for path in Path(tempfile.gettempdir()).glob("*_ground_files_*") if path.is_dir()
+    }
+
+    migrated = _ground_data_file(loaded.topology_manager)
+    assert restore_dirs_after == restore_dirs_before
+    assert migrated.parent == settings.save_root / ".satgonetem" / "ground_stations"
+    assert migrated.is_file()
+    assert migrated != original
+    config = adapter.config(loaded.topology_manager, "")
+    assert config["ground_objects_properties"][0]["stations"][0]["name"] == "Berlin"
+
+    backup = adapter.save(loaded.topology_manager)
+    migrated.unlink()
+    reloaded = adapter.load(backup)
+    config = adapter.config(reloaded.topology_manager, "")
+    assert config["ground_objects_properties"][0]["stations"][0]["name"] == "Berlin"

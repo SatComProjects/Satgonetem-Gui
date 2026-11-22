@@ -104,6 +104,12 @@
   opacity: 0.8;
 }
 
+.queue-error {
+  color: var(--bad);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
 .queue-item-actions {
   display: flex;
   gap: 6px;

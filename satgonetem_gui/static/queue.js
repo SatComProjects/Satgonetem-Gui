@@ -13,6 +13,7 @@ import {
 } from "./queue_model.js";
 
 const JQ_KEY = "sgnt_traffic_queue";
+const MAX_POLL_FAILURES = 5;
 
 const jq = { items: [], timers: {} };
 
@@ -38,6 +39,12 @@ function clearTimer(id) {
 function schedule(id, delay, callback) {
   clearTimer(id);
   jq.timers[id] = setTimeout(callback, delay);
+}
+
+function cancelJob(jobId) {
+  // Best effort: the queue item is already gone, so there is nowhere to show
+  // a failure. The server reaps finished jobs on its own.
+  api.post("/api/traffic/cancel", { job_id: jobId }).catch(() => {});
 }
 
 function queueInit() {
@@ -125,6 +132,7 @@ function jqRender() {
             <span class="queue-label">${escapeHtml(item.label)}</span>
             <span class="queue-status">${escapeHtml(item.status)}</span>
           </div>
+          ${item.error ? `<div class="queue-error">${escapeHtml(item.error)}</div>` : ""}
           <div class="queue-item-actions">
             ${item.status === "done" ? `<button type="button" class="button small secondary" data-action="plot" data-id="${id}">Plot</button>` : ""}
             ${canStart ? `<button type="button" class="button small" data-action="start" data-id="${id}">Start</button>` : ""}
@@ -169,6 +177,10 @@ function jqAdd(item) {
 }
 
 function jqRemove(id) {
+  const item = findItem(jq.items, id);
+  if (item && item.status === "running" && item.job_id) {
+    cancelJob(item.job_id);
+  }
   clearTimer(id);
   jq.items = removeItem(jq.items, id);
   jqSave();
@@ -176,6 +188,11 @@ function jqRemove(id) {
 }
 
 function jqClear() {
+  for (const item of jq.items) {
+    if (item.status === "running" && item.job_id) {
+      cancelJob(item.job_id);
+    }
+  }
   for (const id of Object.keys(jq.timers)) clearTimer(id);
   jq.items = [];
   jqSave();
@@ -208,24 +225,36 @@ async function jqStartNow(id) {
   jq.items = updateItem(jq.items, id, { status: "starting", error: null });
   jqSave();
   jqRender();
+  let data;
   try {
-    const data = await api.post(`/api/traffic/${item.kind}`, item.payload);
-    jq.items = updateItem(jq.items, id, {
-      status: "running",
-      job_id: data.job_id,
-      error: null,
-    });
-    jqSave();
-    jqRender();
-    jqTrack(id);
+    data = await api.post(`/api/traffic/${item.kind}`, item.payload);
   } catch (error) {
-    jq.items = updateItem(jq.items, id, {
-      status: "error",
-      error: error.message || "Start failed",
-    });
-    jqSave();
-    jqRender();
+    const current = findItem(jq.items, id);
+    if (current && !isTerminal(current)) {
+      jq.items = updateItem(jq.items, id, {
+        status: "error",
+        error: error.message || "Start failed",
+      });
+      jqSave();
+      jqRender();
+    }
+    return;
   }
+  if (!findItem(jq.items, id)) {
+    // The item was removed or cleared while the start request was in flight,
+    // so cancel the orphaned backend job instead of recreating the item.
+    cancelJob(data.job_id);
+    return;
+  }
+  jq.items = updateItem(jq.items, id, {
+    status: "running",
+    job_id: data.job_id,
+    poll_failures: 0,
+    error: null,
+  });
+  jqSave();
+  jqRender();
+  jqTrack(id);
 }
 
 async function jqTrack(id) {
@@ -237,10 +266,13 @@ async function jqTrack(id) {
     const status = await api.get(
       `/api/traffic/status?job_id=${encodeURIComponent(item.job_id)}`,
     );
+    const current = findItem(jq.items, id);
+    if (!current || isTerminal(current)) return;
     if (status.status === "done") {
       jq.items = updateItem(jq.items, id, {
         status: "done",
         results: status.results || null,
+        poll_failures: 0,
       });
       jqSave();
       jqRender();
@@ -250,19 +282,36 @@ async function jqTrack(id) {
       jq.items = updateItem(jq.items, id, {
         status: "error",
         error: status.error || "Unknown error",
+        poll_failures: 0,
       });
       jqSave();
       jqRender();
       return;
     }
     if (status.status === "cancelled") {
-      jq.items = updateItem(jq.items, id, { status: "cancelled" });
+      jq.items = updateItem(jq.items, id, {
+        status: "cancelled",
+        poll_failures: 0,
+      });
       jqSave();
       jqRender();
       return;
     }
+    if (status.status !== "running") {
+      jq.items = updateItem(jq.items, id, {
+        status: "error",
+        error: `Unknown job status: ${status.status ?? "missing"}`,
+        poll_failures: 0,
+      });
+      jqSave();
+      jqRender();
+      return;
+    }
+    jq.items = updateItem(jq.items, id, { poll_failures: 0 });
     schedule(id, 1000, () => jqTrack(id));
   } catch (error) {
+    const current = findItem(jq.items, id);
+    if (!current || isTerminal(current)) return;
     if (error instanceof ApiError && error.status === 404) {
       jq.items = updateItem(jq.items, id, {
         status: "error",
@@ -272,6 +321,19 @@ async function jqTrack(id) {
       jqRender();
       return;
     }
+    const failures = (current.poll_failures || 0) + 1;
+    if (failures >= MAX_POLL_FAILURES) {
+      jq.items = updateItem(jq.items, id, {
+        status: "error",
+        poll_failures: failures,
+        error: `Status check failed ${failures} times: ${error.message || "network error"}`,
+      });
+      jqSave();
+      jqRender();
+      return;
+    }
+    jq.items = updateItem(jq.items, id, { poll_failures: failures });
+    jqSave();
     schedule(id, 1500, () => jqTrack(id));
   }
 }
@@ -284,15 +346,26 @@ async function jqCancel(id) {
     try {
       await api.post("/api/traffic/cancel", { job_id: item.job_id });
     } catch (error) {
-      jq.items = updateItem(jq.items, id, {
-        status: "error",
-        error: error.message || "Cancel failed",
-      });
-      jqSave();
-      jqRender();
+      if (error instanceof ApiError && error.status === 409) {
+        // The job finished before the cancel arrived; refresh to pick up its
+        // terminal result instead of replacing it with an error.
+        jqTrack(id);
+        return;
+      }
+      const current = findItem(jq.items, id);
+      if (current && !isTerminal(current)) {
+        jq.items = updateItem(jq.items, id, {
+          status: "error",
+          error: error.message || "Cancel failed",
+        });
+        jqSave();
+        jqRender();
+      }
       return;
     }
   }
+  const current = findItem(jq.items, id);
+  if (!current || isTerminal(current)) return;
   jq.items = updateItem(jq.items, id, { status: "cancelled" });
   jqSave();
   jqRender();

@@ -11,14 +11,50 @@ from satgonetem_gui.storage import (
 )
 
 
-def test_resolve_data_file_accepts_absolute_and_relative_paths(tmp_path: Path) -> None:
-    """Absolute paths win; relative paths resolve under the search directory."""
-    absolute = tmp_path / "absolute.txt"
+def test_resolve_data_file_accepts_paths_inside_allowed_roots(tmp_path: Path) -> None:
+    """Relative paths use the search directory; absolute paths may use a root."""
+    search = tmp_path / "presets"
+    search.mkdir()
+    allowed = tmp_path / "projects"
+    allowed.mkdir()
+    relative = search / "relative.txt"
+    relative.write_text("1,Paris,48.8566,2.3522,0.035\n", encoding="utf-8")
+    absolute = allowed / "absolute.txt"
     absolute.write_text("0,Berlin,52.52,13.405,0.034\n", encoding="utf-8")
-    (tmp_path / "relative.txt").write_text("1,Paris,48.8566,2.3522,0.035\n", encoding="utf-8")
 
-    assert resolve_data_file(str(absolute), tmp_path) == absolute
-    assert resolve_data_file("relative.txt", tmp_path) == tmp_path / "relative.txt"
+    assert resolve_data_file("relative.txt", search) == relative.resolve()
+    assert resolve_data_file(str(absolute), search, allowed_roots=(allowed,)) == absolute.resolve()
+    assert resolve_data_file("absolute.txt", search, allowed_roots=(allowed,)) == absolute.resolve()
+
+
+def test_resolve_data_file_rejects_paths_outside_allowed_roots(tmp_path: Path) -> None:
+    """Absolute paths and traversal outside the roots are rejected."""
+    search = tmp_path / "presets"
+    search.mkdir()
+    allowed = tmp_path / "projects"
+    allowed.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("0,Oslo,59.91,10.75,0.01\n", encoding="utf-8")
+
+    with pytest.raises(SavePathError):
+        resolve_data_file(str(outside), search, allowed_roots=(allowed,))
+    with pytest.raises(SavePathError):
+        resolve_data_file("../outside.txt", search, allowed_roots=(allowed,))
+    with pytest.raises(SavePathError):
+        resolve_data_file(str(outside), search)
+
+
+def test_resolve_data_file_requires_a_regular_file(tmp_path: Path) -> None:
+    """Directories and missing files are not valid data files."""
+    search = tmp_path / "presets"
+    search.mkdir()
+    directory = search / "stations"
+    directory.mkdir()
+
+    with pytest.raises(FileNotFoundError):
+        resolve_data_file(str(directory), search)
+    with pytest.raises(FileNotFoundError):
+        resolve_data_file("missing.txt", search)
 
 
 def test_resolve_save_path_accepts_a_file_inside_the_root(tmp_path: Path) -> None:

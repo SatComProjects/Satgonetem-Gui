@@ -336,3 +336,45 @@ def test_stop_clears_addressing_without_unloading_project(
     assert response.status_code == 200
     assert routing["addressing_applied"] is False
     assert services.topology.status()["constellation_loaded"] is True
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (
+            "/api/traffic/iperf3",
+            {"src": "Sat0", "dst": "Sat1", "congestion_control": "bbr; touch /tmp/pwned"},
+        ),
+        (
+            "/api/traffic/iperf3",
+            {"src": "Sat0", "dst": "Sat1", "window_size": "1M; id"},
+        ),
+        (
+            "/api/traffic/hping3",
+            {"src": "Sat0", "dst": "Sat1", "interval": "u10000; id"},
+        ),
+        (
+            "/api/traffic/hping3",
+            {"src": "Sat0", "dst": "Sat1", "rate_type": "flood"},
+        ),
+    ],
+)
+def test_traffic_rejects_shell_injection_before_starting(
+    project_client, path: str, body: dict
+) -> None:
+    """Unsafe traffic options are rejected with 422 at the schema boundary."""
+    response = project_client.post(path, json=body)
+
+    assert response.status_code == 422
+    assert response.json()["ok"] is False
+
+
+def test_traffic_schema_defaults_still_reach_the_service(project_client) -> None:
+    """The documented defaults pass validation and fail later on GoNetEm state."""
+    response = project_client.post(
+        "/api/traffic/iperf3",
+        json={"src": "Sat0", "dst": "Sat1"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "GoNetEm is not running."

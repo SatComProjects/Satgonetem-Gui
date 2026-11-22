@@ -144,3 +144,49 @@ def test_poll_rejects_unknown_kinds() -> None:
     """Unknown job kinds are an explicit error."""
     with pytest.raises(ValueError):
         SatGoNetemTrafficAdapter().poll("unknown", object())
+
+
+def test_poll_unknown_flow_state_maps_to_a_terminal_error() -> None:
+    """Unrecognized core states never leak as a non-terminal 'unknown'."""
+    adapter = SatGoNetemTrafficAdapter()
+
+    poll = adapter.poll("ping", _flow(PingFlow, "weird"))
+
+    assert poll.status == "error"
+    assert poll.error == "Unknown flow state."
+
+
+@pytest.mark.parametrize(
+    ("kind", "flow_class", "status"),
+    [
+        ("iperf3", Iperf3Flow, FlowStatus.DONE),
+        ("ping", PingFlow, PingStatus.DONE),
+        ("hping3", Hping3Flow, Hping3Status.DONE),
+    ],
+)
+def test_poll_done_result_failure_returns_error(kind, flow_class, status) -> None:
+    """A failing results() call on a finished flow becomes an error poll."""
+    poll = SatGoNetemTrafficAdapter().poll(kind, _flow(flow_class, status))
+
+    assert poll.status == "error"
+    assert poll.error == "flow failed"
+
+
+@pytest.mark.parametrize(
+    ("kind", "flow_class", "status"),
+    [
+        ("iperf3", Iperf3Flow, FlowStatus.DONE),
+        ("ping", PingFlow, PingStatus.DONE),
+        ("hping3", Hping3Flow, Hping3Status.DONE),
+    ],
+)
+def test_poll_done_serialization_failure_returns_error(kind, flow_class, status) -> None:
+    """Malformed result objects become error polls instead of exceptions."""
+    flow = object.__new__(flow_class)
+    flow.status = lambda: status
+    flow.results = lambda: SimpleNamespace()
+
+    poll = SatGoNetemTrafficAdapter().poll(kind, flow)
+
+    assert poll.status == "error"
+    assert poll.error

@@ -3,6 +3,7 @@
 This is the only module that imports concrete traffic-flow classes.
 """
 
+import logging
 from typing import Any
 
 from satgonetem.traffic import (
@@ -24,6 +25,8 @@ from ..serializers import (
     serialize_ping_results,
 )
 from ..services.ports import TrafficPoll
+
+logger = logging.getLogger(__name__)
 
 
 class SatGoNetemTrafficAdapter:
@@ -114,19 +117,23 @@ class SatGoNetemTrafficAdapter:
         if status == FlowStatus.RUNNING:
             return TrafficPoll("running")
         if status == FlowStatus.DONE:
-            result = flow.results()
-            intervals = getattr(result, "_data", {}).get("intervals", [])
-            return TrafficPoll(
-                "done",
-                results=serialize_iperf3_results(result, intervals),
-            )
+            try:
+                result = flow.results()
+                intervals = getattr(result, "_data", {}).get("intervals", [])
+                return TrafficPoll(
+                    "done",
+                    results=serialize_iperf3_results(result, intervals),
+                )
+            except Exception as exc:
+                logger.exception("Failed to read iperf3 results.")
+                return TrafficPoll("error", error=str(exc))
         if status == FlowStatus.ERROR:
             try:
                 flow.results()
             except Exception as exc:
                 return TrafficPoll("error", error=str(exc))
             return TrafficPoll("error", error="Unknown error.")
-        return TrafficPoll("unknown")
+        return TrafficPoll("error", error="Unknown flow state.")
 
     @staticmethod
     def _poll_ping(flow: PingFlow) -> TrafficPoll:
@@ -134,14 +141,18 @@ class SatGoNetemTrafficAdapter:
         if status == PingStatus.RUNNING:
             return TrafficPoll("running")
         if status == PingStatus.DONE:
-            return TrafficPoll("done", results=serialize_ping_results(flow.results()))
+            try:
+                return TrafficPoll("done", results=serialize_ping_results(flow.results()))
+            except Exception as exc:
+                logger.exception("Failed to read ping results.")
+                return TrafficPoll("error", error=str(exc))
         if status == PingStatus.ERROR:
             try:
                 flow.results()
             except Exception as exc:
                 return TrafficPoll("error", error=str(exc))
             return TrafficPoll("error", error="Unknown error.")
-        return TrafficPoll("unknown")
+        return TrafficPoll("error", error="Unknown flow state.")
 
     @staticmethod
     def _poll_hping3(flow: Hping3Flow) -> TrafficPoll:
@@ -149,11 +160,15 @@ class SatGoNetemTrafficAdapter:
         if status == Hping3Status.RUNNING:
             return TrafficPoll("running")
         if status == Hping3Status.DONE:
-            return TrafficPoll("done", results=serialize_hping3_results(flow.results()))
+            try:
+                return TrafficPoll("done", results=serialize_hping3_results(flow.results()))
+            except Exception as exc:
+                logger.exception("Failed to read hping3 results.")
+                return TrafficPoll("error", error=str(exc))
         if status == Hping3Status.ERROR:
             try:
                 flow.results()
             except Exception as exc:
                 return TrafficPoll("error", error=str(exc))
             return TrafficPoll("error", error="Unknown error.")
-        return TrafficPoll("unknown")
+        return TrafficPoll("error", error="Unknown flow state.")

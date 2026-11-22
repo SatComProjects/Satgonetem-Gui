@@ -8,9 +8,13 @@ from ..services.container import ApplicationServices
 
 router = APIRouter(tags=["routing"])
 
+# The blocking status read is declared with ``def`` so FastAPI runs it in its
+# threadpool. Mutating handlers stay ``async def`` because the service offloads
+# Docker/gRPC work with ``asyncio.to_thread``.
+
 
 @router.get("/api/routing/status", response_model=schemas.RoutingStatusResponse)
-async def api_routing_status(
+def api_routing_status(
     services: ApplicationServices = Depends(get_services),
 ) -> schemas.RoutingStatusResponse:
     return schemas.RoutingStatusResponse(**services.routing.status())
