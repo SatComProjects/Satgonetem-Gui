@@ -82,6 +82,26 @@
         <p class="topo-path-summary" id="topo-path-summary"></p>
       </div>
 
+      <div class="topo-history">
+        <div class="topo-history-head">
+          <h4>Snapshots</h4>
+          <span class="muted topo-history-count" id="topo-snapshot-count"></span>
+        </div>
+        <button type="button" class="button small secondary" id="topo-record">Record snapshot</button>
+        <p class="muted topo-history-msg" id="topo-history-msg" aria-live="polite"></p>
+        <div class="topo-history-grid">
+          <label for="topo-compare-from">From
+            <select id="topo-compare-from" disabled></select>
+          </label>
+          <label for="topo-compare-to">To
+            <select id="topo-compare-to" disabled></select>
+          </label>
+        </div>
+        <button type="button" class="button small" id="topo-compare" disabled>Compare steps</button>
+        <p class="muted topo-compare-msg" id="topo-compare-msg" aria-live="polite"></p>
+        <div class="topo-compare-table" id="topo-compare-table"></div>
+      </div>
+
       <section class="topo-inspector" id="topo-inspector" hidden aria-labelledby="topo-inspector-title">
         <div class="topo-inspector-head">
           <div>

@@ -501,10 +501,32 @@
   opacity: 0.5;
 }
 
-/* Traced path wins over inactive, dim, and partition coloring. */
+/* Step-comparison overlays. Declared before `.path` so a traced route still
+ * wins when an edge carries both a diff class and the path class. */
+.topo-edge.added {
+  stroke: var(--ok);
+  stroke-width: 2.2;
+  opacity: 1;
+}
+
+.topo-edge.removed {
+  stroke: var(--bad);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+  opacity: 0.9;
+}
+
+.topo-edge.changed {
+  stroke: var(--warning);
+  stroke-width: 2.2;
+  opacity: 1;
+}
+
+/* Traced path wins over inactive, dim, partition, and diff coloring. */
 .topo-edge.path {
   stroke: var(--topo-path);
   stroke-width: 2.4;
+  stroke-dasharray: none;
   opacity: 1;
   filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.55));
 }
@@ -610,6 +632,184 @@
 
 .topo-path-summary:empty {
   display: none;
+}
+
+/* Snapshot history and step comparison ------------------------------------ */
+
+.topo-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: rgba(11, 15, 20, 0.38);
+}
+
+.topo-history-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.topo-history-head h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.topo-history-count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.topo-history-count:empty {
+  display: none;
+}
+
+.topo-history .button {
+  width: 100%;
+}
+
+.topo-history-msg,
+.topo-compare-msg {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.topo-history-msg.error,
+.topo-history-msg[data-state="error"],
+.topo-compare-msg.error,
+.topo-compare-msg[data-state="error"] {
+  color: var(--bad);
+}
+
+.topo-history-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.topo-history-grid label {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  gap: 4px;
+}
+
+.topo-history-grid select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.topo-compare-table {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(8, 13, 19, 0.55);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.topo-compare-table:empty {
+  display: none;
+}
+
+.topo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.topo-diff-table {
+  min-width: 320px;
+}
+
+.topo-diff-table th,
+.topo-diff-table td {
+  padding: 5px 7px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.topo-diff-table th {
+  background: rgba(11, 15, 20, 0.6);
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topo-diff-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.topo-diff-table tr[data-diff] td:first-child {
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topo-diff-table tr[data-diff] td:first-child::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+
+.topo-diff-table tr[data-diff="added"] {
+  background: rgba(74, 222, 128, 0.06);
+}
+
+.topo-diff-table tr[data-diff="added"] td:first-child {
+  color: var(--ok);
+}
+
+.topo-diff-table tr[data-diff="removed"] {
+  background: rgba(248, 113, 113, 0.06);
+}
+
+.topo-diff-table tr[data-diff="removed"] td:first-child {
+  color: var(--bad);
+}
+
+.topo-diff-table tr[data-diff="changed"] {
+  background: rgba(251, 191, 36, 0.06);
+}
+
+.topo-diff-table tr[data-diff="changed"] td:first-child {
+  color: var(--warning);
 }
 
 /* Node inspector ----------------------------------------------------------- */
@@ -882,6 +1082,12 @@
     grid-column: 1 / -1;
     justify-self: end;
     align-self: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .topo-history-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
