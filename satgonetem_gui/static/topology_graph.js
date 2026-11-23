@@ -19,6 +19,9 @@ let allNodes = [];
 let allLinks = [];
 let pathKeys = new Set();
 let selected = null;
+let snapshots = [];
+let diffState = { added: new Set(), removed: new Set(), changed: new Set(), extraLinks: [] };
+let recording = false;
 let pollTimer = null;
 let searchTimer = null;
 let fetching = false;
@@ -87,6 +90,9 @@ function edgeElement(link, positions, highlightPartitions, componentByNode) {
   const key = linkKey(link.src, link.dst);
   const classes = ["topo-edge"];
   if (link.is_active === false) classes.push("inactive");
+  if (diffState.added.has(key)) classes.push("added");
+  if (diffState.removed.has(key)) classes.push("removed");
+  if (diffState.changed.has(key)) classes.push("changed");
   if (pathKeys.has(key)) classes.push("path");
   else if (pathKeys.size) classes.push("dim");
   if (highlightPartitions) {
@@ -191,6 +197,19 @@ function renderGraph() {
       partitions.componentByNode,
     );
     if (line) svg.appendChild(line);
+  }
+  for (const link of diffState.extraLinks) {
+    if (!positions[link.src] || !positions[link.dst]) continue;
+    const ghost = edgeElement(
+      link,
+      positions,
+      false,
+      partitions.componentByNode,
+    );
+    if (ghost) {
+      ghost.classList.add("removed");
+      svg.appendChild(ghost);
+    }
   }
   for (const node of nodes) {
     const position = positions[node.name];
@@ -362,6 +381,148 @@ function clearPath() {
   renderGraph();
 }
 
+function historyMessage(text, isError = false) {
+  const element = byId("topo-history-msg");
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function compareMessage(text, isError = false) {
+  const element = byId("topo-compare-msg");
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+}
+
+function fillSnapshotSelect(select, records) {
+  const previous = select.value;
+  select.replaceChildren();
+  for (const snapshot of records) {
+    const option = document.createElement("option");
+    option.value = String(snapshot.step);
+    option.textContent = `step ${snapshot.step}${snapshot.time ? ` \u00b7 ${snapshot.time}` : ""}`;
+    select.appendChild(option);
+  }
+  if (records.some((snapshot) => String(snapshot.step) === previous)) {
+    select.value = previous;
+  }
+  select.disabled = records.length < 2;
+}
+
+async function loadSnapshots() {
+  try {
+    const data = await api.get("/api/topology/snapshots");
+    snapshots = Array.isArray(data.snapshots) ? data.snapshots : [];
+    const from = byId("topo-compare-from");
+    const to = byId("topo-compare-to");
+    if (from) fillSnapshotSelect(from, snapshots);
+    if (to) fillSnapshotSelect(to, snapshots);
+    if (snapshots.length >= 2) {
+      if (!from.value) from.value = String(snapshots[snapshots.length - 2].step);
+      if (!to.value) to.value = String(snapshots[snapshots.length - 1].step);
+    }
+    const count = byId("topo-snapshot-count");
+    if (count) count.textContent = `${snapshots.length} recorded`;
+    const compare = byId("topo-compare");
+    if (compare) compare.disabled = snapshots.length < 2;
+  } catch (error) {
+    historyMessage(error.message || "Could not load snapshots.", true);
+  }
+}
+
+async function recordSnapshot(manual = false) {
+  if (recording) return;
+  recording = true;
+  try {
+    const data = await api.post("/api/topology/snapshots", undefined);
+    if (manual) {
+      historyMessage(
+        data.recorded
+          ? `Recorded step ${data.step}.`
+          : `Step ${data.step} is already recorded.`,
+      );
+    }
+    await loadSnapshots();
+  } catch (error) {
+    if (manual) {
+      historyMessage(
+        error.status === 404
+          ? "Load a project before recording snapshots."
+          : error.message || "Could not record a snapshot.",
+        true,
+      );
+    }
+  } finally {
+    recording = false;
+  }
+}
+
+function diffRow(kind, element, details) {
+  return `<tr data-diff="${kind}"><td>${kind[0].toUpperCase() + kind.slice(1)}</td><td>${escapeHtml(element)}</td><td>${escapeHtml(details)}</td></tr>`;
+}
+
+function renderComparison(data) {
+  const added = Array.isArray(data.added_links) ? data.added_links : [];
+  const removed = Array.isArray(data.removed_links) ? data.removed_links : [];
+  const changed = Array.isArray(data.changed_links) ? data.changed_links : [];
+  const addedNodes = Array.isArray(data.added_nodes) ? data.added_nodes : [];
+  const removedNodes = Array.isArray(data.removed_nodes) ? data.removed_nodes : [];
+  diffState = {
+    added: new Set(added.map((link) => linkKey(link.src, link.dst))),
+    removed: new Set(removed.map((link) => linkKey(link.src, link.dst))),
+    changed: new Set(changed.map((link) => linkKey(link.src, link.dst))),
+    extraLinks: removed,
+  };
+  const rows = [
+    ...added.map((link) =>
+      diffRow("added", `${link.src} \u2192 ${link.dst}`, link.type || "link"),
+    ),
+    ...removed.map((link) =>
+      diffRow("removed", `${link.src} \u2192 ${link.dst}`, link.type || "link"),
+    ),
+    ...changed.map((link) =>
+      diffRow(
+        "changed",
+        `${link.src} \u2192 ${link.dst}`,
+        (link.changes || []).join(", "),
+      ),
+    ),
+    ...addedNodes.map((name) => diffRow("added", name, "node")),
+    ...removedNodes.map((name) => diffRow("removed", name, "node")),
+  ];
+  const container = byId("topo-compare-table");
+  if (container) {
+    container.innerHTML = rows.length
+      ? `<table class="topo-table topo-diff-table"><thead><tr><th>Change</th><th>Element</th><th>Details</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+      : '<p class="muted">No differences between these steps.</p>';
+  }
+  compareMessage(
+    `${added.length} added / ${removed.length} removed / ${changed.length} changed links \u00b7 nodes +${addedNodes.length}/-${removedNodes.length}`,
+  );
+  renderGraph();
+}
+
+async function compareSteps() {
+  const from = byId("topo-compare-from")?.value;
+  const to = byId("topo-compare-to")?.value;
+  if (from === undefined || to === undefined) {
+    compareMessage("Record at least two steps before comparing.", true);
+    return;
+  }
+  compareMessage("Comparing...");
+  try {
+    const data = await api.get(
+      `/api/topology/compare?from_step=${encodeURIComponent(from)}&to_step=${encodeURIComponent(to)}`,
+    );
+    renderComparison(data);
+  } catch (error) {
+    diffState = { added: new Set(), removed: new Set(), changed: new Set(), extraLinks: [] };
+    compareMessage(error.message || "Could not compare steps.", true);
+    renderGraph();
+  }
+}
+
 async function loadData() {
   if (fetching) return;
   fetching = true;
@@ -375,6 +536,7 @@ async function loadData() {
     updateShellOptions();
     renderGraph();
     setMessage("");
+    await recordSnapshot(false);
   } catch (error) {
     allNodes = [];
     allLinks = [];
@@ -397,6 +559,8 @@ byId("topo-search")?.addEventListener("input", () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(renderGraph, 120);
 });
+byId("topo-record")?.addEventListener("click", () => recordSnapshot(true));
+byId("topo-compare")?.addEventListener("click", compareSteps);
 byId("topo-path-trace")?.addEventListener("click", tracePath);
 byId("topo-path-clear")?.addEventListener("click", clearPath);
 byId("topo-inspector-close")?.addEventListener("click", closeInspector);

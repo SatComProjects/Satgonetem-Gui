@@ -19,7 +19,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Coverage Analytics** | Snapshot Earth coverage at a chosen elevation mask, per shell and per ground station. |
 | **Link Budget Workbench** | Compute a one-way RF budget and Shannon/MODCOD capacity with a full breakdown. |
 | **Topology Export & Health** | Structural graph checks plus JSON, DOT, and GraphML exports. |
-| **Network Topology Graph** | Deterministic 2D graph with filters, edge metrics, partitions, path highlighting, and an inspector. |
+| **Network Topology Graph** | Deterministic 2D graph with filters, edge metrics, partitions, path highlighting, inspector, and timestamp comparison. |
 | **Experiment Runs** | Build scenarios from forms or YAML, run them, and keep manifests, metrics, results, and reports on the server. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows with saved presets, endpoint swap, clone, replay, and a queued job system. |
@@ -284,6 +284,13 @@ edges expose delay, capacity, configured loss, and jitter. Connected components
 are counted and can be color-highlighted, two nodes can be traced with the
 routing endpoint, and clicking a node opens interfaces, IPs, and the routing
 table. The graph updates on the shared five-second topology poll.
+
+Observed steps are recorded automatically (deduplicated per step) into a bounded
+in-memory history. Two recorded steps can be compared: added, removed, and
+changed links and node additions/removals are listed in a diff table, with
+green/red/amber edge highlighting and ghost lines for removed links whose
+endpoints remain visible. History is cleared when the project changes and does
+not seek the live simulation.
 
 ## World View Node Inspector
 

@@ -24,6 +24,7 @@ from tests.helpers import wait_for_project_state
         ("GET", "/api/nodes", None),
         ("GET", "/api/nodes/Sat0", None),
         ("GET", "/api/topology/health", None),
+        ("POST", "/api/topology/snapshots", None),
         ("GET", "/api/topology/export?format=json", None),
         ("GET", "/api/routing/status", None),
         ("GET", "/api/routing/path?src=Sat0&dst=Sat1", None),

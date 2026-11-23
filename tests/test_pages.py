@@ -72,6 +72,8 @@ def test_openapi_schema_contains_all_public_routes(client) -> None:
         "/api/analysis/link-budget",
         "/api/topology/health",
         "/api/topology/export",
+        "/api/topology/snapshots",
+        "/api/topology/compare",
         "/api/experiments",
         "/api/experiments/{run_id}",
         "/api/experiments/{run_id}/artifacts/{name}",
