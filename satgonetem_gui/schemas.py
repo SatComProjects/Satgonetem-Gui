@@ -63,9 +63,7 @@ class ProjectCreateRequest(BaseModel):
     gs_capacity: int = Field(default=100000, ge=1)
     save_path: str = Field(default="", max_length=4096)
     walker_shells_json: str = Field(min_length=1, max_length=2_000_000)
-    ground_objects_properties_json: str = Field(
-        min_length=1, max_length=2_000_000
-    )
+    ground_objects_properties_json: str = Field(min_length=1, max_length=2_000_000)
 
     @field_validator("walker_shells_json", "ground_objects_properties_json")
     @classmethod
@@ -191,6 +189,7 @@ class SatelliteResponse(BaseModel):
     id: int
     name: str
     position: Position
+    shell: str | None = None
 
 
 class SatelliteAddressabilityResponse(BaseModel):
@@ -240,6 +239,8 @@ class LinkResponse(BaseModel):
     delay_ms: float
     capacity_kbps: int
     is_active: bool
+    loss_percent: float = 0.0
+    jitter_ms: int = 0
 
 
 class LinkUsageEntry(BaseModel):
@@ -391,6 +392,7 @@ class NodeSummary(BaseModel):
     id: int
     city: str | None = None
     position: Position
+    shell: str | None = None
 
 
 class TopologyHealthCheck(BaseModel):
@@ -512,9 +514,7 @@ class PreflightRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     walker_shells_json: str | None = Field(default=None, max_length=2_000_000)
-    ground_objects_properties_json: str | None = Field(
-        default=None, max_length=2_000_000
-    )
+    ground_objects_properties_json: str | None = Field(default=None, max_length=2_000_000)
 
 
 class PreflightCheck(BaseModel):

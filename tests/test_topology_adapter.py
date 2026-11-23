@@ -875,6 +875,8 @@ def test_links_include_delay_capacity_and_active_state(settings) -> None:
                 direction="",
                 distance=1_500_000.0,
                 is_active=False,
+                loss=1.5,
+                jitter=12,
                 get_capacity=lambda: 100_000,
             )
         }
@@ -892,6 +894,8 @@ def test_links_include_delay_capacity_and_active_state(settings) -> None:
             "delay_ms": 5.0,
             "capacity_kbps": 100000,
             "is_active": False,
+            "loss_percent": 1.5,
+            "jitter_ms": 12,
         }
     ]
 

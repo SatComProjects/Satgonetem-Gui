@@ -16,6 +16,7 @@ import pytest
         ("/ground_stations", "Select Ground Stations"),
         ("/world", "World View"),
         ("/nodes", "Nodes"),
+        ("/topology", "Network Topology"),
         ("/traffic", "Traffic Generator"),
     ],
 )

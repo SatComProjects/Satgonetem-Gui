@@ -36,7 +36,8 @@ def test_satellites_endpoint(project_client) -> None:
     assert response.status_code == 200
     satellites = response.json()
     assert len(satellites) == PLANES * SATELLITES_PER_PLANE
-    assert {"id", "name", "position"} == set(satellites[0])
+    assert {"id", "name", "position", "shell"} == set(satellites[0])
+    assert satellites[0]["shell"] == "LEO"
     assert set(satellites[0]["position"]) == {"latitude", "longitude", "altitude"}
 
 
@@ -80,6 +81,8 @@ def test_links_endpoint(project_client) -> None:
             "delay_ms",
             "capacity_kbps",
             "is_active",
+            "loss_percent",
+            "jitter_ms",
         }
         == set(link)
         for link in links
