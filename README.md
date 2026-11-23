@@ -14,6 +14,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Readiness Checks** | Preflight storage, Docker, image, and GoNetEm checks plus a rough container/memory estimate. |
 | **Project Workspace** | List, reopen, save in place, duplicate, and delete projects under the configured save root. |
 | **Usage Link Colors** | Opt-in World View link coloring from green (idle) to red (at/above capacity). |
+| **Keyboard Shortcuts** | Skip link, active navigation, `?` help, and `g`-prefix page navigation. |
 | **Connectivity Matrix** | Ping every ordered pair of addressable nodes with a loss/RTT heatmap and CSV/JSON export. |
 | **Coverage Analytics** | Snapshot Earth coverage at a chosen elevation mask, per shell and per ground station. |
 | **Topology Export & Health** | Structural graph checks plus JSON, DOT, and GraphML exports. |
@@ -231,6 +232,15 @@ at 100,000,000 satellite-cells and 1,200,000 grid cells; a finer grid over a
 large constellation is rejected with a request to use a coarser resolution.
 Results are cached per project generation, simulation step, elevation,
 resolution, and section toggles.
+
+## Shell and Keyboard Shortcuts
+
+Every page shares a skip link, a `<main>` landmark, active navigation, and a
+focus-visible ring. The header `?` button (or the `?` key) opens a shortcuts
+dialog; `g` followed by `d`, `w`, `n`, or `t` navigates to Dashboard, World
+View, Nodes, or Traffic. Shortcuts are suppressed while typing or when a modal
+owns focus. The floating traffic queue becomes a bottom sheet on narrow
+screens.
 
 ## Node Explorer
 
