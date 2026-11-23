@@ -33,6 +33,7 @@ from .routes import (
     simulation,
     topology,
     topology_export,
+    topology_history,
     traffic,
     workspace,
 )
@@ -48,6 +49,7 @@ from .services.project_service import ProjectService
 from .services.routing_service import RoutingService
 from .services.simulation_service import SimulationService
 from .services.topology_export_service import TopologyExportService
+from .services.topology_history_service import TopologyHistoryService
 from .services.topology_service import TopologyService
 from .services.traffic_service import TrafficService
 from .state import RuntimeState
@@ -81,9 +83,12 @@ def _allowed_hosts(settings: Settings) -> list[str]:
 
 def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
     """Reject untrusted Host headers and cross-origin browser mutations."""
-    allowed_names = {
-        host.strip("[]").lower() for host in hosts
-    } | {"127.0.0.1", "localhost", "testserver", "::1"}
+    allowed_names = {host.strip("[]").lower() for host in hosts} | {
+        "127.0.0.1",
+        "localhost",
+        "testserver",
+        "::1",
+    }
 
     @app.middleware("http")
     async def request_guard(request, call_next):
@@ -137,9 +142,7 @@ def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
                     )
         response = await call_next(request)
         response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault(
-            "Content-Security-Policy", "frame-ancestors 'none'"
-        )
+        response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
         return response
 
 
@@ -155,6 +158,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         usage_reader=topology_adapter,
     )
     topology_export = TopologyExportService(topology)
+    topology_history = TopologyHistoryService(topology)
     addressability = AddressabilityService(topology, topology_adapter)
     simulation = SimulationService(topology, topology_adapter)
     project = ProjectService(
@@ -188,6 +192,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         catalog=catalog,
         topology=topology,
         topology_export=topology_export,
+        topology_history=topology_history,
         addressability=addressability,
         routing=routing,
         traffic=traffic,
@@ -231,6 +236,7 @@ def create_app(
     app.include_router(projects.router)
     app.include_router(topology.router)
     app.include_router(topology_export.router)
+    app.include_router(topology_history.router)
     app.include_router(addressability.router)
     app.include_router(routing.router)
     app.include_router(simulation.router)

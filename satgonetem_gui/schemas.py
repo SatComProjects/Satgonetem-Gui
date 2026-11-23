@@ -424,6 +424,84 @@ class TopologyExportResponse(BaseModel):
     content_type: str
 
 
+class TopologySnapshotSummary(BaseModel):
+    """One recorded topology step."""
+
+    step: int
+    time: str | None = None
+    recorded_at: str
+    node_count: int
+    link_count: int
+
+
+class TopologySnapshotListResponse(BaseModel):
+    """Recorded topology snapshots, oldest first."""
+
+    ok: bool = True
+    generation: int | None = None
+    snapshots: list[TopologySnapshotSummary] = Field(default_factory=list)
+
+
+class TopologyRecordSnapshotResponse(BaseModel):
+    """Result of recording the current topology step."""
+
+    ok: bool = True
+    recorded: bool
+    reason: str | None = None
+    step: int
+    snapshot_count: int
+    node_count: int | None = None
+    link_count: int | None = None
+
+
+class TopologyLinkDiff(BaseModel):
+    """One link in a topology comparison."""
+
+    src: str
+    dst: str
+    type: str
+    delay_ms: float
+    capacity_kbps: int
+    loss_percent: float
+    jitter_ms: int
+    is_active: bool
+
+
+class TopologyLinkChange(BaseModel):
+    """One link whose metrics changed between two steps."""
+
+    src: str
+    dst: str
+    before: TopologyLinkDiff
+    after: TopologyLinkDiff
+    changes: list[str]
+
+
+class TopologyCompareMeta(BaseModel):
+    """Metadata for one side of a comparison."""
+
+    step: int
+    time: str | None = None
+    recorded_at: str
+    node_count: int
+    link_count: int
+
+
+class TopologyCompareResponse(BaseModel):
+    """Added, removed, and changed topology elements between two steps."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    ok: bool = True
+    from_snapshot: TopologyCompareMeta = Field(alias="from")
+    to_snapshot: TopologyCompareMeta = Field(alias="to")
+    added_links: list[TopologyLinkDiff] = Field(default_factory=list)
+    removed_links: list[TopologyLinkDiff] = Field(default_factory=list)
+    changed_links: list[TopologyLinkChange] = Field(default_factory=list)
+    added_nodes: list[str] = Field(default_factory=list)
+    removed_nodes: list[str] = Field(default_factory=list)
+
+
 class TrafficNode(BaseModel):
     """Traffic source or destination."""
 
