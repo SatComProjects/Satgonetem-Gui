@@ -22,6 +22,7 @@ from satgonetem_gui.routes import (
     topology_export,
     topology_history,
     traffic,
+    traffic_matrix,
     workspace,
 )
 
@@ -68,6 +69,9 @@ BLOCKING_ENDPOINTS = [
     traffic.api_traffic_hping3,
     traffic.api_traffic_status,
     traffic.api_traffic_cancel,
+    traffic_matrix.api_start_traffic_matrix,
+    traffic_matrix.api_traffic_matrix_status,
+    traffic_matrix.api_traffic_matrix_export,
 ]
 
 ASYNC_ENDPOINTS = [

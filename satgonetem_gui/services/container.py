@@ -16,6 +16,7 @@ from .simulation_service import SimulationService
 from .topology_export_service import TopologyExportService
 from .topology_history_service import TopologyHistoryService
 from .topology_service import TopologyService
+from .traffic_matrix_service import TrafficMatrixService
 from .traffic_service import TrafficService
 
 
@@ -32,6 +33,7 @@ class ApplicationServices:
     addressability: AddressabilityService
     routing: RoutingService
     traffic: TrafficService
+    traffic_matrix: TrafficMatrixService
     simulation: SimulationService
     preflight: PreflightService
     connectivity: ConnectivityService

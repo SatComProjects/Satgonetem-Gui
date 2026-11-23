@@ -18,6 +18,7 @@ import pytest
         ("/nodes", "Nodes"),
         ("/topology", "Network Topology"),
         ("/monitor", "Traffic Monitor"),
+        ("/matrix", "Traffic Matrix"),
         ("/traffic", "Traffic Generator"),
     ],
 )
@@ -94,5 +95,8 @@ def test_openapi_schema_contains_all_public_routes(client) -> None:
         "/api/traffic/hping3",
         "/api/traffic/status",
         "/api/traffic/cancel",
+        "/api/traffic/matrix",
+        "/api/traffic/matrix/{job_id}",
+        "/api/traffic/matrix/{job_id}/export",
     }
     assert expected.issubset(paths)

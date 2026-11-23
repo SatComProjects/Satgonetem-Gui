@@ -44,6 +44,8 @@ from tests.helpers import wait_for_project_state
         ("POST", "/api/traffic/hping3", {"src": "Sat0", "dst": "Sat1"}),
         ("GET", "/api/traffic/status?job_id=missing", None),
         ("POST", "/api/traffic/cancel", {"job_id": "missing"}),
+        ("POST", "/api/traffic/matrix", {}),
+        ("GET", "/api/traffic/matrix/missing", None),
         ("GET", "/api/project/save", None),
         ("GET", "/api/project/config?name=Missing", None),
         ("POST", "/api/analysis/coverage", {}),

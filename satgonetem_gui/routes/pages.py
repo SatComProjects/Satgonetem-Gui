@@ -4,61 +4,41 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+PAGE_ROUTES = (
+    ("/", "index.html"),
+    ("/new_project", "new_project.html"),
+    ("/projects", "projects.html"),
+    ("/connectivity", "connectivity.html"),
+    ("/coverage", "coverage.html"),
+    ("/topology", "topology.html"),
+    ("/monitor", "monitor.html"),
+    ("/matrix", "matrix.html"),
+    ("/link-budget", "link_budget.html"),
+    ("/experiments", "experiments.html"),
+    ("/ground_stations", "ground_stations.html"),
+    ("/world", "world.html"),
+    ("/nodes", "nodes.html"),
+    ("/traffic", "traffic.html"),
+)
+
+
+def _page_handler(templates: Jinja2Templates, template: str):
+    """Build one async HTML handler for a template."""
+
+    async def handler(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, template)
+
+    return handler
+
 
 def create_pages_router(templates: Jinja2Templates) -> APIRouter:
     """Build the page router around a template directory."""
     router = APIRouter()
-
-    @router.get("/", response_class=HTMLResponse)
-    async def dashboard(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "index.html")
-
-    @router.get("/new_project", response_class=HTMLResponse)
-    async def new_project(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "new_project.html")
-
-    @router.get("/projects", response_class=HTMLResponse)
-    async def projects_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "projects.html")
-
-    @router.get("/connectivity", response_class=HTMLResponse)
-    async def connectivity_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "connectivity.html")
-
-    @router.get("/coverage", response_class=HTMLResponse)
-    async def coverage_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "coverage.html")
-
-    @router.get("/topology", response_class=HTMLResponse)
-    async def topology_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "topology.html")
-
-    @router.get("/monitor", response_class=HTMLResponse)
-    async def monitor_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "monitor.html")
-
-    @router.get("/link-budget", response_class=HTMLResponse)
-    async def link_budget_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "link_budget.html")
-
-    @router.get("/experiments", response_class=HTMLResponse)
-    async def experiments_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "experiments.html")
-
-    @router.get("/ground_stations", response_class=HTMLResponse)
-    async def ground_stations_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "ground_stations.html")
-
-    @router.get("/world", response_class=HTMLResponse)
-    async def world_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "world.html")
-
-    @router.get("/nodes", response_class=HTMLResponse)
-    async def nodes_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "nodes.html")
-
-    @router.get("/traffic", response_class=HTMLResponse)
-    async def traffic_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "traffic.html")
-
+    for path, template in PAGE_ROUTES:
+        router.add_api_route(
+            path,
+            _page_handler(templates, template),
+            response_class=HTMLResponse,
+            name=template.removesuffix(".html"),
+        )
     return router
