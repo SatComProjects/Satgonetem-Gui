@@ -1,0 +1,446 @@
+/* Traffic monitor ----------------------------------------------------------
+ * Live observability page. The markup is a fixed skeleton wired by
+ * traffic_monitor.js; this file owns the frame, instrument surfaces, table
+ * density, and the paused/empty/unavailable states.
+ */
+
+.mon-page {
+  --mon-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  --mon-panel-deep: #0a1118;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mon-page > * {
+  min-width: 0;
+}
+
+/* Page header --------------------------------------------------------------
+ * A telemetry panel: accent glow from the top-right, scanlines fading out
+ * under the copy, and a live dot on the eyebrow.
+ */
+
+.mon-page-head {
+  position: relative;
+  overflow: hidden;
+  padding: 22px 24px 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 180% at 100% -40%, rgba(61, 169, 252, 0.16), transparent 58%),
+    linear-gradient(140deg, rgba(61, 169, 252, 0.05), transparent 52%),
+    var(--card);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+.mon-page-head::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), rgba(61, 169, 252, 0) 64%);
+  pointer-events: none;
+}
+
+.mon-page-head::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 46%;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(138, 160, 183, 0.09) 0 1px,
+    transparent 1px 7px
+  );
+  -webkit-mask-image: radial-gradient(90% 110% at 100% 0, #000 0%, transparent 74%);
+  mask-image: radial-gradient(90% 110% at 100% 0, #000 0%, transparent 74%);
+  pointer-events: none;
+}
+
+.mon-page-head > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mon-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.mon-eyebrow::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: mon-pulse 2.6s ease-out infinite;
+}
+
+@keyframes mon-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(61, 169, 252, 0.5);
+  }
+
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px rgba(61, 169, 252, 0);
+  }
+}
+
+.mon-title {
+  margin: 5px 0 8px;
+  font-size: clamp(1.5rem, 1.1rem + 1.2vw, 1.95rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.mon-lede {
+  max-width: 68ch;
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+/* Status line --------------------------------------------------------------
+ * traffic_monitor.js owns the colour; this only reserves the line and keeps
+ * long API messages from stretching the page.
+ */
+
+.mon-msg {
+  min-height: 1.35em;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* Toolbar ------------------------------------------------------------------
+ * One inset control strip: actions left, summary pushed right.
+ */
+
+.mon-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 60%),
+    var(--input-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.mon-page .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.mon-page .button.secondary {
+  border-color: #26364a;
+  background: #101823;
+  color: var(--text);
+}
+
+.mon-page .button.secondary:hover {
+  border-color: #33475f;
+  background: #17212e;
+}
+
+.mon-page .button.secondary:active {
+  background: #0c131b;
+}
+
+/* Pause is a toggle, so it keeps a state mark in both positions. */
+#monitor-pause {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+#monitor-pause::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(138, 160, 183, 0.65);
+  border-radius: 50%;
+  background: transparent;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    border-radius 0.15s ease;
+}
+
+#monitor-pause[aria-pressed="true"] {
+  border-color: rgba(61, 169, 252, 0.6);
+  background: rgba(61, 169, 252, 0.14);
+  color: #cfe8ff;
+  box-shadow: inset 0 0 0 1px rgba(61, 169, 252, 0.16);
+}
+
+#monitor-pause[aria-pressed="true"]:hover {
+  border-color: rgba(61, 169, 252, 0.78);
+  background: rgba(61, 169, 252, 0.2);
+}
+
+#monitor-pause[aria-pressed="true"]::before {
+  border-color: var(--accent);
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.mon-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  font-family: var(--mon-mono);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.mon-summary:empty {
+  display: none;
+}
+
+.mon-page .button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Unavailable note ---------------------------------------------------------
+ * Shown only when usage cannot be measured; the panel stays out of the flow
+ * while hidden.
+ */
+
+.mon-note {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--warning-border);
+  border-left: 3px solid var(--warning);
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.07);
+  color: #e8c777;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.mon-note[hidden],
+#monitor-nodes-empty[hidden],
+#monitor-links-empty[hidden] {
+  display: none;
+}
+
+/* Chart + node sidebar ----------------------------------------------------- */
+
+.mon-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.mon-chart-card,
+.mon-side,
+.mon-links-card {
+  min-width: 0;
+}
+
+.mon-side {
+  background:
+    radial-gradient(110% 80% at 100% 0, rgba(61, 169, 252, 0.05), transparent 62%),
+    var(--card);
+}
+
+.mon-chart-wrap {
+  position: relative;
+  height: 280px;
+  padding: 10px 12px 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background:
+    radial-gradient(120% 90% at 50% -12%, rgba(61, 169, 252, 0.08), transparent 62%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(138, 160, 183, 0.055) 0 1px,
+      transparent 1px 32px
+    ),
+    var(--mon-panel-deep);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    inset 0 12px 30px rgba(0, 0, 0, 0.25);
+}
+
+.mon-chart-wrap canvas {
+  display: block;
+  max-width: 100%;
+}
+
+.mon-chart-msg {
+  margin: 8px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.mon-chart-msg:empty {
+  display: none;
+}
+
+/* Tables -------------------------------------------------------------------
+ * The wrapper scrolls, not the page. Numeric columns are right-aligned,
+ * monospaced, and tabular so values stop jittering between polls.
+ */
+
+.mon-table-wrap {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: rgba(10, 17, 24, 0.45);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mon-table-wrap:empty {
+  display: none;
+}
+
+.mon-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mon-links-card .mon-table {
+  min-width: 620px;
+}
+
+.mon-table th,
+.mon-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  line-height: 1.4;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.mon-table thead th {
+  background: #101923;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mon-table th:not(:first-child) {
+  text-align: right;
+}
+
+.mon-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mon-table tbody tr:hover td {
+  background: rgba(61, 169, 252, 0.045);
+}
+
+.mon-table td:first-child {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mon-table td:not(:first-child) {
+  font-family: var(--mon-mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.005em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Empty states ------------------------------------------------------------- */
+
+#monitor-nodes-empty,
+#monitor-links-empty {
+  margin: 0;
+  padding: 14px 12px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 10px;
+  background: rgba(10, 17, 24, 0.35);
+  font-style: italic;
+  line-height: 1.45;
+}
+
+/* Responsive --------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .mon-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .mon-page {
+    gap: 14px;
+  }
+
+  .mon-page-head {
+    padding: 18px 18px 16px;
+  }
+
+  .mon-toolbar {
+    padding: 10px;
+    gap: 7px;
+  }
+
+  .mon-summary {
+    flex-basis: 100%;
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .mon-chart-wrap {
+    height: 220px;
+    padding: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mon-eyebrow::before {
+    animation: none;
+  }
+
+  .mon-page .button,
+  #monitor-pause::before {
+    transition: none;
+  }
+}

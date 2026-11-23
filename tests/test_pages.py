@@ -17,6 +17,7 @@ import pytest
         ("/world", "World View"),
         ("/nodes", "Nodes"),
         ("/topology", "Network Topology"),
+        ("/monitor", "Traffic Monitor"),
         ("/traffic", "Traffic Generator"),
     ],
 )

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/traffic_monitor.css">
+{% endblock %}
+
+{% block content %}
+<div class="mon-page">
+  <header class="mon-page-head">
+    <p class="mon-eyebrow">Live observability</p>
+    <h2 class="mon-title">Traffic Monitor</h2>
+    <p class="muted mon-lede">Per-link throughput, utilization, and configured delay, loss, and jitter, sampled every two seconds while GoNetEm is running.</p>
+  </header>
+  <p class="muted mon-msg" id="monitor-msg" aria-live="polite"></p>
+  <div class="mon-toolbar" role="group" aria-label="Monitor controls">
+    <button type="button" class="button small secondary" id="monitor-pause" aria-pressed="false">Pause</button>
+    <button type="button" class="button small secondary" id="monitor-clear">Clear</button>
+    <button type="button" class="button small secondary" id="monitor-export-csv">Export CSV</button>
+    <button type="button" class="button small secondary" id="monitor-export-json">Export JSON</button>
+    <span class="muted mon-summary" id="monitor-summary"></span>
+  </div>
+  <p class="mon-note" id="monitor-note" hidden></p>
+  <div class="mon-layout">
+    <section class="card mon-chart-card" aria-labelledby="monitor-chart-title">
+      <h3 class="card-title" id="monitor-chart-title">Total throughput</h3>
+      <div class="mon-chart-wrap"><canvas id="monitor-chart" role="img" aria-label="Total throughput over retained samples"></canvas></div>
+      <p class="muted mon-chart-msg" id="monitor-chart-msg"></p>
+    </section>
+    <section class="card mon-side" aria-labelledby="monitor-nodes-title">
+      <h3 class="card-title" id="monitor-nodes-title">Top nodes</h3>
+      <div id="monitor-nodes-table" class="mon-table-wrap"></div>
+      <p class="muted" id="monitor-nodes-empty" hidden>No node traffic yet.</p>
+    </section>
+  </div>
+  <section class="card mon-links-card" aria-labelledby="monitor-links-title">
+    <h3 class="card-title" id="monitor-links-title">Links</h3>
+    <div id="monitor-links-table" class="mon-table-wrap"></div>
+    <p class="muted" id="monitor-links-empty" hidden>No links sampled yet.</p>
+  </section>
+</div>
+<script type="module" src="/static/traffic_monitor.js?v=1"></script>
+{% endblock %}
