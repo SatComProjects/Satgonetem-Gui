@@ -19,6 +19,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Coverage Analytics** | Snapshot Earth coverage at a chosen elevation mask, per shell and per ground station. |
 | **Link Budget Workbench** | Compute a one-way RF budget and Shannon/MODCOD capacity with a full breakdown. |
 | **Topology Export & Health** | Structural graph checks plus JSON, DOT, and GraphML exports. |
+| **Network Topology Graph** | Deterministic 2D graph with filters, edge metrics, partitions, path highlighting, and an inspector. |
 | **Experiment Runs** | Build scenarios from forms or YAML, run them, and keep manifests, metrics, results, and reports on the server. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows with saved presets, endpoint swap, clone, replay, and a queued job system. |
@@ -111,6 +112,7 @@ package.json            # Frontend test/tooling manifest
 | `/` | Dashboard — constellation statistics, simulation playback, GoNetem status, routing controls |
 | `/world` | 3D Globe — visualisation, node inspector, link isolation, playback, and path highlighting |
 | `/nodes` | Node Explorer — search, filter, sort, favorite, inspect, trace paths, check health, and export |
+| `/topology` | Network Topology — graph of nodes/links with filters, partitions, path highlight, and inspector |
 | `/traffic` | Traffic Generator — presets, endpoint swap, queued jobs, history, and replay |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/projects` | Projects — list, reopen, save, duplicate, and delete workspace projects |
@@ -261,6 +263,16 @@ city, or type, and supports a favorites-only view. Favorite node names are kept
 in browser-local storage and survive reloads. Filtering and sorting do not
 change the five-second poll, path tracing, addressability controls, detail
 expansion, or topology health card.
+
+## Network Topology Graph
+
+The Topology page renders a deterministic 2D graph of all satellites, ground
+stations, and links. Satellites are grouped by orbital shell; ground stations
+sit near the center. Filters cover shell, node type, and name/city/shell search;
+edges expose delay, capacity, configured loss, and jitter. Connected components
+are counted and can be color-highlighted, two nodes can be traced with the
+routing endpoint, and clicking a node opens interfaces, IPs, and the routing
+table. The graph updates on the shared five-second topology poll.
 
 ## World View Node Inspector
 

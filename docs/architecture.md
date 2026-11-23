@@ -356,6 +356,16 @@ not import those dependency internals.
   pytest check that the generated YAML parses with the core `Scenario` schema.
 - Traffic, events, and topology-file authoring remain in YAML.
 
+## Phase 27 changes
+
+- Exposed satellite shell identifiers (via the simulation manager object ids)
+  and link loss/jitter in the read models.
+- Added the `/topology` deterministic SVG graph with shell/type/search filters,
+  edge metrics, connected-component highlighting, routing-path trace, node
+  inspector, caps, and polling.
+- Added pure graph filter/layout/partition/tooltip models, Vitest coverage, and
+  Playwright graph tests.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -382,8 +392,9 @@ not import those dependency internals.
   project-workspace formatting, connectivity matrix formatting, coverage
   formatting/sorting, topology health formatting, node filter/sort/favorites,
   world inspector link/peer helpers, shell shortcut guards, link-budget
-  formatting, scenario builder generation/validation, traffic preset and
-  clone/replay models, experiment
+  formatting, scenario builder generation/validation, topology graph
+  filtering/layout/partitions, traffic preset and clone/replay models,
+  experiment
   status/summary/artifact/detail formatting and diffing, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
@@ -394,9 +405,10 @@ not import those dependency internals.
   connectivity start/heatmap/export, coverage analyze/too-large-grid,
   topology health/export, node search/filter/sort/favorites, world
   inspector/deep link/isolation, shell shortcuts/responsive queue, link-budget
-  calculate/error, scenario builder generate/validate/collapse, traffic
-  preset/swap/clone/replay, experiment start/list/artifact download,
-  detail/live metrics, comparison/diff, and the WebGL fallback. World View WebGL rendering itself remains a manual desktop
+  calculate/error, scenario builder generate/validate/collapse, topology graph
+  filters/partitions/path/inspector, traffic preset/swap/clone/replay,
+  experiment start/list/artifact download, detail/live metrics,
+  comparison/diff, and the WebGL fallback. World View WebGL rendering itself remains a manual desktop
   check.
 
 ## Current measurements
@@ -408,11 +420,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **792 passed, 1 skipped** in about 55 s with coverage. Frontend:
-**157 Vitest tests**, **49 Playwright tests**.
+Result: **794 passed, 1 skipped** in about 61 s with coverage. Frontend:
+**164 Vitest tests**, **51 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**89.71%** over 4724 statements.
+**89.65%** over 4752 statements.
 
 ## Tooling decisions
 

@@ -29,6 +29,10 @@ def create_pages_router(templates: Jinja2Templates) -> APIRouter:
     async def coverage_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "coverage.html")
 
+    @router.get("/topology", response_class=HTMLResponse)
+    async def topology_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "topology.html")
+
     @router.get("/link-budget", response_class=HTMLResponse)
     async def link_budget_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "link_budget.html")

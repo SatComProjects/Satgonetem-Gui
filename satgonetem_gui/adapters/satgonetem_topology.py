@@ -86,9 +86,7 @@ class SatGoNetemTopologyAdapter:
                     ground.pop("stations", None)
                     data_file = ground.get("data_file")
                     if not data_file:
-                        raise ValueError(
-                            "Ground object has no stations or data_file."
-                        )
+                        raise ValueError("Ground object has no stations or data_file.")
                     ground["data_file"] = str(
                         resolve_data_file(
                             data_file,
@@ -227,10 +225,7 @@ class SatGoNetemTopologyAdapter:
                 )
                 ground["stations"] = parse_ground_station_file(resolved)
             except (OSError, ValueError) as exc:
-                raise ValueError(
-                    "Could not read ground station file: "
-                    f"{data_file!r}"
-                ) from exc
+                raise ValueError(f"Could not read ground station file: {data_file!r}") from exc
         return config
 
     def status(self, topology: Any) -> dict[str, Any]:
@@ -276,9 +271,7 @@ class SatGoNetemTopologyAdapter:
         total_steps = topology.get_project_duration_in_timesteps()
         if step < 0 or step > total_steps:
             raise ValueError(f"Step {step} is outside 0..{total_steps}.")
-        target = topology.start_time + timedelta(
-            seconds=step * topology.update_time
-        )
+        target = topology.start_time + timedelta(seconds=step * topology.update_time)
         topology.move_to_time(target)
 
     def change_simulation_speed(self, topology: Any, direction: str) -> None:
@@ -323,9 +316,31 @@ class SatGoNetemTopologyAdapter:
             return None
         return f"{type(error).__name__}: {error}"[:500]
 
+    @staticmethod
+    def _shell_identifiers(topology: Any) -> dict[Any, str]:
+        """Map object ids to shell identifiers from the simulation manager."""
+        manager = getattr(topology, "simulation_manager", None)
+        getter = getattr(manager, "get_satellites", None)
+        if not callable(getter):
+            return {}
+        try:
+            satellites = getter()
+        except Exception:
+            return {}
+        if isinstance(satellites, dict):
+            satellites = satellites.values()
+        shells = {}
+        for satellite in satellites or []:
+            identifier = getattr(getattr(satellite, "shell", None), "identifier", None)
+            object_id = getattr(satellite, "object_id", None)
+            if object_id is not None and identifier:
+                shells[object_id] = str(identifier)
+        return shells
+
     def satellites(self, topology: Any) -> list[dict[str, Any]]:
         """Return satellite identity and positions."""
         self._sync_positions(topology)
+        shells = self._shell_identifiers(topology)
         return [
             {
                 "id": satellite.id,
@@ -335,6 +350,8 @@ class SatGoNetemTopologyAdapter:
                     "longitude": satellite.position.get("longitude"),
                     "altitude": satellite.position.get("altitude"),
                 },
+                "shell": shells.get(satellite.id)
+                or getattr(getattr(satellite, "shell", None), "identifier", None),
             }
             for satellite in topology.satellites.values()
         ]
@@ -367,6 +384,8 @@ class SatGoNetemTopologyAdapter:
                 "delay_ms": round(link.distance / 299_792_458 * 1000, 2),
                 "capacity_kbps": int(link.get_capacity()),
                 "is_active": bool(link.is_active),
+                "loss_percent": float(getattr(link, "loss", 0.0) or 0.0),
+                "jitter_ms": int(getattr(link, "jitter", 0) or 0),
             }
             for link in topology.links.values()
         ]
@@ -382,9 +401,7 @@ class SatGoNetemTopologyAdapter:
                 "available": False,
                 "sampled_at": None,
                 "links": [],
-                "note": (
-                    "GoNetEm containers are stopped; link usage is unavailable."
-                ),
+                "note": ("GoNetEm containers are stopped; link usage is unavailable."),
             }
 
         try:
@@ -409,9 +426,7 @@ class SatGoNetemTopologyAdapter:
                     target = link.target.name
                     capacity_bps = int(link.get_capacity()) * 1000
                 except Exception:
-                    logger.exception(
-                        "Could not read a link capacity for usage sampling."
-                    )
+                    logger.exception("Could not read a link capacity for usage sampling.")
                     continue
                 if capacity_bps > 0:
                     capacities[frozenset((source, target))] = capacity_bps
@@ -439,13 +454,9 @@ class SatGoNetemTopologyAdapter:
                     "dst": dst,
                     "type": link_type if isinstance(link_type, str) else None,
                     "value_bps": value_bps,
-                    "capacity_kbps": (
-                        capacity_bps // 1000 if capacity_bps else None
-                    ),
+                    "capacity_kbps": (capacity_bps // 1000 if capacity_bps else None),
                     "utilization": (
-                        round(min(1.0, value_bps / capacity_bps), 4)
-                        if capacity_bps
-                        else None
+                        round(min(1.0, value_bps / capacity_bps), 4) if capacity_bps else None
                     ),
                 }
             )
@@ -460,6 +471,7 @@ class SatGoNetemTopologyAdapter:
     def nodes(self, topology: Any) -> list[dict[str, Any]]:
         """Return node summaries."""
         self._sync_positions(topology)
+        shells = self._shell_identifiers(topology)
         nodes = [
             {
                 "name": satellite.name,
@@ -470,6 +482,8 @@ class SatGoNetemTopologyAdapter:
                     "longitude": satellite.position.get("longitude"),
                     "altitude": satellite.position.get("altitude"),
                 },
+                "shell": shells.get(satellite.id)
+                or getattr(getattr(satellite, "shell", None), "identifier", None),
             }
             for satellite in topology.satellites.values()
         ]
@@ -519,9 +533,7 @@ class SatGoNetemTopologyAdapter:
             logger.exception("Failed to read routing table for %s", name)
 
         node_kind = str(getattr(node, "type", "")).lower()
-        is_ground = node_kind.startswith("ground") or (
-            not node_kind and name.startswith("Gnd")
-        )
+        is_ground = node_kind.startswith("ground") or (not node_kind and name.startswith("Gnd"))
         data: dict[str, Any] = {
             "name": node.name,
             "type": "ground_station" if is_ground else "satellite",
@@ -539,9 +551,7 @@ class SatGoNetemTopologyAdapter:
             data["city"] = getattr(node, "city", None)
         else:
             data["default_qos_is_on"] = getattr(node, "default_qos_is_on", False)
-            data["program_specific_qos_is_on"] = getattr(
-                node, "program_specific_qos_is_on", False
-            )
+            data["program_specific_qos_is_on"] = getattr(node, "program_specific_qos_is_on", False)
             data["addressable"] = node.is_addressable()
         return data
 
@@ -617,9 +627,7 @@ class SatGoNetemTopologyAdapter:
             seen: set[str] = set()
             for name in names:
                 if name not in available:
-                    raise ValueError(
-                        f"Node is not an addressable traffic endpoint: {name}"
-                    )
+                    raise ValueError(f"Node is not an addressable traffic endpoint: {name}")
                 if name in seen:
                     continue
                 seen.add(name)
@@ -643,9 +651,7 @@ class SatGoNetemTopologyAdapter:
         for name in names:
             node = topology.get_node_by_name(name)
             if node is None:
-                raise ValueError(
-                    f"Node is not an addressable traffic endpoint: {name}"
-                )
+                raise ValueError(f"Node is not an addressable traffic endpoint: {name}")
             nodes.append(node)
 
         try:
@@ -676,9 +682,7 @@ class SatGoNetemTopologyAdapter:
         satellites = list(topology.satellites.values())
         return {
             "addressable": sorted(
-                satellite.name
-                for satellite in satellites
-                if satellite.is_addressable()
+                satellite.name for satellite in satellites if satellite.is_addressable()
             ),
             "total": len(satellites),
         }
@@ -865,10 +869,7 @@ class SatGoNetemTopologyAdapter:
                     allowed_roots=(self.settings.save_root,),
                 )
             except (OSError, ValueError) as exc:
-                raise ValueError(
-                    "Ground station data file is unavailable: "
-                    f"{data_file!r}"
-                ) from exc
+                raise ValueError(f"Ground station data file is unavailable: {data_file!r}") from exc
             if resolved != Path(data_file):
                 ground.data_file = str(resolved)
 
@@ -905,10 +906,7 @@ class SatGoNetemTopologyAdapter:
                 ):
                     continue
                 if not source.is_file():
-                    raise ValueError(
-                        "Restored ground station file is missing: "
-                        f"{data_file!r}"
-                    )
+                    raise ValueError(f"Restored ground station file is missing: {data_file!r}")
                 descriptor, name = tempfile.mkstemp(
                     dir=stable_dir,
                     prefix=f"{source.stem}-",
@@ -936,9 +934,7 @@ class SatGoNetemTopologyAdapter:
         """Refresh positions through the dependency's private sync hook."""
         sync = getattr(topology, "_sync_node_positions", None)
         if not callable(sync):
-            raise RuntimeError(
-                "Core contract changed: _sync_node_positions is unavailable."
-            )
+            raise RuntimeError("Core contract changed: _sync_node_positions is unavailable.")
         try:
             sync()
         except Exception:
@@ -949,9 +945,7 @@ class SatGoNetemTopologyAdapter:
         """Return the user-facing project name without the timestamp suffix."""
         simulation_property = getattr(topology, "simulation_property", None)
         name = (
-            getattr(simulation_property, "simulation_name", None)
-            if simulation_property
-            else None
+            getattr(simulation_property, "simulation_name", None) if simulation_property else None
         )
         if not name:
             raw_name = str(getattr(topology, "project_name", "") or "Loaded Project")
