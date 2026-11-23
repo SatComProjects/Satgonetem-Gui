@@ -17,6 +17,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Keyboard Shortcuts** | Skip link, active navigation, `?` help, and `g`-prefix page navigation. |
 | **Connectivity Matrix** | Ping every ordered pair of addressable nodes with a loss/RTT heatmap and CSV/JSON export. |
 | **Coverage Analytics** | Snapshot Earth coverage at a chosen elevation mask, per shell and per ground station. |
+| **Link Budget Workbench** | Compute a one-way RF budget and Shannon/MODCOD capacity with a full breakdown. |
 | **Topology Export & Health** | Structural graph checks plus JSON, DOT, and GraphML exports. |
 | **Experiment Runs** | Run v0.3.2 YAML scenarios and keep manifests, metrics, results, and reports on the server. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
@@ -115,6 +116,7 @@ package.json            # Frontend test/tooling manifest
 | `/projects` | Projects — list, reopen, save, duplicate, and delete workspace projects |
 | `/connectivity` | Connectivity Matrix — full-mesh loss/RTT heatmap with exports |
 | `/coverage` | Coverage Analytics — elevation-mask coverage, shells, and station visibility |
+| `/link-budget` | Link Budget — one-way RF budget and capacity calculator |
 | `/experiments` | Experiments — run scenarios and download server-side artifacts |
 | `/ground_stations` | Ground Station Editor — manage ground station presets |
 | `/docs` | API Documentation — auto-generated Swagger UI |
@@ -221,6 +223,16 @@ addressing/routing. Runs are capped at 32 nodes and 2,000 ordered pairs, run in
 the background, and render an N×N heatmap of packet loss and average RTT.
 Completed jobs can be exported as CSV or JSON. The matrix is a snapshot; rerun
 after topology or routing changes.
+
+## Link Budget Workbench
+
+The Link Budget page computes a one-way downlink or uplink budget from carrier
+frequency, bandwidth, slant distance, elevation, ground-station coordinates,
+and satellite/ground antenna parameters. It uses the SatGoNetem v0.3.2 RF chain
+and reports capacity (Shannon or MODCOD), EIRP, G/T, free-space loss,
+atmospheric attenuation, C/N₀, and C/N. It is a read-only what-if tool: applying
+the budget to project GSL capacities and persisting it in project JSON is a
+later phase.
 
 ## Coverage Analytics
 
