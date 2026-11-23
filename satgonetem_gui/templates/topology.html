@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/topology_graph.css">
+{% endblock %}
+
+{% block content %}
+<div class="topo-page">
+
+  <header class="topo-page-head">
+    <p class="topo-eyebrow">Whole-network view</p>
+    <h2 class="topo-title">Network Topology</h2>
+    <p class="muted topo-lede">
+      Deterministic 2D graph of the current satellites, ground stations, and links.
+      Select nodes for details or trace a routing path.
+    </p>
+  </header>
+
+  <p class="muted topo-msg" id="topo-msg" aria-live="polite"></p>
+
+  <div class="topo-toolbar" role="group" aria-label="Topology filters">
+    <label for="topo-shell">Shell
+      <select id="topo-shell">
+        <option value="all">All shells</option>
+      </select>
+    </label>
+    <label for="topo-type">Type
+      <select id="topo-type">
+        <option value="all">All nodes</option>
+        <option value="satellite">Satellites</option>
+        <option value="ground_station">Ground stations</option>
+      </select>
+    </label>
+    <label class="topo-search-field" for="topo-search">Search
+      <input type="search" id="topo-search" placeholder="Name, city, or shell" autocomplete="off">
+    </label>
+    <label class="topo-check">
+      <input type="checkbox" id="topo-partitions"> Highlight partitions
+    </label>
+    <span class="muted topo-count" id="topo-count"></span>
+    <span class="muted topo-partition-count" id="topo-partition-count"></span>
+  </div>
+
+  <div class="topo-layout">
+
+    <section class="card topo-graph-card" aria-labelledby="topo-graph-title">
+      <div class="topo-graph-head">
+        <h3 class="card-title" id="topo-graph-title">Graph</h3>
+        <div class="topo-legend" id="topo-legend">
+          <span><i class="topo-swatch topo-satellite-swatch"></i>Satellite</span>
+          <span><i class="topo-swatch topo-ground-swatch"></i>Ground station</span>
+          <span><i class="topo-swatch topo-path-swatch"></i>Routing path</span>
+        </div>
+      </div>
+      <div class="topo-graph" id="topology-graph" role="img" aria-label="Network topology graph"></div>
+      <p class="topo-empty" id="topo-empty">
+        <strong>No topology loaded</strong>
+        <span>Load a project to render the network graph.</span>
+      </p>
+      <p class="muted topo-overflow" id="topo-overflow" hidden></p>
+    </section>
+
+    <aside class="card topo-side" aria-labelledby="topo-side-title">
+      <div class="topo-side-head">
+        <h3 class="card-title" id="topo-side-title">Path and inspector</h3>
+      </div>
+
+      <div class="topo-path">
+        <div class="topo-path-grid">
+          <label for="topo-path-src">Source
+            <select id="topo-path-src" disabled></select>
+          </label>
+          <label for="topo-path-dst">Destination
+            <select id="topo-path-dst" disabled></select>
+          </label>
+        </div>
+        <div class="topo-path-actions">
+          <button type="button" class="button small" id="topo-path-trace" disabled>Trace path</button>
+          <button type="button" class="button small secondary" id="topo-path-clear" disabled>Clear</button>
+        </div>
+        <p class="muted topo-path-msg" id="topo-path-msg" aria-live="polite"></p>
+        <p class="topo-path-summary" id="topo-path-summary"></p>
+      </div>
+
+      <section class="topo-inspector" id="topo-inspector" hidden aria-labelledby="topo-inspector-title">
+        <div class="topo-inspector-head">
+          <div>
+            <span class="topo-inspector-kind" id="topo-inspector-kind">Node</span>
+            <h4 id="topo-inspector-title">Node</h4>
+          </div>
+          <button type="button" class="button small secondary" id="topo-inspector-close">Close</button>
+        </div>
+        <dl class="topo-position" id="topo-inspector-position"></dl>
+        <div id="topo-inspector-interfaces" class="topo-inspector-section"></div>
+        <div id="topo-inspector-routing" class="topo-inspector-section"></div>
+      </section>
+    </aside>
+
+  </div>
+</div>
+<script type="module" src="/static/topology_graph.js?v=1"></script>
+{% endblock %}

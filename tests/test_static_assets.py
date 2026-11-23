@@ -37,6 +37,8 @@ LINK_BUDGET_MODULE = PACKAGE / "static" / "link_budget.js"
 LINK_BUDGET_MODEL_IMPORT = "./link_budget_model.js?v=1"
 SCENARIO_BUILDER_MODULE = PACKAGE / "static" / "scenario_builder.js"
 SCENARIO_BUILDER_MODEL_IMPORT = "./scenario_builder_model.js?v=1"
+TOPOLOGY_GRAPH_MODULE = PACKAGE / "static" / "topology_graph.js"
+TOPOLOGY_GRAPH_MODEL_IMPORT = "./topology_graph_model.js?v=1"
 EXPERIMENTS_MODULE = PACKAGE / "static" / "experiments.js"
 EXPERIMENTS_MODEL_IMPORT = "./experiments_model.js?v=2"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
@@ -58,6 +60,11 @@ def test_link_controllers_import_the_versioned_model() -> None:
 def test_experiments_page_imports_the_versioned_model() -> None:
     """The experiment page uses one cache-busted formatting model."""
     assert f'"{EXPERIMENTS_MODEL_IMPORT}"' in EXPERIMENTS_MODULE.read_text(encoding="utf-8")
+
+
+def test_topology_graph_imports_the_versioned_model() -> None:
+    """The topology graph uses one cache-busted model."""
+    assert f'"{TOPOLOGY_GRAPH_MODEL_IMPORT}"' in TOPOLOGY_GRAPH_MODULE.read_text(encoding="utf-8")
 
 
 def test_scenario_builder_imports_the_versioned_model() -> None:
