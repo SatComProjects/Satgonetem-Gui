@@ -5,6 +5,7 @@
       integrity="sha384-ghEeMdcWWzRv/BPeUcX835vcKDGrxvROXisl/Btpv3GeekBUXTSPVcFJpI1Tcrgp"
       crossorigin="anonymous">
 <link rel="stylesheet" href="/static/simulation.css">
+<link rel="stylesheet" href="/static/world_inspector.css">
 <script src="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Cesium.js"
         integrity="sha384-u6lI9nKeZ0sgcSQty6qC4XQHU/ZG7JJ8PfRvtUQTH83OstsiEivIu3F9k012EB3W"
         crossorigin="anonymous"></script>
@@ -460,7 +461,32 @@
     <h3 class="sim-overlay-title" id="sim-overlay-title">Simulation</h3>
     {% include "_simulation_panel.html" %}
   </section>
+
+  <aside class="world-inspector" id="world-inspector" hidden aria-labelledby="world-inspector-title">
+    <div class="wi-head">
+      <div class="wi-heading">
+        <span class="wi-kind" id="world-inspector-kind">Node</span>
+        <h3 class="wi-title" id="world-inspector-title">Node</h3>
+      </div>
+      <button type="button" class="button small secondary wi-close" id="world-inspector-close">Close</button>
+    </div>
+    <dl class="wi-position">
+      <div><dt>Lat</dt><dd id="world-inspector-lat">—</dd></div>
+      <div><dt>Lon</dt><dd id="world-inspector-lon">—</dd></div>
+      <div><dt>Alt</dt><dd id="world-inspector-alt">—</dd></div>
+    </dl>
+    <p class="wi-links" id="world-inspector-links"></p>
+    <label class="wi-isolate"><input type="checkbox" id="world-isolate-links"> Isolate links</label>
+    <div class="wi-section">
+      <h4>Neighbors</h4>
+      <ul class="wi-list" id="world-inspector-neighbors"></ul>
+    </div>
+    <div class="wi-section">
+      <h4>Nearest peers</h4>
+      <ul class="wi-list" id="world-inspector-peers"></ul>
+    </div>
+  </aside>
 </div>
 
-<script type="module" src="/static/world_boot.js?v=12"></script>
+<script type="module" src="/static/world_boot.js?v=13"></script>
 {% endblock %}

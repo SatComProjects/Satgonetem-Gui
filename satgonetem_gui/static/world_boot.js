@@ -24,7 +24,7 @@ try {
 if (!supported) {
   showFallback("This browser does not provide WebGL.");
 } else {
-  import("./world.js?v=13").catch((error) => {
+  import("./world.js?v=14").catch((error) => {
     console.error("World view failed to start:", error);
     showFallback("The 3D view could not start. Check that the Cesium assets are reachable.");
   });
