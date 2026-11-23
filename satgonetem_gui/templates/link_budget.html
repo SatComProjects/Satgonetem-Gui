@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/link_budget.css">
+{% endblock %}
+
+{% block content %}
+<div class="lb-page">
+  <header class="lb-page-head">
+    <p class="lb-eyebrow">RF analysis</p>
+    <h2 class="lb-title">Link Budget</h2>
+    <p class="muted lb-lede">Compute a one-way satellite/ground budget and capacity from RF and geometry inputs. This is a read-only what-if workbench.</p>
+  </header>
+  <p class="muted lb-msg" id="lb-msg" aria-live="polite"></p>
+  <div class="lb-layout">
+    <section class="card lb-form-card" aria-labelledby="lb-form-title">
+      <h3 class="card-title" id="lb-form-title">Inputs</h3>
+      <div class="lb-group">
+        <h4>Direction and strategy</h4>
+        <div class="lb-grid-2">
+          <label for="lb-direction">Direction
+            <select id="lb-direction"><option value="downlink" selected>Downlink</option><option value="uplink">Uplink</option></select>
+          </label>
+          <label for="lb-strategy">Capacity strategy
+            <select id="lb-strategy"><option value="shannon" selected>Shannon</option><option value="modcod">MODCOD</option></select>
+          </label>
+        </div>
+      </div>
+      <div class="lb-group">
+        <h4>Carrier and geometry</h4>
+        <div class="lb-grid-3">
+          <label for="lb-frequency">Frequency (GHz)<input type="number" id="lb-frequency" value="19" min="0.1" max="1000" step="0.01"></label>
+          <label for="lb-bandwidth">Bandwidth (MHz)<input type="number" id="lb-bandwidth" value="500" min="0.001" max="10000" step="0.1"></label>
+          <label for="lb-distance">Slant distance (km)<input type="number" id="lb-distance" value="1000" min="1" max="100000" step="1"></label>
+          <label for="lb-elevation">Elevation (deg)<input type="number" id="lb-elevation" value="30" min="0" max="90" step="0.1"></label>
+          <label for="lb-gs-lat">GS latitude<input type="number" id="lb-gs-lat" value="0" min="-90" max="90" step="0.01"></label>
+          <label for="lb-gs-lon">GS longitude<input type="number" id="lb-gs-lon" value="0" min="-180" max="180" step="0.01"></label>
+        </div>
+      </div>
+      <div class="lb-group">
+        <h4>Satellite antenna</h4>
+        <div class="lb-grid-3">
+          <label for="lb-sat-diameter">Diameter (m)<input type="number" id="lb-sat-diameter" value="0.5" min="0" max="20" step="0.01"></label>
+          <label for="lb-sat-efficiency">Efficiency<input type="number" id="lb-sat-efficiency" value="0.6" min="0.01" max="1" step="0.01"></label>
+          <label for="lb-sat-sspa">SSPA power (dB)<input type="number" id="lb-sat-sspa" value="10" min="-100" max="100" step="0.1"></label>
+          <label for="lb-sat-losses">Losses (dB)<input type="number" id="lb-sat-losses" value="0" min="0" max="100" step="0.1"></label>
+          <label for="lb-sat-eirp">EIRP override (dBW, blank = compute)<input type="number" id="lb-sat-eirp" min="-100" max="100" step="0.1"></label>
+        </div>
+      </div>
+      <div class="lb-group">
+        <h4>Ground antenna</h4>
+        <div class="lb-grid-3">
+          <label for="lb-gnd-diameter">Diameter (m)<input type="number" id="lb-gnd-diameter" value="1.2" min="0" max="20" step="0.01"></label>
+          <label for="lb-gnd-efficiency">Efficiency<input type="number" id="lb-gnd-efficiency" value="0.6" min="0.01" max="1" step="0.01"></label>
+          <label for="lb-gnd-losses">Losses (dB)<input type="number" id="lb-gnd-losses" value="0" min="0" max="100" step="0.1"></label>
+          <label for="lb-gnd-eirp">EIRP override (dBW, uplink only)<input type="number" id="lb-gnd-eirp" min="-100" max="100" step="0.1"></label>
+        </div>
+      </div>
+      <div class="lb-group">
+        <h4>Receiver</h4>
+        <div class="lb-grid-2">
+          <label for="lb-tsys">System temperature (K)<input type="number" id="lb-tsys" value="100" min="1" max="100000" step="1"></label>
+          <label for="lb-unavailability">Unavailability (%)<input type="number" id="lb-unavailability" value="0.1" min="0.001" max="50" step="0.001"></label>
+        </div>
+      </div>
+      <button type="button" class="button lb-run-btn" id="lb-run">Calculate budget</button>
+    </section>
+    <section class="card lb-results-card" aria-labelledby="lb-results-title">
+      <h3 class="card-title" id="lb-results-title">Result</h3>
+      <p class="lb-empty" id="lb-empty"><strong>No calculation yet</strong><span>Adjust the inputs and calculate a one-way budget.</span></p>
+      <div id="lb-results" hidden>
+        <div class="lb-hero">
+          <span class="lb-hero-label">Capacity</span>
+          <span class="lb-capacity" id="lb-capacity">&mdash;</span>
+          <p class="muted" id="lb-summary"></p>
+        </div>
+        <p class="lb-breakdown-label">Link breakdown</p>
+        <dl class="lb-breakdown" id="lb-breakdown"></dl>
+        <p class="muted lb-note" id="lb-atmosphere-note" hidden></p>
+      </div>
+    </section>
+  </div>
+</div>
+<script type="module" src="/static/link_budget.js?v=1"></script>
+{% endblock %}
