@@ -461,3 +461,37 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Narrow screens: the floating queue becomes a full-width bottom sheet. */
+@media (max-width: 640px) {
+  .floating-queue {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 60vh;
+  }
+
+  .floating-queue .card {
+    display: flex;
+    flex-direction: column;
+    max-height: 60vh;
+  }
+
+  .floating-queue-header {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 12px 14px;
+  }
+
+  .floating-queue-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .queue-list {
+    max-height: none;
+  }
+}

@@ -13,26 +13,30 @@
 </head>
 <body>
 
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
   <header class="site-header">
     <span class="site-title">SatGoNetem</span>
+    {% set path = request.url.path %}
     <nav>
-      <a href="/">Dashboard</a>
-      <a href="/world">World View</a>
-      <a href="/nodes">Nodes</a>
-      <a href="/connectivity">Connectivity</a>
-      <a href="/coverage">Coverage</a>
-      <a href="/experiments">Experiments</a>
-      <a href="/traffic">Traffic</a>
-      <a href="/new_project">New Project</a>
-      <a href="/projects">Projects</a>
+      <a href="/"{% if path == "/" %} aria-current="page"{% endif %}>Dashboard</a>
+      <a href="/world"{% if path == "/world" %} aria-current="page"{% endif %}>World View</a>
+      <a href="/nodes"{% if path == "/nodes" %} aria-current="page"{% endif %}>Nodes</a>
+      <a href="/connectivity"{% if path == "/connectivity" %} aria-current="page"{% endif %}>Connectivity</a>
+      <a href="/coverage"{% if path == "/coverage" %} aria-current="page"{% endif %}>Coverage</a>
+      <a href="/experiments"{% if path == "/experiments" %} aria-current="page"{% endif %}>Experiments</a>
+      <a href="/traffic"{% if path == "/traffic" %} aria-current="page"{% endif %}>Traffic</a>
+      <a href="/new_project"{% if path == "/new_project" %} aria-current="page"{% endif %}>New Project</a>
+      <a href="/projects"{% if path == "/projects" %} aria-current="page"{% endif %}>Projects</a>
       <a href="#" id="loadProjectLink">Load Project</a>
       <a href="#" id="saveProjectLink">Save Project</a>
       <a href="/docs" target="_blank">Docs</a>
     </nav>
+    <button type="button" class="shortcuts-help-btn" id="shortcuts-help-btn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
     <input type="file" id="loadProjectInput" accept=".json" style="display:none">
   </header>
 
-  <main class="container">
+  <main id="main-content" class="container" tabindex="-1">
     {% block content %}{% endblock %}
   </main>
 
@@ -63,6 +67,15 @@
   </div>
 </div>
 
+<dialog class="shortcuts-dialog" id="shortcuts-help" aria-labelledby="shortcuts-title">
+  <div class="shortcuts-head">
+    <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+    <button type="button" class="button small secondary" id="shortcuts-close">Close</button>
+  </div>
+  <p class="muted shortcuts-intro">Press <kbd>?</kbd> any time, or <kbd>g</kbd> then a destination key.</p>
+  <ul class="shortcuts-list" id="shortcuts-list"></ul>
+</dialog>
+
 <!-- Results Modal -->
 <div id="results-modal" class="modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="results-title">
   <div class="modal-content">
@@ -77,6 +90,8 @@
   </div>
   <div class="modal-backdrop" id="results-backdrop"></div>
 </div>
+
+<script type="module" src="/static/shortcuts.js?v=1"></script>
 
 <!-- Keep this queue.js version in sync with the import in static/traffic.js. -->
 <script type="module" src="/static/queue.js?v=24"></script>

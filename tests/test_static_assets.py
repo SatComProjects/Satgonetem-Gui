@@ -31,6 +31,8 @@ TOPOLOGY_HEALTH_MODULE = PACKAGE / "static" / "topology_health.js"
 TOPOLOGY_HEALTH_MODEL_IMPORT = "./topology_health_model.js?v=1"
 TRAFFIC_MODULE = PACKAGE / "static" / "traffic.js"
 TRAFFIC_PRESETS_IMPORT = "./traffic_presets.js?v=1"
+SHORTCUTS_MODULE = PACKAGE / "static" / "shortcuts.js"
+SHORTCUTS_MODEL_IMPORT = "./shortcuts_model.js?v=1"
 EXPERIMENTS_MODULE = PACKAGE / "static" / "experiments.js"
 EXPERIMENTS_MODEL_IMPORT = "./experiments_model.js?v=2"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
@@ -52,6 +54,11 @@ def test_link_controllers_import_the_versioned_model() -> None:
 def test_experiments_page_imports_the_versioned_model() -> None:
     """The experiment page uses one cache-busted formatting model."""
     assert f'"{EXPERIMENTS_MODEL_IMPORT}"' in EXPERIMENTS_MODULE.read_text(encoding="utf-8")
+
+
+def test_shortcuts_module_imports_the_versioned_model() -> None:
+    """The shell shortcuts use one cache-busted guard model."""
+    assert f'"{SHORTCUTS_MODEL_IMPORT}"' in SHORTCUTS_MODULE.read_text(encoding="utf-8")
 
 
 def test_traffic_page_imports_the_versioned_preset_model() -> None:
