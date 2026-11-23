@@ -35,6 +35,7 @@ from .routes import (
     topology_export,
     topology_history,
     traffic,
+    traffic_matrix,
     workspace,
 )
 from .services.addressability_service import AddressabilityService
@@ -51,6 +52,7 @@ from .services.simulation_service import SimulationService
 from .services.topology_export_service import TopologyExportService
 from .services.topology_history_service import TopologyHistoryService
 from .services.topology_service import TopologyService
+from .services.traffic_matrix_service import TrafficMatrixService
 from .services.traffic_service import TrafficService
 from .state import RuntimeState
 
@@ -177,6 +179,7 @@ def build_services(settings: Settings) -> ApplicationServices:
     )
     routing = RoutingService(topology, topology_adapter, reader=topology_adapter)
     traffic = TrafficService(topology, traffic_adapter)
+    traffic_matrix = TrafficMatrixService(topology, traffic)
     preflight = PreflightService(LocalEnvironmentDoctor(settings))
     connectivity_service = ConnectivityService(topology, topology_adapter)
     coverage_service = CoverageService(topology, SatGoNetemCoverageAdapter())
@@ -196,6 +199,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         addressability=addressability,
         routing=routing,
         traffic=traffic,
+        traffic_matrix=traffic_matrix,
         simulation=simulation,
         preflight=preflight,
         connectivity=connectivity_service,
@@ -241,6 +245,7 @@ def create_app(
     app.include_router(routing.router)
     app.include_router(simulation.router)
     app.include_router(traffic.router)
+    app.include_router(traffic_matrix.router)
     app.include_router(diagnostics.router)
     app.include_router(connectivity.router)
     app.include_router(coverage.router)

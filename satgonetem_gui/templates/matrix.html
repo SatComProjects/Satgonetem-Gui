@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <link rel="stylesheet" href="/static/traffic_matrix.css">
+{% endblock %}
+
+{% block content %}
+<div class="mtx-page">
+  <header class="mtx-page-head">
+    <p class="mtx-eyebrow">Bounded measurement</p>
+    <h2 class="mtx-title">Traffic Matrix</h2>
+    <p class="muted mtx-lede">Run short iperf3 flows between selected nodes and render ordered-pair throughput as an N×N heatmap.</p>
+  </header>
+
+  <p class="mtx-warning">The matrix injects traffic and can perturb the network. Runs are bounded to 12 nodes, 132 ordered pairs, 1–10&nbsp;s flows, and two concurrent jobs; pairs cannot be cancelled in this phase.</p>
+
+  <p class="muted mtx-msg" id="matrix-msg" aria-live="polite"></p>
+
+  <div class="mtx-layout">
+    <section class="card mtx-controls-card" aria-labelledby="matrix-controls-title">
+      <h3 class="card-title" id="matrix-controls-title">Run</h3>
+
+      <label for="matrix-nodes">Nodes (2–12)
+        <select id="matrix-nodes" multiple size="12"></select>
+      </label>
+      <p class="muted mtx-hint" id="matrix-node-hint">Select at least two traffic endpoints.</p>
+
+      <div class="mtx-grid-2">
+        <label for="matrix-duration">Flow duration (s)
+          <input type="number" id="matrix-duration" value="1" min="1" max="10" step="1" inputmode="numeric" autocomplete="off">
+        </label>
+        <label for="matrix-concurrency">Concurrency
+          <input type="number" id="matrix-concurrency" value="2" min="1" max="4" step="1" inputmode="numeric" autocomplete="off">
+        </label>
+      </div>
+
+      <button type="button" class="button mtx-start" id="matrix-start">Run matrix</button>
+      <p class="muted mtx-progress" id="matrix-progress" aria-live="polite"></p>
+    </section>
+
+    <section class="card mtx-results-card" aria-labelledby="matrix-results-title">
+      <div class="mtx-results-head">
+        <h3 class="card-title" id="matrix-results-title">Throughput heatmap</h3>
+        <div class="mtx-export-actions">
+          <button type="button" class="button small secondary" id="matrix-export-csv" disabled>Export CSV</button>
+          <button type="button" class="button small secondary" id="matrix-export-json" disabled>Export JSON</button>
+        </div>
+      </div>
+
+      <p class="mtx-empty" id="matrix-empty">
+        <strong>No matrix yet</strong>
+        <span>Select nodes and run a bounded matrix.</span>
+      </p>
+
+      <div id="matrix-results" hidden>
+        <p class="mtx-summary" id="matrix-summary"></p>
+        <p class="mtx-errors" id="matrix-errors" hidden></p>
+        <div class="mtx-heatmap-wrap" id="matrix-heatmap" role="region" aria-label="Throughput matrix, scrollable" tabindex="0"></div>
+        <div class="mtx-legend" role="group" aria-label="Throughput heat scale, low to high">
+          <span>Low</span>
+          <i class="heat-1" aria-hidden="true"></i>
+          <i class="heat-2" aria-hidden="true"></i>
+          <i class="heat-3" aria-hidden="true"></i>
+          <i class="heat-4" aria-hidden="true"></i>
+          <span>High</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script type="module" src="/static/traffic_matrix.js?v=1"></script>
+{% endblock %}

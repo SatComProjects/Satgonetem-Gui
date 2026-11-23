@@ -388,6 +388,16 @@ not import those dependency internals.
   the topology page.
 - Added service/API tests and Playwright comparison coverage.
 
+## Phase 30 changes
+
+- Added the bounded traffic matrix service: 2–12 node selection, 132 ordered
+  pairs, 1–4 concurrent iperf3 flows, two active jobs, progress/results,
+  per-pair failures, and CSV/JSON export.
+- Added start/status/export routes and the `/matrix` page with node selection,
+  duration/concurrency controls, an N×N heatmap, error display, and exports.
+- Added service/API tests, a pure heatmap model, and Playwright coverage; real
+  container runs remain opt-in/manual.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -416,7 +426,8 @@ not import those dependency internals.
   world inspector link/peer helpers, shell shortcut guards, link-budget
   formatting, scenario builder generation/validation, topology graph
   filtering/layout/partitions, traffic monitor aggregation/export, topology
-  history/compare, traffic preset and clone/replay models, experiment
+  history/compare, traffic matrix heatmap levels, traffic preset and
+  clone/replay models, experiment
   status/summary/artifact/detail formatting and diffing, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
@@ -429,9 +440,9 @@ not import those dependency internals.
   inspector/deep link/isolation, shell shortcuts/responsive queue, link-budget
   calculate/error, scenario builder generate/validate/collapse, topology graph
   filters/partitions/path/inspector, topology snapshot compare/diff, traffic
-  monitor sample/pause/export, traffic preset/swap/clone/replay, experiment
-  start/list/artifact download, detail/live metrics, comparison/diff, and the
-  WebGL fallback. World View WebGL rendering itself remains a manual desktop
+  monitor sample/pause/export, traffic matrix run/heatmap/export, traffic
+  preset/swap/clone/replay, experiment start/list/artifact download,
+  detail/live metrics, comparison/diff, and the WebGL fallback. World View WebGL rendering itself remains a manual desktop
   check.
 
 ## Current measurements
@@ -443,11 +454,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **809 passed, 1 skipped** in about 63 s with coverage. Frontend:
-**171 Vitest tests**, **54 Playwright tests**.
+Result: **824 passed, 1 skipped** in about 68 s with coverage. Frontend:
+**173 Vitest tests**, **56 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**89.88%** over 4901 statements.
+**89.70%** over 5109 statements.
 
 ## Tooling decisions
 

@@ -539,6 +539,59 @@ class TrafficCancelRequest(BaseModel):
     job_id: str = Field(min_length=1)
 
 
+class TrafficMatrixRequest(BaseModel):
+    """Bounded throughput-matrix request."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    nodes: list[str] = Field(default_factory=list, max_length=12)
+    duration_s: int = Field(default=1, ge=1, le=10)
+    concurrency: int = Field(default=2, ge=1, le=4)
+    timeout_s: float = Field(default=30.0, ge=5.0, le=120.0)
+
+
+class TrafficMatrixStartResponse(BaseModel):
+    """Identifier of the started matrix job."""
+
+    ok: bool = True
+    job_id: str
+
+
+class TrafficMatrixPairResult(BaseModel):
+    """One ordered pair in a throughput matrix."""
+
+    src: str
+    dst: str
+    status: str
+    throughput_mbps: float | None = None
+    error: str | None = None
+
+
+class TrafficMatrixStatusResponse(BaseModel):
+    """Progress, node axes, matrix, and flat results for one matrix job."""
+
+    ok: bool = True
+    job_id: str
+    status: Literal["running", "done", "error"]
+    nodes: list[str]
+    matrix: list[list[float | None]]
+    results: list[TrafficMatrixPairResult]
+    pairs_total: int
+    pairs_completed: int
+    started_at: str
+    finished_at: str | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
+class TrafficMatrixExportResponse(BaseModel):
+    """Download envelope for matrix CSV/JSON."""
+
+    ok: bool = True
+    filename: str
+    content: str
+    content_type: str
+
+
 class Iperf3Request(BaseModel):
     """iperf3 flow configuration."""
 
