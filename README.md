@@ -23,6 +23,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Experiment Runs** | Build scenarios from forms or YAML, run them, and keep manifests, metrics, results, and reports on the server. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows with saved presets, endpoint swap, clone, replay, and a queued job system. |
+| **Traffic Monitor** | Live per-link/node throughput, utilization, configured delay/loss/jitter, charts, and CSV/JSON export. |
 | **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
 | **Routing Control** | Apply Static/Dijkstra, OSPF, IS-IS, or SR-MPLS routing across the emulated topology. |
 | **GoNetem Integration** | Start and stop Dockerised network nodes directly from the web UI. |
@@ -114,6 +115,7 @@ package.json            # Frontend test/tooling manifest
 | `/nodes` | Node Explorer — search, filter, sort, favorite, inspect, trace paths, check health, and export |
 | `/topology` | Network Topology — graph of nodes/links with filters, partitions, path highlight, and inspector |
 | `/traffic` | Traffic Generator — presets, endpoint swap, queued jobs, history, and replay |
+| `/monitor` | Traffic Monitor — live link/node throughput, configured metrics, and export |
 | `/new_project` | New Project — build a constellation from scratch |
 | `/projects` | Projects — list, reopen, save, duplicate, and delete workspace projects |
 | `/connectivity` | Connectivity Matrix — full-mesh loss/RTT heatmap with exports |
@@ -142,6 +144,15 @@ v0.3.2 persists the addressable flag only in runtime-state projects. Re-enable
 it after loading or replacing a Walker project. If addressing and routing are
 already applied, re-apply them before running traffic so the new endpoints
 receive routes.
+
+## Traffic Monitor
+
+The Monitor page samples `/api/links/usage`, `/api/links`, and `/api/status`
+every two seconds while GoNetEm runs. It retains up to 300 in-browser samples
+and shows per-link throughput, utilization, capacity, delay, configured loss,
+and jitter, plus per-node aggregates and a total-throughput chart. Pause, resume,
+clear, and CSV/JSON export are available; the "containers stopped" state is
+shown explicitly. The monitor is read-only and does not start flows.
 
 ## Traffic Presets and Replay
 
