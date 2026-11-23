@@ -41,6 +41,8 @@ TOPOLOGY_GRAPH_MODULE = PACKAGE / "static" / "topology_graph.js"
 TOPOLOGY_GRAPH_MODEL_IMPORT = "./topology_graph_model.js?v=1"
 TRAFFIC_MONITOR_MODULE = PACKAGE / "static" / "traffic_monitor.js"
 TRAFFIC_MONITOR_MODEL_IMPORT = "./traffic_monitor_model.js?v=1"
+TRAFFIC_MATRIX_MODULE = PACKAGE / "static" / "traffic_matrix.js"
+TRAFFIC_MATRIX_MODEL_IMPORT = "./traffic_matrix_model.js?v=1"
 EXPERIMENTS_MODULE = PACKAGE / "static" / "experiments.js"
 EXPERIMENTS_MODEL_IMPORT = "./experiments_model.js?v=2"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
@@ -62,6 +64,11 @@ def test_link_controllers_import_the_versioned_model() -> None:
 def test_experiments_page_imports_the_versioned_model() -> None:
     """The experiment page uses one cache-busted formatting model."""
     assert f'"{EXPERIMENTS_MODEL_IMPORT}"' in EXPERIMENTS_MODULE.read_text(encoding="utf-8")
+
+
+def test_traffic_matrix_imports_the_versioned_model() -> None:
+    """The matrix uses one cache-busted heatmap model."""
+    assert f'"{TRAFFIC_MATRIX_MODEL_IMPORT}"' in TRAFFIC_MATRIX_MODULE.read_text(encoding="utf-8")
 
 
 def test_traffic_monitor_imports_the_versioned_model() -> None:
