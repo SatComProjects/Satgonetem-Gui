@@ -19,7 +19,7 @@ A web-based control panel for the [SatGoNetem](https://github.com/satcomprojects
 | **Coverage Analytics** | Snapshot Earth coverage at a chosen elevation mask, per shell and per ground station. |
 | **Link Budget Workbench** | Compute a one-way RF budget and Shannon/MODCOD capacity with a full breakdown. |
 | **Topology Export & Health** | Structural graph checks plus JSON, DOT, and GraphML exports. |
-| **Experiment Runs** | Run v0.3.2 YAML scenarios and keep manifests, metrics, results, and reports on the server. |
+| **Experiment Runs** | Build scenarios from forms or YAML, run them, and keep manifests, metrics, results, and reports on the server. |
 | **Forwarding Paths** | Trace a diagnostic hop-by-hop path between nodes and highlight it on the globe. |
 | **Traffic Generator** | Run `iperf3`, `ping`, and `hping3` flows with saved presets, endpoint swap, clone, replay, and a queued job system. |
 | **Experiment History** | Reopen, compare, and export recent completed runs from browser-local storage. |
@@ -283,7 +283,9 @@ same card exports the graph as JSON, Graphviz DOT, or GraphML through
 ## Experiment Runs
 
 The Experiments page runs a v0.3.2 YAML scenario in validate-only, offline, or
-live mode. Each run is stored under
+live mode. A phase-1 Scenario builder generates the header, Walker shells, and
+ground stations from structured fields; traffic, events, and custom topology
+files remain in the YAML editor. Each run is stored under
 `SATGONETEM_GUI_SAVE_ROOT/.satgonetem/experiments/` with its scenario, manifest,
 metrics (`metrics.jsonl`), flows, errors, summary, report, optional connectivity
 matrix, and a provenance record. Live runs require GoNetEm containers to be
