@@ -27,31 +27,114 @@ body {
   font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
 }
 
+/* Skip link ---------------------------------------------------------------
+ * Off-screen until focused, then pinned to the top-left corner.
+ */
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 3000;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #04121f;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transform: translateY(calc(-100% - 16px));
+  transition: transform 0.15s ease;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid var(--text);
+  outline-offset: 2px;
+}
+
 .site-header {
   display: flex;
   align-items: center;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 8px 20px;
   padding: 10px 24px;
   background: #0e151d;
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .site-title {
+  flex: 0 0 auto;
   font-weight: 700;
   font-size: 1rem;
   color: var(--accent);
   letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.site-header nav {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 14px;
+  min-width: 0;
 }
 
 .site-header nav a {
   color: var(--muted);
   text-decoration: none;
   font-size: 0.9rem;
-  margin-right: 14px;
+  padding: 2px 0;
+  border-bottom: 2px solid transparent;
 }
 
 .site-header nav a:hover {
   color: var(--text);
+}
+
+.site-header nav a[aria-current="page"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.shortcuts-help-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid #2a394b;
+  background: #182230;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.shortcuts-help-btn:hover {
+  background: #223045;
+  color: var(--text);
+}
+
+@media (max-width: 640px) {
+  .site-header {
+    gap: 6px 12px;
+    padding: 8px 16px;
+  }
+
+  .site-header nav {
+    gap: 2px 10px;
+  }
+
+  .site-header nav a {
+    font-size: 0.82rem;
+  }
 }
 
 .site-footer {
@@ -308,4 +391,117 @@ button.small,
 
 .preflight-check[data-status="error"] .preflight-hint {
   color: #f1b3b3;
+}
+
+/* Shortcuts dialog -------------------------------------------------------
+ * Native <dialog> card: sticky head, scrollable shortcut list, kbd chips.
+ */
+
+.shortcuts-dialog {
+  width: min(92vw, 480px);
+  max-height: min(80vh, 560px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.shortcuts-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.shortcuts-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.64);
+}
+
+.shortcuts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.shortcuts-head h2 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.shortcuts-head .button {
+  flex: 0 0 auto;
+}
+
+.shortcuts-intro {
+  margin: 12px 18px 0;
+}
+
+.shortcuts-intro kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid #2a394b;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  padding: 3px 6px;
+  white-space: nowrap;
+}
+
+.shortcuts-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 12px 0 0;
+  padding: 0 18px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.shortcuts-row {
+  display: grid;
+  grid-template-columns: minmax(72px, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.shortcuts-row:first-child {
+  border-top: 0;
+}
+
+.shortcuts-row kbd {
+  justify-self: start;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid #2a394b;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
+/* Global focus ring ------------------------------------------------------
+ * Page-specific focus rules are more specific and keep working unchanged.
+ */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
