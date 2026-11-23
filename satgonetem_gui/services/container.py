@@ -7,6 +7,7 @@ from .addressability_service import AddressabilityService
 from .connectivity_service import ConnectivityService
 from .coverage_service import CoverageService
 from .experiment_service import ExperimentService
+from .link_budget_service import LinkBudgetService
 from .preflight_service import PreflightService
 from .project_catalog_service import ProjectCatalogService
 from .project_service import ProjectService
@@ -34,3 +35,4 @@ class ApplicationServices:
     connectivity: ConnectivityService
     coverage: CoverageService
     experiments: ExperimentService
+    link_budget: LinkBudgetService

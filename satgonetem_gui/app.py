@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from .adapters.coverage_adapter import SatGoNetemCoverageAdapter
 from .adapters.environment_doctor import LocalEnvironmentDoctor
 from .adapters.experiment_adapter import SatGoNetemExperimentAdapter
+from .adapters.link_budget_adapter import SatGoNetemLinkBudgetAdapter
 from .adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
 from .config import Settings, load_settings
@@ -25,6 +26,7 @@ from .routes import (
     coverage,
     diagnostics,
     experiments,
+    link_budget,
     pages,
     projects,
     routing,
@@ -39,6 +41,7 @@ from .services.connectivity_service import ConnectivityService
 from .services.container import ApplicationServices
 from .services.coverage_service import CoverageService
 from .services.experiment_service import ExperimentService
+from .services.link_budget_service import LinkBudgetService
 from .services.preflight_service import PreflightService
 from .services.project_catalog_service import ProjectCatalogService
 from .services.project_service import ProjectService
@@ -178,6 +181,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         topology,
         SatGoNetemExperimentAdapter(),
     )
+    link_budget_service = LinkBudgetService(SatGoNetemLinkBudgetAdapter())
     return ApplicationServices(
         runtime=runtime,
         project=project,
@@ -192,6 +196,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         connectivity=connectivity_service,
         coverage=coverage_service,
         experiments=experiment_service,
+        link_budget=link_budget_service,
     )
 
 
@@ -233,5 +238,6 @@ def create_app(
     app.include_router(diagnostics.router)
     app.include_router(connectivity.router)
     app.include_router(coverage.router)
+    app.include_router(link_budget.router)
     app.include_router(experiments.router)
     return app
