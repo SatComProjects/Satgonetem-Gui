@@ -4,7 +4,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from ..schemas import Hping3Request, Iperf3Request, PingRequest, ProjectCreateRequest
+from ..schemas import (
+    Hping3Request,
+    Iperf3Request,
+    LinkBudgetRequest,
+    PingRequest,
+    ProjectCreateRequest,
+)
 from ..state import ProjectResult
 
 
@@ -171,6 +177,12 @@ class ExperimentGateway(Protocol):
     ) -> dict[str, Any]: ...
 
     def core_version(self) -> str: ...
+
+
+class LinkBudgetGateway(Protocol):
+    """Standalone RF link-budget chain from the SatGoNetem core."""
+
+    def calculate(self, request: LinkBudgetRequest) -> dict[str, Any]: ...
 
 
 class TrafficGateway(Protocol):

@@ -713,3 +713,50 @@ class ExperimentMetricsResponse(BaseModel):
     run_id: str
     total: int
     samples: list[dict[str, Any]]
+
+
+class LinkBudgetRequest(BaseModel):
+    """Standalone one-way RF link-budget inputs."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    direction: Literal["downlink", "uplink"] = "downlink"
+    strategy: Literal["shannon", "modcod"] = "shannon"
+    frequency_ghz: float = Field(19.0, ge=0.1, le=1000.0)
+    bandwidth_mhz: float = Field(500.0, ge=0.001, le=10_000.0)
+    distance_km: float = Field(1000.0, ge=1.0, le=100_000.0)
+    elevation_deg: float = Field(30.0, ge=0.0, le=90.0)
+    gs_latitude: float = Field(0.0, ge=-90.0, le=90.0)
+    gs_longitude: float = Field(0.0, ge=-180.0, le=180.0)
+    satellite_antenna_diameter_m: float = Field(0.5, ge=0.0, le=20.0)
+    satellite_antenna_efficiency: float = Field(0.6, gt=0.0, le=1.0)
+    satellite_sspa_output_power_db: float = Field(10.0, ge=-100.0, le=100.0)
+    satellite_losses_db: float = Field(0.0, ge=0.0, le=100.0)
+    satellite_eirp_db: float | None = Field(None, ge=-100.0, le=100.0)
+    ground_antenna_diameter_m: float = Field(1.2, ge=0.0, le=20.0)
+    ground_antenna_efficiency: float = Field(0.6, gt=0.0, le=1.0)
+    ground_losses_db: float = Field(0.0, ge=0.0, le=100.0)
+    ground_eirp_db: float | None = Field(None, ge=-100.0, le=100.0)
+    rx_tsys_k: float = Field(100.0, ge=1.0, le=100_000.0)
+    unavailability_percent: float = Field(0.1, ge=0.001, le=50.0)
+
+
+class LinkBudgetResponse(BaseModel):
+    """Computed one-way budget, capacity, and echoed request parameters."""
+
+    ok: bool = True
+    capacity_kbps: int
+    capacity_mbps: float
+    eirp_db: float
+    g_over_t_db: float
+    fspl_db: float
+    atmospheric_db: float
+    atmospheric_available: bool
+    cn0_dbhz: float
+    cn_db: float
+    direction: Literal["downlink", "uplink"]
+    strategy: Literal["shannon", "modcod"]
+    frequency_ghz: float
+    bandwidth_mhz: float
+    distance_km: float
+    elevation_deg: float
