@@ -376,6 +376,18 @@ not import those dependency internals.
 - Configured link metrics and measured usage are labelled separately; no
   backend changes were needed beyond the shell/loss/jitter read fields.
 
+## Phase 29 changes
+
+- Added a bounded in-memory topology snapshot history (240 steps / 100k link
+  records) recorded on observed step changes and cleared on project generation
+  changes.
+- Added record/list/compare routes with added/removed/changed links, node
+  changes, dedupe, and 404 semantics.
+- Added automatic snapshot recording, step selects, a diff table, and
+  added/removed/changed edge highlighting (including removed-link ghosts) to
+  the topology page.
+- Added service/API tests and Playwright comparison coverage.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -403,8 +415,8 @@ not import those dependency internals.
   formatting/sorting, topology health formatting, node filter/sort/favorites,
   world inspector link/peer helpers, shell shortcut guards, link-budget
   formatting, scenario builder generation/validation, topology graph
-  filtering/layout/partitions, traffic monitor aggregation/export, traffic
-  preset and clone/replay models, experiment
+  filtering/layout/partitions, traffic monitor aggregation/export, topology
+  history/compare, traffic preset and clone/replay models, experiment
   status/summary/artifact/detail formatting and diffing, and escaping modules.
 - Playwright covers page navigation, runtime page errors, absence of inline
   handlers, queue add/remove, cross-preset station selection, edit-form prefill,
@@ -416,9 +428,10 @@ not import those dependency internals.
   topology health/export, node search/filter/sort/favorites, world
   inspector/deep link/isolation, shell shortcuts/responsive queue, link-budget
   calculate/error, scenario builder generate/validate/collapse, topology graph
-  filters/partitions/path/inspector, traffic monitor sample/pause/export,
-  traffic preset/swap/clone/replay, experiment start/list/artifact download,
-  detail/live metrics, comparison/diff, and the WebGL fallback. World View WebGL rendering itself remains a manual desktop
+  filters/partitions/path/inspector, topology snapshot compare/diff, traffic
+  monitor sample/pause/export, traffic preset/swap/clone/replay, experiment
+  start/list/artifact download, detail/live metrics, comparison/diff, and the
+  WebGL fallback. World View WebGL rendering itself remains a manual desktop
   check.
 
 ## Current measurements
@@ -430,11 +443,11 @@ Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **796 passed, 1 skipped** in about 61 s with coverage. Frontend:
-**171 Vitest tests**, **53 Playwright tests**.
+Result: **809 passed, 1 skipped** in about 63 s with coverage. Frontend:
+**171 Vitest tests**, **54 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**89.66%** over 4755 statements.
+**89.88%** over 4901 statements.
 
 ## Tooling decisions
 
