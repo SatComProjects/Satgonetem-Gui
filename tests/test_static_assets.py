@@ -35,6 +35,8 @@ SHORTCUTS_MODULE = PACKAGE / "static" / "shortcuts.js"
 SHORTCUTS_MODEL_IMPORT = "./shortcuts_model.js?v=1"
 LINK_BUDGET_MODULE = PACKAGE / "static" / "link_budget.js"
 LINK_BUDGET_MODEL_IMPORT = "./link_budget_model.js?v=1"
+SCENARIO_BUILDER_MODULE = PACKAGE / "static" / "scenario_builder.js"
+SCENARIO_BUILDER_MODEL_IMPORT = "./scenario_builder_model.js?v=1"
 EXPERIMENTS_MODULE = PACKAGE / "static" / "experiments.js"
 EXPERIMENTS_MODEL_IMPORT = "./experiments_model.js?v=2"
 NODES_MODULE = PACKAGE / "static" / "nodes.js"
@@ -56,6 +58,13 @@ def test_link_controllers_import_the_versioned_model() -> None:
 def test_experiments_page_imports_the_versioned_model() -> None:
     """The experiment page uses one cache-busted formatting model."""
     assert f'"{EXPERIMENTS_MODEL_IMPORT}"' in EXPERIMENTS_MODULE.read_text(encoding="utf-8")
+
+
+def test_scenario_builder_imports_the_versioned_model() -> None:
+    """The builder uses one cache-busted generation model."""
+    assert f'"{SCENARIO_BUILDER_MODEL_IMPORT}"' in SCENARIO_BUILDER_MODULE.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_link_budget_page_imports_the_versioned_model() -> None:

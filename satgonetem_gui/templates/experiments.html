@@ -2,6 +2,7 @@
 
 {% block head %}
   <link rel="stylesheet" href="/static/experiments.css?v=2">
+  <link rel="stylesheet" href="/static/scenario_builder.css">
 {% endblock %}
 
 {% block content %}
@@ -24,6 +25,49 @@
   </header>
 
   <p class="muted exp-msg" id="experiments-msg" aria-live="polite"></p>
+
+  <section class="card sb-card" id="scenario-builder" aria-labelledby="sb-title">
+    <div class="sb-head">
+      <div>
+        <p class="sb-eyebrow">Structured authoring</p>
+        <h3 class="card-title" id="sb-title">Scenario builder</h3>
+        <p class="muted sb-lede">Generate the scenario header, Walker shells, and ground stations. Traffic, events, and custom topology files stay in the YAML editor.</p>
+      </div>
+      <button type="button" class="button small secondary" id="sb-toggle" aria-expanded="false" aria-controls="sb-body">Show builder</button>
+    </div>
+    <div id="sb-body" hidden>
+      <div class="sb-grid">
+        <label for="sb-name">Name<input id="sb-name" type="text" maxlength="128" value="Demo Experiment"></label>
+        <label for="sb-duration">Duration (s)<input id="sb-duration" type="number" min="1" step="1" value="30"></label>
+        <label for="sb-tick">Tick (s)<input id="sb-tick" type="number" min="1" step="1" value="1"></label>
+        <label for="sb-metrics">Metrics interval (s)<input id="sb-metrics" type="number" min="0.1" step="0.1" value="5"></label>
+        <label for="sb-routing">Routing
+          <select id="sb-routing">
+            <option value="static" selected>Static</option>
+            <option value="dijkstra">Dijkstra</option>
+            <option value="ospf">OSPF</option>
+            <option value="isis">IS-IS</option>
+            <option value="sr-mpls">SR-MPLS</option>
+          </select>
+        </label>
+        <label class="sb-check"><input type="checkbox" id="sb-connectivity"> Include connectivity matrix</label>
+      </div>
+      <fieldset class="sb-group">
+        <legend>Walker shells</legend>
+        <div id="sb-shells" class="sb-rows"></div>
+        <button type="button" class="button small secondary" id="sb-add-shell">Add shell</button>
+      </fieldset>
+      <fieldset class="sb-group">
+        <legend>Ground stations</legend>
+        <div id="sb-stations" class="sb-rows"></div>
+        <button type="button" class="button small secondary" id="sb-add-station">Add station</button>
+      </fieldset>
+      <div class="sb-actions">
+        <button type="button" class="button" id="sb-generate">Generate YAML</button>
+      </div>
+      <p class="sb-msg" id="sb-msg" aria-live="polite"></p>
+    </div>
+  </section>
 
   <section class="card exp-setup-card" aria-labelledby="experiment-setup-title">
     <div class="exp-card-head">
@@ -169,4 +213,5 @@
 </div>
 
 <script type="module" src="/static/experiments.js?v=2"></script>
+<script type="module" src="/static/scenario_builder.js?v=1"></script>
 {% endblock %}
