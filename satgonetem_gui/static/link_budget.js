@@ -1,5 +1,6 @@
 /** Link-budget workbench page controller. */
 import { api } from "./api.js?v=4";
+import { byId, setStatus } from "./dom.js";
 import {
   atmosphereNote,
   budgetRows,
@@ -9,15 +10,8 @@ import {
 
 let busy = false;
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("lb-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("lb-msg"), text, isError);
 }
 
 function numberValue(id, fallback = 0) {

@@ -1,4 +1,5 @@
 /** Phase-1 scenario builder: header, Walker shells, and ground stations. */
+import { byId, setStatus } from "./dom.js";
 import {
   addShell,
   addStation,
@@ -11,15 +12,8 @@ import {
 
 let state = defaultBuilderState();
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("sb-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("sb-msg"), text, isError);
 }
 
 function field(labelText, name, type, value) {

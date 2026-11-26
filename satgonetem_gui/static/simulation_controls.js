@@ -6,6 +6,7 @@
  * World View lets this module poll on its own.
  */
 import { api } from "./api.js?v=4";
+import { byId, setStatus } from "./dom.js";
 import {
   formatSimRate,
   formatSimTime,
@@ -17,10 +18,6 @@ import {
 
 const POLL_INTERVAL_MS = 2000;
 const CONTROL_TIMEOUT_MS = 600000;
-
-function byId(id) {
-  return document.getElementById(id);
-}
 
 /**
  * @param {Object} [options]
@@ -59,9 +56,7 @@ export function initSimulationControls({ poll = true } = {}) {
   let pollTimer = null;
 
   function setMessage(text, isError = false) {
-    if (!elements.message) return;
-    elements.message.textContent = text;
-    elements.message.style.color = isError ? "var(--bad)" : "var(--muted)";
+    setStatus(elements.message, text, isError);
   }
 
   function updateControls() {

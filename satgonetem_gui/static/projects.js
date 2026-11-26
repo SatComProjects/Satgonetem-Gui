@@ -1,5 +1,6 @@
 /** Project workspace page controller. */
 import { api, apiRequest } from "./api.js?v=4";
+import { byId, setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   formatProjectCount,
@@ -8,22 +9,12 @@ import {
   projectNameValid,
 } from "./projects_model.js?v=1";
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("projects-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("projects-msg"), text, isError);
 }
 
 function setSaveMessage(text, isError = false) {
-  const element = byId("save-current-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("save-current-msg"), text, isError);
 }
 
 function projectRow(project) {

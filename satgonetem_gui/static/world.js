@@ -1,22 +1,13 @@
 import { api, ApiError } from "./api.js?v=4";
-import { initSimulationControls } from "./simulation_controls.js?v=1";
+import { byId, setStatus } from "./dom.js";
+import { initSimulationControls } from "./simulation_controls.js?v=2";
 import { linkWidth, usageColor } from "./links_model.js?v=1";
-import {
-    linkKey,
-    pathLinkKeys,
-    pathSummary,
-} from "./path_model.js?v=1";
-import {
-    deepLinkNode,
-    describeGroundStation,
-    describeSatellite,
-    formatCoordinate,
-    hasPosition,
-    linkCategory,
-    nearestPeers,
-    retainedSelection,
-    summarizeLinks,
-} from "./world_model.js?v=3";
+import { linkKey } from "./path_model.js?v=1";
+import { createWorldCoverage } from "./world_coverage.js?v=1";
+import { createWorldInspector } from "./world_inspector.js?v=1";
+import { createWorldPath } from "./world_path.js?v=1";
+import { createWorldUsage } from "./world_usage.js?v=1";
+import { deepLinkNode, describeGroundStation, describeSatellite, hasPosition, linkCategory } from "./world_model.js?v=3";
 
 const SAT_COLOR = Cesium.Color.fromCssColorString("#3b82f6");
 const GS_CONN_COLOR = Cesium.Color.fromCssColorString("#22c55e");
@@ -33,75 +24,30 @@ const linkCollections = { gsl: null, orbital: null, adjacent: null };
 const satEntities = {};
 const gsEntities = {};
 const nodePositions = new Map();
-
-const vis = {
-    satellites: true,
-    groundStations: true,
-    gsl: false,
-    orbital: false,
-    adjacent: false,
-};
-
-const coverageEntities = {};
-
-// Stores the most-recent lat/lon/alt for each satellite so coverage
-// circles can be created immediately when the checkbox is toggled,
-// without waiting for the next 2-second poll.
+const nodeInfo = new Map();
 const satPositions = {};
+const vis = { satellites: true, groundStations: true, gsl: false, orbital: false, adjacent: false };
 
-const coverage = {
-    enabled: false,
-    elevationDeg: 10,
-    opacity: 0.40,
-    selectedSat: null,
-};
+let coverage = null;
+let inspector = null;
+let worldPath = null;
+let usage = null;
 
-let pathKeys = new Set();
 let lastLinks = [];
-let worldPathBusy = false;
-let usageEnabled = false;
-let usageAvailable = false;
-let usageByLink = new Map();
-let usageTimer = null;
 let pollTimer = null;
 let clickHandler = null;
 let worldDisposed = false;
-let usageInFlight = false;
-const nodeInfo = new Map();
-const inspector = { node: null, isolate: false, signature: "" };
 let pendingDeepLink = deepLinkNode(window.location.search);
 
-/**
- * Convert geographic coordinates to a Cesium Cartesian3 position.
- *
- * @param {number} lat - Latitude in degrees.
- * @param {number} lon - Longitude in degrees.
- * @param {number} altKm - Altitude in kilometres.
- * @returns {Cesium.Cartesian3}
- */
+/** Convert geographic coordinates to a Cesium Cartesian3 position. */
 function toCartesian(lat, lon, altKm) {
     return Cesium.Cartesian3.fromDegrees(lon, lat, (altKm || 0) * 1000);
 }
 
-/**
- * Classify a link into one of the three display categories.
- *
- * @param {{type: string, direction: string}} link
- * @returns {"gsl"|"orbital"|"adjacent"}
- */
-function classifyLink(link) {
-    return linkCategory(link);
-}
-
-/**
- * Build the set of ground station names that have at least one active GSL.
- *
- * @param {Array} links
- * @returns {Set<string>}
- */
+/** Names of ground stations that have at least one GSL. */
 function connectedGsNames(links) {
     const connected = new Set();
-    links.forEach(lk => {
+    links.forEach((lk) => {
         const t = (lk.type || "").toLowerCase();
         if (t.includes("groundstation") || t.includes("userterm")) {
             connected.add(lk.src);
@@ -111,119 +57,7 @@ function connectedGsNames(links) {
     return connected;
 }
 
-/**
- * Calculate the coverage circle radius on Earth's surface.
- *
- * Standard satellite geometry: in the triangle (Earth center, ground point,
- * satellite), the elevation angle at the ground point gives:
- *   sin(rho) = Re * cos(el) / (Re + h)
- *   lambda   = pi/2 - el - rho
- *   R        = Re * lambda
- *
- * @param {number} altKm - Satellite altitude in kilometres.
- * @param {number} elevationDeg - Minimum elevation angle in degrees.
- * @returns {number} Coverage radius in metres.
- */
-function coverageRadiusMeters(altKm, elevationDeg) {
-    const RE = 6371.0;
-    const elRad = elevationDeg * Math.PI / 180;
-    const sinRho = RE * Math.cos(elRad) / (RE + altKm);
-    const rhoRad = Math.asin(Math.min(1, sinRho));
-    const lambdaRad = Math.PI / 2 - elRad - rhoRad;
-    return Math.max(0, RE * 1000 * lambdaRad);
-}
-
-/**
- * Return the effective fill opacity for a coverage circle.
- * When a satellite is selected, non-selected circles are dimmed to 15%.
- *
- * @param {string} satName
- * @returns {number} Opacity in [0, 1].
- */
-function getEffectiveOpacity(satName) {
-    if (coverage.selectedSat === null) return coverage.opacity;
-    return satName === coverage.selectedSat ? coverage.opacity : coverage.opacity * 0.15;
-}
-
-/**
- * Create or update the coverage circle Cesium entity for a satellite.
- * The entity is always kept in sync with the satellite position; its
- * visibility is controlled separately via coverage.enabled.
- *
- * @param {string} satName
- * @param {number} latDeg
- * @param {number} lonDeg
- * @param {number} altKm
- */
-function updateCoverageCircle(satName, latDeg, lonDeg, altKm) {
-    const radius = coverageRadiusMeters(altKm, coverage.elevationDeg);
-    const opacity = getEffectiveOpacity(satName);
-    const groundPos = Cesium.Cartesian3.fromDegrees(lonDeg, latDeg, 0);
-
-    if (coverageEntities[satName]) {
-        const c = coverageEntities[satName];
-        c.entity.position = groundPos;
-        c.entity.ellipse.semiMajorAxis = radius;
-        c.entity.ellipse.semiMinorAxis = radius;
-        c.entity.ellipse.material = Cesium.Color.YELLOW.withAlpha(opacity);
-        c.entity.show = coverage.enabled;
-        c.altKm = altKm;
-    } else {
-        const entity = viewer.entities.add({
-            position: groundPos,
-            ellipse: {
-                semiMajorAxis: radius,
-                semiMinorAxis: radius,
-                material: Cesium.Color.YELLOW.withAlpha(opacity),
-                height: 0,
-                outline: true,
-                outlineColor: Cesium.Color.ORANGE.withAlpha(Math.min(1, opacity * 2)),
-            },
-            show: coverage.enabled,
-        });
-        coverageEntities[satName] = { entity, altKm };
-    }
-}
-
-/**
- * Show or hide all coverage circle entities based on coverage.enabled.
- */
-function applyCoverageVisibility() {
-    Object.values(coverageEntities).forEach(c => {
-        c.entity.show = coverage.enabled;
-    });
-    viewer.scene.requestRender();
-}
-
-/**
- * Recalculate and apply fill opacity for every coverage circle.
- * Called when the opacity slider changes or a satellite is selected/deselected.
- */
-function applyCoverageOpacity() {
-    Object.entries(coverageEntities).forEach(([name, c]) => {
-        const op = getEffectiveOpacity(name);
-        c.entity.ellipse.material = Cesium.Color.YELLOW.withAlpha(op);
-        c.entity.ellipse.outlineColor = Cesium.Color.ORANGE.withAlpha(Math.min(1, op * 2));
-    });
-    viewer.scene.requestRender();
-}
-
-/**
- * Recalculate and apply coverage radii for all circles.
- * Called when the elevation slider changes.
- */
-function applyCoverageElevation() {
-    Object.entries(coverageEntities).forEach(([name, c]) => {
-        const radius = coverageRadiusMeters(c.altKm, coverage.elevationDeg);
-        c.entity.ellipse.semiMajorAxis = radius;
-        c.entity.ellipse.semiMinorAxis = radius;
-    });
-    viewer.scene.requestRender();
-}
-
-/**
- * Initialise the Cesium viewer and the per-type polyline collections.
- */
+/** Initialise the Cesium viewer and the per-type polyline collections. */
 function initCesium() {
     viewer = new Cesium.Viewer("world", {
         baseLayer: new Cesium.ImageryLayer(
@@ -234,24 +68,17 @@ function initCesium() {
                 tileMatrixSetID: "GoogleMapsCompatible_Level8",
                 maximumLevel: 8,
                 credit: new Cesium.Credit("Imagery from NASA GIBS"),
-            })
+            }),
         ),
         terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-        baseLayerPicker: false,
-        geocoder: false,
-        homeButton: false,
-        navigationHelpButton: false,
-        animation: false,
-        timeline: false,
-        sceneModePicker: false,
-        infoBox: true,
-        requestRenderMode: true,
+        baseLayerPicker: false, geocoder: false, homeButton: false,
+        navigationHelpButton: false, animation: false, timeline: false,
+        sceneModePicker: false, infoBox: true, requestRenderMode: true,
         maximumRenderTimeChange: Infinity,
     });
-
     viewer.scene.globe.depthTestAgainstTerrain = true;
 
-    Object.keys(linkCollections).forEach(key => {
+    Object.keys(linkCollections).forEach((key) => {
         const col = viewer.scene.primitives.add(new Cesium.PolylineCollection());
         col.show = vis[key];
         linkCollections[key] = col;
@@ -259,15 +86,12 @@ function initCesium() {
 }
 
 /**
- * Sync satellite entities with the fetched data.
- * Creates new entities, updates positions of existing ones, removes stale ones.
- * Coverage circles are maintained in parallel for every satellite.
- *
- * @param {Array} satellites
+ * Sync satellite entities: create, move, and remove. Coverage circles are
+ * maintained in parallel for every positioned satellite.
  */
 function updateSatellites(satellites) {
     const seen = new Set();
-    satellites.forEach(sat => {
+    satellites.forEach((sat) => {
         const p = sat.position || {};
         if (!hasPosition(p)) {
             if (satEntities[sat.name]) {
@@ -277,75 +101,53 @@ function updateSatellites(satellites) {
             nodePositions.delete(sat.name);
             nodeInfo.delete(sat.name);
             delete satPositions[sat.name];
-            if (coverageEntities[sat.name]) {
-                viewer.entities.remove(coverageEntities[sat.name].entity);
-                delete coverageEntities[sat.name];
-            }
+            coverage.removeSatellite(sat.name);
             return;
         }
         const pos = toCartesian(p.latitude, p.longitude, p.altitude);
+        const description = describeSatellite(sat.name, p);
         nodePositions.set(sat.name, pos);
-        nodeInfo.set(sat.name, {
-            name: sat.name,
-            type: "satellite",
-            city: null,
-            position: p,
-        });
+        nodeInfo.set(sat.name, { name: sat.name, type: "satellite", city: null, position: p });
         seen.add(sat.name);
 
         if (satEntities[sat.name]) {
             satEntities[sat.name].position = pos;
             satEntities[sat.name].show = vis.satellites;
-            satEntities[sat.name].description = describeSatellite(sat.name, p);
+            satEntities[sat.name].description = description;
         } else {
             satEntities[sat.name] = viewer.entities.add({
                 name: sat.name,
                 position: pos,
-                point: {
-                    pixelSize: 5,
-                    color: SAT_COLOR,
-                },
-                description: describeSatellite(sat.name, p),
+                point: { pixelSize: 5, color: SAT_COLOR },
+                description,
                 show: vis.satellites,
             });
         }
 
         satPositions[sat.name] = { latDeg: p.latitude, lonDeg: p.longitude, altKm: p.altitude };
-        updateCoverageCircle(sat.name, p.latitude, p.longitude, p.altitude);
+        coverage.updateCoverageCircle(sat.name, p.latitude, p.longitude, p.altitude);
     });
 
-    Object.keys(satEntities).forEach(name => {
+    Object.keys(satEntities).forEach((name) => {
         if (!seen.has(name)) {
             viewer.entities.remove(satEntities[name]);
             delete satEntities[name];
             nodePositions.delete(name);
             nodeInfo.delete(name);
             delete satPositions[name];
-
-            if (coverageEntities[name]) {
-                viewer.entities.remove(coverageEntities[name].entity);
-                delete coverageEntities[name];
-            }
+            coverage.removeSatellite(name);
         }
     });
-
-    const retained = retainedSelection(coverage.selectedSat, seen);
-    if (retained !== coverage.selectedSat) {
-        coverage.selectedSat = retained;
-        if (coverage.enabled) applyCoverageOpacity();
-    }
+    coverage.retainSelection(seen);
 }
 
 /**
- * Sync ground station entities with the fetched data.
- * Color is green for connected stations and red for disconnected ones.
- *
- * @param {Array} groundStations
- * @param {Set<string>} connected - Names of stations with at least one active link.
+ * Sync ground station entities: green when linked, red when disconnected.
+ * @param {Set<string>} connected - Names of stations with at least one link.
  */
 function updateGroundStations(groundStations, connected) {
     const seen = new Set();
-    groundStations.forEach(gs => {
+    groundStations.forEach((gs) => {
         const p = gs.position || {};
         if (!hasPosition(p)) {
             if (gsEntities[gs.name]) {
@@ -357,34 +159,26 @@ function updateGroundStations(groundStations, connected) {
             return;
         }
         const pos = toCartesian(p.latitude, p.longitude, p.altitude);
+        const linked = connected.has(gs.name);
+        const description = describeGroundStation(gs.name, gs.city, p, linked);
         nodePositions.set(gs.name, pos);
         nodeInfo.set(gs.name, {
-            name: gs.name,
-            type: "ground_station",
-            city: gs.city || null,
-            position: p,
+            name: gs.name, type: "ground_station", city: gs.city || null, position: p,
         });
         seen.add(gs.name);
 
-        const color = connected.has(gs.name) ? GS_CONN_COLOR : GS_DISC_COLOR;
-
         if (gsEntities[gs.name]) {
             gsEntities[gs.name].position = pos;
-            gsEntities[gs.name].point.color = color;
+            gsEntities[gs.name].point.color = linked ? GS_CONN_COLOR : GS_DISC_COLOR;
             gsEntities[gs.name].show = vis.groundStations;
-            gsEntities[gs.name].description = describeGroundStation(
-                gs.name,
-                gs.city,
-                p,
-                connected.has(gs.name),
-            );
+            gsEntities[gs.name].description = description;
         } else {
             gsEntities[gs.name] = viewer.entities.add({
                 name: gs.name,
                 position: pos,
                 point: {
                     pixelSize: 8,
-                    color: color,
+                    color: linked ? GS_CONN_COLOR : GS_DISC_COLOR,
                     outlineColor: Cesium.Color.WHITE,
                     outlineWidth: 1,
                 },
@@ -398,18 +192,13 @@ function updateGroundStations(groundStations, connected) {
                     pixelOffset: new Cesium.Cartesian2(0, -18),
                     show: true,
                 },
-                description: describeGroundStation(
-                    gs.name,
-                    gs.city,
-                    p,
-                    connected.has(gs.name),
-                ),
+                description,
                 show: vis.groundStations,
             });
         }
     });
 
-    Object.keys(gsEntities).forEach(name => {
+    Object.keys(gsEntities).forEach((name) => {
         if (!seen.has(name)) {
             viewer.entities.remove(gsEntities[name]);
             delete gsEntities[name];
@@ -419,162 +208,36 @@ function updateGroundStations(groundStations, connected) {
     });
 }
 
-function inspectorElement(id) {
-    return document.getElementById(id);
-}
-
-function fillInspectorList(element, rows) {
-    if (!element) return;
-    element.replaceChildren();
-    for (const row of rows) {
-        const item = document.createElement("li");
-        item.textContent = row;
-        element.appendChild(item);
-    }
-}
-
-/**
- * Select one satellite or ground station and show the DOM inspector.
- * @param {string} name
- */
-function selectWorldNode(name) {
-    const info = nodeInfo.get(name);
-    if (!info) {
-        clearWorldSelection();
-        return;
-    }
-    inspector.node = name;
-    inspector.signature = "";
-    coverage.selectedSat = info.type === "satellite" ? name : null;
-    if (coverage.enabled) applyCoverageOpacity();
-    renderInspector();
-    updateLinks(lastLinks);
-}
-
-function clearWorldSelection() {
-    inspector.node = null;
-    inspector.signature = "";
-    inspector.isolate = false;
-    const isolate = inspectorElement("world-isolate-links");
-    if (isolate) isolate.checked = false;
-    coverage.selectedSat = null;
-    if (coverage.enabled) applyCoverageOpacity();
-    const panel = inspectorElement("world-inspector");
-    if (panel) panel.hidden = true;
-    updateLinks(lastLinks);
-}
-
-function renderInspector() {
-    const name = inspector.node;
-    const info = name ? nodeInfo.get(name) : null;
-    const panel = inspectorElement("world-inspector");
-    if (!info || !panel) {
-        if (panel) panel.hidden = true;
-        return;
-    }
-    const summary = summarizeLinks(lastLinks, name);
-    const peers = nearestPeers(info, [...nodeInfo.values()], 5);
-    const neighborRows = summary.incident.map(
-        (link) => `${link.peer} (${link.category})`,
-    );
-    const peerRows = peers.map(
-        (peer) => `${peer.name} - ${peer.distance_km} km`,
-    );
-    const signature = [
-        name,
-        info.position?.latitude,
-        info.position?.longitude,
-        info.position?.altitude,
-        lastLinks.length,
-        neighborRows.join("|"),
-        peerRows.join("|"),
-    ].join("~");
-    if (signature === inspector.signature) {
-        panel.hidden = false;
-        return;
-    }
-    inspector.signature = signature;
-
-    const title = inspectorElement("world-inspector-title");
-    if (title) title.textContent = name;
-    const kind = inspectorElement("world-inspector-kind");
-    if (kind) {
-        kind.textContent =
-            info.type === "ground_station"
-                ? `Ground station${info.city ? ` - ${info.city}` : ""}`
-                : "Satellite";
-    }
-    const lat = inspectorElement("world-inspector-lat");
-    if (lat) lat.textContent = formatCoordinate(info.position?.latitude);
-    const lon = inspectorElement("world-inspector-lon");
-    if (lon) lon.textContent = formatCoordinate(info.position?.longitude);
-    const alt = inspectorElement("world-inspector-alt");
-    if (alt) alt.textContent = `${formatCoordinate(info.position?.altitude, 0)} km`;
-    const links = inspectorElement("world-inspector-links");
-    if (links) {
-        links.textContent =
-            `${summary.total} links - GSL ${summary.byCategory.gsl}, ` +
-            `orbital ${summary.byCategory.orbital}, ` +
-            `adjacent ${summary.byCategory.adjacent}`;
-    }
-    fillInspectorList(
-        inspectorElement("world-inspector-neighbors"),
-        neighborRows.length ? neighborRows : ["No incident links."],
-    );
-    fillInspectorList(
-        inspectorElement("world-inspector-peers"),
-        peerRows.length ? peerRows : ["No positioned peers."],
-    );
-    panel.hidden = false;
-}
-
-/**
- * Rebuild the polyline primitives for all link types from the fetched links.
- * Clears each collection then re-populates it.
- *
- * @param {Array} links
- */
+/** Rebuild every link polyline collection from the fetched links. */
 function updateLinks(links) {
     lastLinks = Array.isArray(links) ? links : [];
-    Object.values(linkCollections).forEach(col => col.removeAll());
+    Object.values(linkCollections).forEach((col) => col.removeAll());
 
-    const hasPath = pathKeys.size > 0;
-    lastLinks.forEach(lk => {
-        const ltype = classifyLink(lk);
+    const hasPath = worldPath.hasPath();
+    const isolationNode = inspector.getIsolationNode();
+    lastLinks.forEach((lk) => {
+        const ltype = linkCategory(lk);
         const col = linkCollections[ltype];
         const src = nodePositions.get(lk.src);
         const dst = nodePositions.get(lk.dst);
         if (!src || !dst) return;
 
         const key = linkKey(lk.src, lk.dst);
-        const onPath = hasPath && pathKeys.has(key);
+        const onPath = hasPath && worldPath.isOnPath(key);
         const dim = hasPath && !onPath;
         const isolated =
-            inspector.isolate &&
-            inspector.node &&
-            lk.src !== inspector.node &&
-            lk.dst !== inspector.node;
+            Boolean(isolationNode) && lk.src !== isolationNode && lk.dst !== isolationNode;
         const inactive = lk.is_active === false;
         let baseColor;
         if (inactive) {
             baseColor = INACTIVE_LINK_COLOR;
-        } else if (usageEnabled) {
-            const ratio = usageAvailable
-                ? (usageByLink.has(key) ? usageByLink.get(key) : 0)
-                : null;
+        } else if (usage.isEnabled()) {
+            const ratio = usage.isAvailable() ? usage.utilizationFor(key) : null;
             baseColor = Cesium.Color.fromCssColorString(usageColor(ratio));
         } else {
             baseColor = LINK_COLORS[ltype];
         }
-        const alpha = isolated
-            ? 0.05
-            : dim
-              ? 0.10
-              : onPath
-                ? 1.0
-                : inactive
-                  ? 0.55
-                  : 0.75;
+        const alpha = isolated ? 0.05 : dim ? 0.10 : onPath ? 1.0 : inactive ? 0.55 : 0.75;
         col.add({
             positions: [src, dst],
             width: inactive ? 1.0 : onPath ? 4.0 : linkWidth(lk.capacity_kbps),
@@ -587,16 +250,11 @@ function updateLinks(links) {
     viewer.scene.requestRender();
 }
 
-/**
- * Fetch satellites, ground stations, and links from the API, then update the view.
- */
-async function showWorldMsg(text, isError = false) {
-    const element = document.getElementById("world-msg");
-    if (!element) return;
-    element.textContent = text;
-    element.style.color = isError ? "var(--bad)" : "var(--muted)";
+function showWorldMsg(text, isError = false) {
+    setStatus(byId("world-msg"), text, isError);
 }
 
+/** Fetch satellites, ground stations, and links, then update the view. */
 async function updateWorld() {
     try {
         const [satellites, groundStations, links] = await Promise.all([
@@ -607,37 +265,26 @@ async function updateWorld() {
 
         if (!Array.isArray(satellites) || !Array.isArray(groundStations)) return;
         const linkArr = Array.isArray(links) ? links : [];
-
         const connected = connectedGsNames(linkArr);
 
-        // Satellites and ground stations must be updated before links
-        // so nodePositions contains fresh positions when link endpoints are resolved.
+        // Nodes must be updated before links so nodePositions is fresh.
         updateSatellites(satellites);
         updateGroundStations(groundStations, connected);
-        nodeInfo.forEach((info, name) => {
-            if (info.type === "satellite" && !satEntities[name]) {
-                nodeInfo.delete(name);
-            }
-            if (info.type === "ground_station" && !gsEntities[name]) {
-                nodeInfo.delete(name);
-            }
-        });
         updateLinks(linkArr);
-        if (inspector.node && !nodeInfo.has(inspector.node)) {
-            clearWorldSelection();
-        } else if (inspector.node) {
-            renderInspector();
+        const selected = inspector.getSelectedNode();
+        if (selected && !inspector.hasNode(selected)) {
+            inspector.clear();
+        } else if (selected) {
+            inspector.render();
         }
         showWorldMsg(
-            satellites.length || groundStations.length || linkArr.length
-                ? ""
-                : "No project data is available yet.",
+            satellites.length || groundStations.length || linkArr.length ? "" : "No project data is available yet.",
         );
         if (pendingDeepLink) {
             const wanted = pendingDeepLink;
             pendingDeepLink = null;
-            if (nodeInfo.has(wanted)) {
-                selectWorldNode(wanted);
+            if (inspector.hasNode(wanted)) {
+                inspector.select(wanted);
             } else {
                 showWorldMsg(`Node not found: ${wanted}`, true);
             }
@@ -647,258 +294,59 @@ async function updateWorld() {
         if (err instanceof ApiError && err.status === 404) {
             showWorldMsg("No project is loaded.");
         } else {
-            showWorldMsg(
-                `World view refresh failed: ${err.message || "network error"}`,
-                true,
-            );
+            showWorldMsg(`World view refresh failed: ${err.message || "network error"}`, true);
         }
     }
 }
 
-/**
- * Propagate the current vis state to all entities and primitives.
- */
+/** Propagate the current vis state to all entities and primitives. */
 function applyVisibility() {
-    Object.values(satEntities).forEach(e => { e.show = vis.satellites; });
-    Object.values(gsEntities).forEach(e => { e.show = vis.groundStations; });
+    Object.values(satEntities).forEach((e) => { e.show = vis.satellites; });
+    Object.values(gsEntities).forEach((e) => { e.show = vis.groundStations; });
     linkCollections.gsl.show = vis.gsl;
     linkCollections.orbital.show = vis.orbital;
     linkCollections.adjacent.show = vis.adjacent;
     viewer.scene.requestRender();
 }
 
-/**
- * Toggle the plot controls panel between collapsed and expanded.
- */
-function togglePanel() {
-    const panel = document.getElementById("plot-controls");
-    const content = document.getElementById("plot-controls-content");
-    const toggle = document.getElementById("plot-controls-toggle");
-    const title = document.getElementById("plot-controls-title");
-    const isNowCollapsed = panel.classList.toggle("collapsed");
-    content.classList.toggle("collapsed", isNowCollapsed);
-    toggle.textContent = isNowCollapsed ? "▶" : "◀";
-    title.style.visibility = isNowCollapsed ? "hidden" : "visible";
-    const header = document.getElementById("plot-controls-header");
-    if (header) header.setAttribute("aria-expanded", String(!isNowCollapsed));
-}
-
-function setWorldPathMsg(text, isError = false) {
-    const element = document.getElementById("world-path-msg");
-    if (!element) return;
-    element.textContent = text;
-    element.style.color = isError ? "var(--bad)" : "var(--muted)";
-}
-
-function fillWorldPathSelect(select, nodes) {
-    const previous = select.value;
-    select.replaceChildren();
-    for (const node of nodes) {
-        const option = document.createElement("option");
-        option.value = node.name;
-        option.textContent =
-            node.type === "ground_station" && node.city
-                ? `${node.name} (${node.city})`
-                : node.name;
-        select.appendChild(option);
-    }
-    if (nodes.some(node => node.name === previous)) {
-        select.value = previous;
-    }
-}
-
-async function loadWorldPathNodes() {
-    const source = document.getElementById("world-path-src");
-    const destination = document.getElementById("world-path-dst");
-    const trace = document.getElementById("world-path-trace");
-    const clear = document.getElementById("world-path-clear");
-    if (!source || !destination) return;
-
-    try {
-        const nodes = await api.getAll("/api/nodes");
-        const sorted = [...nodes].sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { numeric: true }),
-        );
-        fillWorldPathSelect(source, sorted);
-        fillWorldPathSelect(destination, sorted);
-        if (!source.value && sorted.length) {
-            const ground = sorted.find(node => node.type === "ground_station");
-            source.value = (ground || sorted[0]).name;
-        }
-        if (!destination.value && sorted.length) {
-            const satellite = sorted.find(node => node.type === "satellite");
-            destination.value = (satellite || sorted[1] || sorted[0]).name;
-        }
-        const enabled = sorted.length >= 2;
-        source.disabled = !enabled;
-        destination.disabled = !enabled;
-        if (trace) trace.disabled = worldPathBusy || !enabled;
-        if (clear) clear.disabled = worldPathBusy || !enabled;
-        if (!enabled) {
-            setWorldPathMsg("Load a project with at least two nodes to trace a path.");
-        }
-    } catch {
-        source.disabled = true;
-        destination.disabled = true;
-        if (trace) trace.disabled = true;
-        if (clear) clear.disabled = true;
-        setWorldPathMsg("Load a project to trace a path.");
-    }
-}
-
-function ensurePathLinkVisibility(hops) {
-    for (const hop of hops || []) {
-        if (hop.type === "GroundStationLink") {
-            vis.gsl = true;
-        } else if (hop.type === "InterSatelliteLink") {
-            const direction = String(hop.direction || "").toUpperCase();
-            if (direction === "ORBITAL") vis.orbital = true;
-            else if (direction === "ADJACENT") vis.adjacent = true;
-            else {
-                vis.orbital = true;
-                vis.adjacent = true;
-            }
-        }
-    }
-    const checkboxes = [
+/** Wire the node and link layer checkboxes to the visibility state. */
+function bindVisibilityControls() {
+    const cbMap = [
+        ["cb-satellites", "satellites"],
+        ["cb-ground-stations", "groundStations"],
         ["cb-gsl", "gsl"],
         ["cb-orbital", "orbital"],
         ["cb-adjacent", "adjacent"],
     ];
-    for (const [id, key] of checkboxes) {
-        const checkbox = document.getElementById(id);
-        if (checkbox) checkbox.checked = vis[key];
-    }
-    applyVisibility();
+    cbMap.forEach(([id, key]) => {
+        const el = byId(id);
+        if (!el) return;
+        el.checked = vis[key];
+        el.addEventListener("change", () => {
+            vis[key] = el.checked;
+            applyVisibility();
+        });
+    });
 }
 
-async function traceWorldPath() {
-    if (worldPathBusy) return;
-    const source = document.getElementById("world-path-src");
-    const destination = document.getElementById("world-path-dst");
-    const trace = document.getElementById("world-path-trace");
-    const clear = document.getElementById("world-path-clear");
-    const summary = document.getElementById("world-path-summary");
-    if (!source || !destination || !source.value || !destination.value) {
-        setWorldPathMsg("Choose a source and destination.", true);
-        return;
-    }
-    if (source.value === destination.value) {
-        setWorldPathMsg("Choose two different nodes.", true);
-        return;
-    }
-
-    worldPathBusy = true;
-    if (trace) trace.disabled = true;
-    if (clear) clear.disabled = true;
-    if (summary) summary.textContent = "";
-    setWorldPathMsg("Tracing path...");
-
-    try {
-        const data = await api.get(
-            `/api/routing/path?src=${encodeURIComponent(source.value)}&dst=${encodeURIComponent(destination.value)}`,
-        );
-        pathKeys = data.found ? pathLinkKeys(data.hops) : new Set();
-        if (summary) summary.textContent = pathSummary(data);
-        if (data.found) {
-            ensurePathLinkVisibility(data.hops);
-            setWorldPathMsg(data.note || "");
-        } else {
-            setWorldPathMsg(data.note || "No path found.");
-        }
-    } catch (error) {
-        pathKeys = new Set();
-        if (summary) summary.textContent = "";
-        setWorldPathMsg(error.message || "Could not trace the path.", true);
-    } finally {
-        worldPathBusy = false;
-        const enabled = (source?.options.length || 0) >= 2;
-        if (trace) trace.disabled = !enabled;
-        if (clear) clear.disabled = !enabled;
-        if (lastLinks.length) updateLinks(lastLinks);
-        else viewer?.scene.requestRender();
-    }
+/** Toggle the plot controls panel between collapsed and expanded. */
+function togglePanel() {
+    const panel = byId("plot-controls");
+    const content = byId("plot-controls-content");
+    const toggle = byId("plot-controls-toggle");
+    const title = byId("plot-controls-title");
+    const isNowCollapsed = panel.classList.toggle("collapsed");
+    content.classList.toggle("collapsed", isNowCollapsed);
+    toggle.textContent = isNowCollapsed ? "▶" : "◀";
+    title.style.visibility = isNowCollapsed ? "hidden" : "visible";
+    const header = byId("plot-controls-header");
+    if (header) header.setAttribute("aria-expanded", String(!isNowCollapsed));
 }
 
-function clearWorldPath() {
-    pathKeys = new Set();
-    const summary = document.getElementById("world-path-summary");
-    if (summary) summary.textContent = "";
-    setWorldPathMsg("");
-    if (lastLinks.length) updateLinks(lastLinks);
-    else viewer?.scene.requestRender();
-}
-
-function setUsageMessage(text, isError = false) {
-    const element = document.getElementById("world-usage-msg");
-    if (!element) return;
-    element.textContent = text;
-    element.style.color = isError ? "var(--bad)" : "var(--muted)";
-}
-
+/** Rebuild the link primitives after selection/path/usage changes. */
 function rerenderLinks() {
     if (lastLinks.length) updateLinks(lastLinks);
     else viewer?.scene.requestRender();
-}
-
-async function refreshUsage() {
-    if (!usageEnabled || usageInFlight) return;
-    usageInFlight = true;
-    try {
-        const data = await api.get("/api/links/usage");
-        if (!usageEnabled) return;
-        usageAvailable = Boolean(data.available);
-        usageByLink = new Map(
-            (Array.isArray(data.links) ? data.links : [])
-                .filter(entry => entry && entry.src && entry.dst)
-                .map(entry => [linkKey(entry.src, entry.dst), entry.utilization]),
-        );
-        setUsageMessage(
-            data.available ? "" : (data.note || "Link usage is unavailable."),
-        );
-    } catch (error) {
-        usageAvailable = false;
-        usageByLink.clear();
-        setUsageMessage(
-            "Link usage refresh failed: " + (error.message || "network error"),
-            true,
-        );
-    } finally {
-        usageInFlight = false;
-    }
-    rerenderLinks();
-}
-
-function setUsageEnabled(enabled) {
-    usageEnabled = Boolean(enabled);
-    if (usageTimer !== null) {
-        clearInterval(usageTimer);
-        usageTimer = null;
-    }
-    if (usageEnabled) {
-        refreshUsage();
-        usageTimer = setInterval(refreshUsage, 5000);
-    } else {
-        usageByLink.clear();
-        usageAvailable = false;
-        setUsageMessage("");
-        rerenderLinks();
-    }
-}
-
-function bindUsageControl() {
-    const checkbox = document.getElementById("cb-link-usage");
-    if (!checkbox) return;
-    checkbox.addEventListener("change", () => setUsageEnabled(checkbox.checked));
-}
-
-function bindWorldPathControls() {
-    document
-        .getElementById("world-path-trace")
-        ?.addEventListener("click", traceWorldPath);
-    document
-        .getElementById("world-path-clear")
-        ?.addEventListener("click", clearWorldPath);
 }
 
 function cleanupWorld(event) {
@@ -910,10 +358,7 @@ function cleanupWorld(event) {
         clearTimeout(pollTimer);
         pollTimer = null;
     }
-    if (usageTimer !== null) {
-        clearInterval(usageTimer);
-        usageTimer = null;
-    }
+    if (usage !== null) usage.stopUsagePolling();
     if (clickHandler !== null) {
         clickHandler.destroy();
         clickHandler = null;
@@ -931,102 +376,47 @@ function poll() {
 function startWorld() {
     initCesium();
     initSimulationControls({ poll: true });
-    bindWorldPathControls();
-    bindUsageControl();
-    loadWorldPathNodes();
 
-    const isolate = document.getElementById("world-isolate-links");
-    if (isolate) {
-        isolate.checked = false;
-        isolate.addEventListener("change", () => {
-            inspector.isolate = isolate.checked;
-            updateLinks(lastLinks);
-        });
-    }
-    document
-        .getElementById("world-inspector-close")
-        ?.addEventListener("click", clearWorldSelection);
-
-    const cbMap = [
-        ["cb-satellites", "satellites"],
-        ["cb-ground-stations", "groundStations"],
-        ["cb-gsl", "gsl"],
-        ["cb-orbital", "orbital"],
-        ["cb-adjacent", "adjacent"],
-    ];
-    cbMap.forEach(([id, key]) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.checked = vis[key];
-        el.addEventListener("change", () => {
-            vis[key] = el.checked;
-            applyVisibility();
-        });
+    coverage = createWorldCoverage({
+        viewer,
+        requestRender: () => viewer.scene.requestRender(),
+        getSatellitePositions: () => Object.entries(satPositions),
+    });
+    inspector = createWorldInspector({
+        viewer,
+        getNodeInfo: (name) => nodeInfo.get(name),
+        nodeInfoValues: () => nodeInfo.values(),
+        getLinks: () => lastLinks,
+        getSatelliteEntities: () => satEntities,
+        getGroundStationEntities: () => gsEntities,
+        resolveCoverageEntity: (entity) => coverage.satelliteForEntity(entity),
+        selectCoverageSatellite: (name) => coverage.selectSatellite(name),
+        rerenderLinks,
+    });
+    worldPath = createWorldPath({
+        rerenderLinks,
+        applyVisibility,
+        enableLinkVisibility: (key) => {
+            vis[key] = true;
+        },
+        isLinkVisible: (key) => vis[key],
+    });
+    usage = createWorldUsage({
+        rerenderLinks,
+        messageId: "world-usage-msg",
+        checkboxId: "cb-link-usage",
     });
 
-    const cbCoverage = document.getElementById("cb-coverage");
-    if (cbCoverage) {
-        cbCoverage.checked = coverage.enabled;
-        cbCoverage.addEventListener("change", () => {
-            coverage.enabled = cbCoverage.checked;
-            if (coverage.enabled) {
-                // Immediately create circles for all known satellites without
-                // waiting for the next 2-second poll.
-                Object.entries(satPositions).forEach(([name, pos]) => {
-                    updateCoverageCircle(name, pos.latDeg, pos.lonDeg, pos.altKm);
-                });
-                viewer.scene.requestRender();
-            } else {
-                applyCoverageVisibility();
-            }
-        });
-    }
+    worldPath.bindControls();
+    usage.bindControl();
+    coverage.bindControls();
+    inspector.bindControls();
+    worldPath.loadWorldPathNodes();
+    bindVisibilityControls();
 
-    const slElevation = document.getElementById("sl-elevation");
-    const slElevationVal = document.getElementById("sl-elevation-val");
-    if (slElevation) {
-        slElevation.value = coverage.elevationDeg;
-        slElevation.addEventListener("input", () => {
-            coverage.elevationDeg = parseFloat(slElevation.value);
-            if (slElevationVal) slElevationVal.textContent = slElevation.value;
-            if (coverage.enabled) applyCoverageElevation();
-        });
-    }
+    clickHandler = inspector.bindPicking();
 
-    const slOpacity = document.getElementById("sl-opacity");
-    const slOpacityVal = document.getElementById("sl-opacity-val");
-    if (slOpacity) {
-        slOpacity.value = Math.round(coverage.opacity * 100);
-        slOpacity.addEventListener("input", () => {
-            coverage.opacity = parseFloat(slOpacity.value) / 100;
-            if (slOpacityVal) slOpacityVal.textContent = slOpacity.value + "%";
-            if (coverage.enabled) applyCoverageOpacity();
-        });
-    }
-
-    // Clicking a satellite dot or its coverage circle selects it (dims all others).
-    // Clicking empty space or a ground station deselects.
-    clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    clickHandler.setInputAction((click) => {
-        const picked = viewer.scene.pick(click.position);
-        let nodeName = null;
-
-        if (Cesium.defined(picked) && Cesium.defined(picked.id)) {
-            const entity = picked.id;
-            nodeName =
-                Object.keys(satEntities).find(n => satEntities[n] === entity) ||
-                Object.keys(gsEntities).find(n => gsEntities[n] === entity) ||
-                Object.keys(coverageEntities).find(
-                    n => coverageEntities[n].entity === entity,
-                ) ||
-                null;
-        }
-
-        if (nodeName) selectWorldNode(nodeName);
-        else clearWorldSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-    const panelHeader = document.getElementById("plot-controls-header");
+    const panelHeader = byId("plot-controls-header");
     panelHeader.addEventListener("click", togglePanel);
     panelHeader.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;

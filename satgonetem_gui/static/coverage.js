@@ -1,5 +1,6 @@
 /** Coverage analytics page controller. */
 import { api } from "./api.js?v=4";
+import { byId, setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   coverageClass,
@@ -14,15 +15,8 @@ import {
 
 let busy = false;
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("coverage-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("coverage-msg"), text, isError);
 }
 
 function setHidden(element, hidden) {

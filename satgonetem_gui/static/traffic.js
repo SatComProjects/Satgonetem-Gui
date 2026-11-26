@@ -1,7 +1,8 @@
 /** Traffic Generator UI controller. */
 import { api } from "./api.js?v=4";
+import { byId, setStatus } from "./dom.js";
 // Keep this queue.js version in sync with the script tag in templates/base.html.
-import { jqAdd, jqStartNow, jqStartOne } from "./queue.js?v=24";
+import { jqAdd, jqStartNow, jqStartOne } from "./queue.js?v=26";
 import { buildTrafficPayload } from "./traffic_model.js";
 import {
   PRESETS_KEY,
@@ -18,15 +19,8 @@ import {
   routingRefreshMessage,
 } from "./addressability_model.js?v=1";
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMsg(text, isError = false) {
-  const element = byId("tg-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("tg-msg"), text, isError);
 }
 
 function toggleTool() {
@@ -161,10 +155,7 @@ function formFields() {
 let presets = normalizePresets(null);
 
 function setPresetMsg(text, isError = false) {
-  const element = byId("tg-preset-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("tg-preset-msg"), text, isError);
 }
 
 function persistPresets() {

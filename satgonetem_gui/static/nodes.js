@@ -1,5 +1,6 @@
 /** Node Explorer page controller. */
 import { api } from "./api.js?v=4";
+import { downloadBlob, setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   FAVORITES_KEY,
@@ -44,10 +45,7 @@ function el(id) {
 }
 
 function showMsg(text, isError = false) {
-  const message = el("nodes-msg");
-  if (!message) return;
-  message.textContent = text;
-  message.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(el("nodes-msg"), text, isError);
 }
 
 function buildInterfaceRow(iface) {
@@ -442,10 +440,7 @@ function bindNodeFilters() {
 }
 
 function setPathMsg(text, isError = false) {
-  const message = el("path-msg");
-  if (!message) return;
-  message.textContent = text;
-  message.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(el("path-msg"), text, isError);
 }
 
 function fillPathSelect(select, nodes) {
@@ -638,18 +633,11 @@ async function copyPath() {
 
 function exportPath() {
   if (!lastPathData) return;
-  const blob = new Blob([JSON.stringify(lastPathData, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `path-${lastPathData.src}-${lastPathData.dst}.json`;
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  downloadBlob(
+    `path-${lastPathData.src}-${lastPathData.dst}.json`,
+    JSON.stringify(lastPathData, null, 2),
+    "application/json",
+  );
   setPathMsg("Path exported as JSON.");
 }
 
