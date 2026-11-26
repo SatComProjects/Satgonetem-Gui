@@ -9,32 +9,16 @@
   --lb-ink: #c4d2e0;
   --lb-value: #bfe3ff;
   --lb-grid-line: rgba(138, 160, 183, 0.06);
-
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
 }
 
-.lb-page > *,
 .lb-layout > * {
   min-width: 0;
-}
-
-/* The page script toggles results and the atmospheric note with the hidden
- * attribute; both have layout displays, so the attribute must win.
- */
-.lb-page [hidden] {
-  display: none !important;
 }
 
 /* Page header -------------------------------------------------------------- */
 
 .lb-page-head {
-  position: relative;
-  overflow: hidden;
   padding: 22px 24px 20px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
   background:
     radial-gradient(115% 170% at 100% -30%, rgba(61, 169, 252, 0.19), transparent 58%),
     radial-gradient(75% 120% at 96% 135%, rgba(251, 191, 36, 0.05), transparent 60%),
@@ -83,51 +67,8 @@
   pointer-events: none;
 }
 
-.lb-page-head > * {
-  position: relative;
-  z-index: 1;
-}
-
-.lb-eyebrow {
-  margin: 0;
-  color: var(--accent);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  line-height: 1.4;
-  text-transform: uppercase;
-}
-
-.lb-page .lb-title {
-  margin: 5px 0 8px;
-  font-size: clamp(1.55rem, 1.1rem + 1.4vw, 2.05rem);
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
-}
-
 .lb-lede {
   max-width: 70ch;
-  margin: 0;
-  font-size: 0.86rem;
-  line-height: 1.55;
-}
-
-.lb-msg {
-  min-height: 1.35em;
-  margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.lb-msg.error,
-.lb-msg[data-state="error"] {
-  color: var(--bad);
-}
-
-.lb-msg[data-state="success"] {
-  color: var(--ok);
 }
 
 /* Layout ------------------------------------------------------------------- */
@@ -139,29 +80,15 @@
   gap: 18px;
 }
 
-.lb-page .card {
-  position: relative;
-}
-
 .lb-form-card::before,
 .lb-results-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 2px;
   border-radius: 12px 12px 0 0;
   background: linear-gradient(90deg, var(--accent), transparent 64%);
-  pointer-events: none;
 }
 
 .lb-results-card::before {
   background: linear-gradient(90deg, var(--accent), var(--ok) 58%, transparent 88%);
   opacity: 0.72;
-}
-
-.lb-form-card .card-title,
-.lb-results-card .card-title {
-  margin: 0 0 14px;
 }
 
 @media (min-width: 901px) {
@@ -275,7 +202,7 @@
   opacity: 1;
 }
 
-.lb-run-btn {
+.lb-page .lb-run-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -283,36 +210,25 @@
   width: 100%;
   margin-top: 20px;
   padding: 11px 16px;
-  border: 1px solid rgba(61, 169, 252, 0.65);
-  border-radius: 8px;
-  background: linear-gradient(180deg, #53b8ff 0%, #2f9bea 100%);
-  color: #04121f;
   font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
   box-shadow:
     0 10px 24px rgba(61, 169, 252, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
   transition: background 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
 }
 
-.lb-run-btn:hover:not(:disabled) {
-  background: linear-gradient(180deg, #6fc5ff 0%, #3da9fc 100%);
+.lb-page .lb-run-btn:hover:not(:disabled) {
   box-shadow:
     0 12px 28px rgba(61, 169, 252, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.lb-run-btn:active:not(:disabled) {
+.lb-page .lb-run-btn:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-.lb-run-btn:disabled {
-  border-color: #2a394b;
-  background: #182230;
-  color: var(--muted);
-  box-shadow: none;
-  cursor: not-allowed;
+.lb-page .lb-run-btn:disabled {
+  opacity: 1;
   transform: none;
 }
 
@@ -569,7 +485,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .lb-run-btn {
+  .lb-page .lb-run-btn {
     margin-top: 18px;
   }
 

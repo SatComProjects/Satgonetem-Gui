@@ -435,6 +435,47 @@ not import those dependency internals.
 - Added service/API tests, a pure heatmap model, and Playwright coverage; real
   container runs remain opt-in/manual.
 
+## Remediation Phase 4 changes
+
+- Added `static/dom.js` (`byId`, `setStatus` with the shared `.is-error` class,
+  `downloadBlob`) and replaced the duplicated DOM/status/download boilerplate
+  across page modules.
+- Split `queue.js` into `traffic_plots_model.js` (pure, Vitest-covered),
+  `traffic_plots.js`, `results_modal.js`, and `history_panel.js`; `queue.js`
+  keeps queue state, stable ids, timers, cross-tab sync, and polling.
+- Split `world.js` into `world_coverage.js`, `world_inspector.js`,
+  `world_path.js`, and `world_usage.js`, wired through factory initializers
+  without import cycles; the idempotent bfcache-aware `pagehide` teardown
+  contract is preserved.
+- Split `experiments.js` into `experiments_detail.js`,
+  `experiments_compare.js`, and `experiments_shared.js`, and parallelized the
+  per-run metrics/scenario fetches with `Promise.all`.
+- Bumped `?v=` for every changed entry module and versioned all new imports.
+
+## Remediation Phase 5 changes
+
+- Promoted shared page chrome into `base.css`: `.page-frame`, `.page-head`,
+  `.page-eyebrow`, `.page-title`, `.page-lede`, `.status-msg`/`.is-error`,
+  `.toolbar`, `.data-table`, `.card-head`, `.empty-state`, shared
+  buttons/scroll panels, and responsive gutters.
+- Refactored the seven page stylesheets that duplicated page chrome
+  (`experiments`, `topology_graph`, `connectivity`, `coverage`,
+  `traffic_matrix`, `nodes`, `link_budget`) to consume the shared primitives and
+  removed duplicated generic rules; page-specific visual accents stay with
+  their pages.
+- Split the two largest page stylesheets along their component sections:
+  `experiments.css` + `experiments_runs.css` + `experiments_detail.css` +
+  `experiments_compare.css`, and `topology_graph.css` +
+  `topology_graph_panels.css`, so every production stylesheet is under 1,000
+  lines and the named target files are under 450 lines.
+- Verified zero visual change against a pre-refactor checkout in a separate
+  worktree: all 13 real page routes are pixel-identical at 1280 px (only
+  environment-specific text differs, such as the configured save-root path and
+  the monitor's live pulse), and the seven refactored pages are pixel-identical
+  at 760/560/420 px. State styling that screenshots cannot cover was checked
+  with computed-style assertions: page-head padding at the 760/560 breakpoints,
+  disabled compare-button colours, and disabled secondary hover.
+
 ## Test strategy
 
 - The integration fixture is a **10x10 Walker delta** constellation (100
@@ -444,9 +485,10 @@ not import those dependency internals.
 - API tests use `create_app()` per test with an isolated save root.
 - Unit tests cover serializers, storage, traffic-flow normalization, routing
   guards, project lifecycle transitions, the job registry, and cancellation.
-- A structural test asserts `TopologyManager` and concrete flow classes appear
-  only in their adapters, private dependency hooks appear only in adapters, and
-  route handlers stay small.
+- AST-based structural tests assert that routes/services never import the
+  core or `adapters/`, that concrete core symbols and private dependency hooks
+  stay inside `adapters/`, and that route handlers stay small. Reports and
+  services are tested in per-service modules with a shared fake harness.
 - Docker-backed routing and traffic happy paths are not part of the default
   suite. The fake traffic gateway exercises start/status/cancel without
   containers.
@@ -484,18 +526,18 @@ not import those dependency internals.
 
 ## Current measurements
 
-Measured on 2026-11-22 with Python 3.12.16, pytest 9.2.0, and coverage
+Measured on 2026-11-26 with Python 3.12.16, pytest 9.2.0, and coverage
 7.17.1:
 
 ```bash
 uv run pytest --cov=satgonetem_gui --cov-report=term-missing
 ```
 
-Result: **824 passed, 1 skipped** in about 68 s with coverage. Frontend:
-**173 Vitest tests**, **56 Playwright tests**.
+Result: **846 passed, 1 skipped** in about 60 s with coverage. Frontend:
+**187 Vitest tests**, **57 Playwright tests**.
 
 Branch coverage is enabled with an 85% minimum; the current suite is at
-**89.70%** over 5109 statements.
+**90.05%** over 5,112 statements.
 
 ## Tooling decisions
 

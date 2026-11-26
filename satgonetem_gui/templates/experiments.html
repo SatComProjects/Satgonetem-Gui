@@ -1,18 +1,21 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/experiments.css?v=2">
+  <link rel="stylesheet" href="/static/experiments.css?v=6">
+  <link rel="stylesheet" href="/static/experiments_runs.css?v=2">
+  <link rel="stylesheet" href="/static/experiments_detail.css?v=1">
+  <link rel="stylesheet" href="/static/experiments_compare.css?v=1">
   <link rel="stylesheet" href="/static/scenario_builder.css">
 {% endblock %}
 
 {% block content %}
-<div class="exp-page">
+<div class="exp-page page-frame">
 
-  <header class="exp-page-head">
+  <header class="exp-page-head page-head">
     <div class="exp-heading">
-      <p class="exp-eyebrow">Scenario runner</p>
-      <h2 class="exp-title">Experiments</h2>
-      <p class="muted exp-lede">
+      <p class="exp-eyebrow page-eyebrow">Scenario runner</p>
+      <h2 class="exp-title page-title">Experiments</h2>
+      <p class="muted exp-lede page-lede">
         Run a v0.3.2 YAML scenario and keep its manifest, metrics, results, and report
         on the server. Every run stays listed below with the artifacts it produced.
       </p>
@@ -24,7 +27,7 @@
     </div>
   </header>
 
-  <p class="muted exp-msg" id="experiments-msg" aria-live="polite"></p>
+  <p class="muted exp-msg status-msg" id="experiments-msg" aria-live="polite"></p>
 
   <section class="card sb-card" id="scenario-builder" aria-labelledby="sb-title">
     <div class="sb-head">
@@ -69,11 +72,11 @@
     </div>
   </section>
 
-  <section class="card exp-setup-card" aria-labelledby="experiment-setup-title">
-    <div class="exp-card-head">
+  <section class="card card-accent exp-setup-card" aria-labelledby="experiment-setup-title">
+    <div class="exp-card-head card-head">
       <div>
         <h3 class="card-title" id="experiment-setup-title">New run</h3>
-        <p class="muted exp-card-hint">
+        <p class="muted exp-card-hint card-hint">
           Paste a scenario, choose how far to run it, then start. The YAML is validated
           before anything is launched.
         </p>
@@ -108,12 +111,12 @@
           </select>
         </label>
         <p class="muted exp-field-hint">The scenario is validated first in every mode.</p>
-        <button type="button" class="button exp-run-btn" id="experiment-run"
+        <button type="button" class="button primary exp-run-btn" id="experiment-run"
                 aria-describedby="experiment-run-note">Run experiment</button>
         <p class="muted exp-run-note" id="experiment-run-note">
           Live mode requires stopped GoNetEm containers.
         </p>
-        <p class="exp-run-status" id="experiment-start-status" role="status" aria-live="polite"></p>
+        <p class="exp-run-status status-msg" id="experiment-start-status" role="status" aria-live="polite"></p>
       </div>
     </div>
 
@@ -130,36 +133,36 @@
   </section>
 
   <section class="card exp-runs-card" aria-labelledby="experiment-runs-title">
-    <div class="exp-runs-head">
+    <div class="exp-runs-head card-head">
       <div>
         <h3 class="card-title" id="experiment-runs-title">Runs</h3>
-        <p class="muted exp-runs-hint">
+        <p class="muted exp-runs-hint card-hint">
           Newest first. Artifacts open from the run that produced them.
         </p>
       </div>
     </div>
     <div class="experiment-compare-bar" id="experiment-compare-bar" hidden>
       <span class="muted" id="experiment-selection-count" aria-live="polite">0 selected</span>
-      <button type="button" class="button small" id="experiment-compare-btn" disabled>Compare</button>
+      <button type="button" class="button small primary" id="experiment-compare-btn" disabled>Compare</button>
       <button type="button" class="button small secondary" id="experiment-clear-selection">Clear</button>
     </div>
     <div class="experiment-list" id="experiments-list"></div>
-    <p class="experiment-empty" id="experiments-empty" hidden>
+    <p class="experiment-empty empty-state" id="experiments-empty" hidden>
       <strong>No runs yet</strong>
       <span>Start a dry run to validate the scenario, or an offline run to build and sample it.</span>
     </p>
   </section>
 
-  <section class="card exp-detail-card" id="experiment-detail" hidden aria-labelledby="experiment-detail-title">
+  <section class="card card-accent exp-detail-card" id="experiment-detail" hidden aria-labelledby="experiment-detail-title">
     <div class="exp-detail-head">
       <div>
-        <p class="exp-eyebrow">Run detail</p>
+        <p class="exp-eyebrow page-eyebrow">Run detail</p>
         <h3 class="card-title" id="experiment-detail-title">Run</h3>
         <p class="muted exp-detail-sub" id="experiment-detail-sub"></p>
       </div>
       <button type="button" class="button small secondary" id="experiment-detail-close">Close</button>
     </div>
-    <p class="exp-run-status" id="experiment-detail-status" role="status" aria-live="polite"></p>
+    <p class="exp-run-status status-msg" id="experiment-detail-status" role="status" aria-live="polite"></p>
     <div class="exp-detail-grid">
       <div class="exp-detail-main">
         <div class="exp-chart-wrap">
@@ -182,10 +185,10 @@
     </div>
   </section>
 
-  <section class="card exp-compare-card" id="experiment-compare" hidden aria-labelledby="experiment-compare-title">
+  <section class="card card-accent exp-compare-card" id="experiment-compare" hidden aria-labelledby="experiment-compare-title">
     <div class="exp-detail-head">
       <div>
-        <p class="exp-eyebrow">Run comparison</p>
+        <p class="exp-eyebrow page-eyebrow">Run comparison</p>
         <h3 class="card-title" id="experiment-compare-title">Compare runs</h3>
         <p class="muted" id="experiment-compare-sub"></p>
       </div>
@@ -206,7 +209,7 @@
       <canvas id="experiment-compare-chart" role="img" aria-label="Comparison metrics chart"></canvas>
     </div>
     <p class="muted exp-chart-msg" id="experiment-compare-msg" aria-live="polite"></p>
-    <div class="exp-compare-table" id="experiment-compare-table"></div>
+    <div class="exp-compare-table scroll-panel" id="experiment-compare-table"></div>
     <div class="exp-compare-diff" id="experiment-compare-diff"></div>
   </section>
 

@@ -119,16 +119,7 @@ label.inline > select {
   }
 }
 
-.progress-fill.error {
-  width: 100% !important;
-  background: linear-gradient(90deg, #7f1d1d, var(--bad));
-  transition: none;
-}
 
-.progress-fill.error::after {
-  display: none;
-  animation: none;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .progress-fill {

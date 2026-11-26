@@ -107,9 +107,6 @@
   overflow-wrap: anywhere;
 }
 
-.projects-msg.error {
-  color: var(--bad);
-}
 
 /* Save card ---------------------------------------------------------------- */
 

@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/link_budget.css">
+  <link rel="stylesheet" href="/static/link_budget.css?v=2">
 {% endblock %}
 
 {% block content %}
-<div class="lb-page">
-  <header class="lb-page-head">
-    <p class="lb-eyebrow">RF analysis</p>
-    <h2 class="lb-title">Link Budget</h2>
-    <p class="muted lb-lede">Compute a one-way satellite/ground budget and capacity from RF and geometry inputs. This is a read-only what-if workbench.</p>
+<div class="lb-page page-frame">
+  <header class="lb-page-head page-head">
+    <p class="lb-eyebrow page-eyebrow">RF analysis</p>
+    <h2 class="lb-title page-title">Link Budget</h2>
+    <p class="muted lb-lede page-lede">Compute a one-way satellite/ground budget and capacity from RF and geometry inputs. This is a read-only what-if workbench.</p>
   </header>
-  <p class="muted lb-msg" id="lb-msg" aria-live="polite"></p>
+  <p class="muted lb-msg status-msg" id="lb-msg" aria-live="polite"></p>
   <div class="lb-layout">
-    <section class="card lb-form-card" aria-labelledby="lb-form-title">
+    <section class="card card-accent lb-form-card" aria-labelledby="lb-form-title">
       <h3 class="card-title" id="lb-form-title">Inputs</h3>
       <div class="lb-group">
         <h4>Direction and strategy</h4>
@@ -63,9 +63,9 @@
           <label for="lb-unavailability">Unavailability (%)<input type="number" id="lb-unavailability" value="0.1" min="0.001" max="50" step="0.001"></label>
         </div>
       </div>
-      <button type="button" class="button lb-run-btn" id="lb-run">Calculate budget</button>
+      <button type="button" class="button primary lb-run-btn" id="lb-run">Calculate budget</button>
     </section>
-    <section class="card lb-results-card" aria-labelledby="lb-results-title">
+    <section class="card card-accent lb-results-card" aria-labelledby="lb-results-title">
       <h3 class="card-title" id="lb-results-title">Result</h3>
       <p class="lb-empty" id="lb-empty"><strong>No calculation yet</strong><span>Adjust the inputs and calculate a one-way budget.</span></p>
       <div id="lb-results" hidden>
