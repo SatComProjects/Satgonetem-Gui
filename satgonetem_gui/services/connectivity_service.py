@@ -13,6 +13,7 @@ from typing import Any, Callable
 from ..errors import APIError
 from ..schemas import ConnectivityStartRequest
 from ..time_utils import utc_timestamp
+from .job_registry import BoundedJobRegistry, JobCapacityError
 from .ports import ConnectivityController
 from .topology_service import TopologyService
 
@@ -47,10 +48,6 @@ def _deduplicate(names: list[str]) -> list[str]:
         seen.add(name)
         ordered.append(name)
     return ordered
-
-
-class ConnectivityJobCapacityError(RuntimeError):
-    """Raised when every connectivity job slot is held by a running check."""
 
 
 @dataclass
@@ -132,100 +129,6 @@ class ConnectivityJob:
             }
 
 
-@dataclass
-class ConnectivityJobRegistry:
-    """Thread-safe, bounded connectivity job storage with TTL cleanup."""
-
-    max_jobs: int = MAX_JOBS
-    ttl_seconds: float = TERMINAL_TTL_SECONDS
-    clock: Callable[[], float] = time.time
-    _jobs: dict[str, ConnectivityJob] = field(default_factory=dict)
-    _lock: threading.Lock = field(default_factory=threading.Lock)
-
-    def __post_init__(self) -> None:
-        if self.max_jobs < 1:
-            raise ValueError("max_jobs must be at least 1")
-        if self.ttl_seconds < 0:
-            raise ValueError("ttl_seconds must be non-negative")
-
-    def __len__(self) -> int:
-        with self._lock:
-            return len(self._jobs)
-
-    def create(
-        self,
-        *,
-        nodes: list[str],
-        ping_count: int,
-        max_workers: int,
-        flow_timeout_seconds: float,
-        pair_count: int,
-        generation: int,
-    ) -> ConnectivityJob:
-        """Create a running job, retaining capacity for running checks."""
-        with self._lock:
-            now = self.clock()
-            self._prune_locked(now)
-            running = sum(1 for job in self._jobs.values() if not job.terminal)
-            if running >= self.max_jobs:
-                raise ConnectivityJobCapacityError(
-                    "Connectivity check limit reached. Wait for a running check to finish."
-                )
-            if len(self._jobs) >= self.max_jobs:
-                self._evict_terminal_locked()
-            if len(self._jobs) >= self.max_jobs:
-                raise ConnectivityJobCapacityError(
-                    "Connectivity check limit reached. Wait for a running check to finish."
-                )
-            job = ConnectivityJob(
-                job_id=f"c{uuid.uuid4().hex}",
-                nodes=list(nodes),
-                ping_count=ping_count,
-                max_workers=max_workers,
-                flow_timeout_seconds=flow_timeout_seconds,
-                pair_count=pair_count,
-                generation=generation,
-                created_at=now,
-                updated_at=now,
-                clock=self.clock,
-            )
-            self._jobs[job.job_id] = job
-            return job
-
-    def get(self, job_id: str) -> ConnectivityJob | None:
-        """Return a job by ID."""
-        with self._lock:
-            return self._jobs.get(job_id)
-
-    def running(self) -> list[ConnectivityJob]:
-        """Return a snapshot of jobs that have not reached a terminal state."""
-        with self._lock:
-            return [job for job in self._jobs.values() if not job.terminal]
-
-    def prune(self) -> None:
-        """Remove terminal jobs older than the TTL."""
-        with self._lock:
-            self._prune_locked(self.clock())
-
-    def _prune_locked(self, now: float) -> None:
-        expired = [
-            job_id
-            for job_id, job in self._jobs.items()
-            if job.terminal and now - job.updated_at >= self.ttl_seconds
-        ]
-        for job_id in expired:
-            del self._jobs[job_id]
-
-    def _evict_terminal_locked(self) -> None:
-        terminal = sorted(
-            (job for job in self._jobs.values() if job.terminal),
-            key=lambda job: job.updated_at,
-        )
-        while len(self._jobs) >= self.max_jobs and terminal:
-            job = terminal.pop(0)
-            self._jobs.pop(job.job_id, None)
-
-
 class ConnectivityService:
     """Run full-mesh connectivity checks in the background."""
 
@@ -233,11 +136,19 @@ class ConnectivityService:
         self,
         topology: TopologyService,
         controller: ConnectivityController,
-        jobs: ConnectivityJobRegistry | None = None,
+        jobs: BoundedJobRegistry[ConnectivityJob] | None = None,
     ) -> None:
         self.topology = topology
         self.controller = controller
-        self.jobs = jobs if jobs is not None else ConnectivityJobRegistry()
+        self.jobs = (
+            jobs
+            if jobs is not None
+            else BoundedJobRegistry[ConnectivityJob](
+                max_jobs=MAX_JOBS,
+                max_active=MAX_JOBS,
+                ttl_seconds=TERMINAL_TTL_SECONDS,
+            )
+        )
 
     def start(self, payload: ConnectivityStartRequest) -> str:
         """Validate the request, reserve a job, and start one worker thread."""
@@ -276,17 +187,25 @@ class ConnectivityService:
 
         runner = self.controller.run_connectivity_matrix
 
+        now = self.jobs.clock()
+        job = ConnectivityJob(
+            job_id=f"c{uuid.uuid4().hex}",
+            nodes=list(names),
+            ping_count=payload.ping_count,
+            max_workers=payload.max_workers,
+            flow_timeout_seconds=payload.flow_timeout_seconds,
+            pair_count=pair_count,
+            generation=generation,
+            created_at=now,
+            updated_at=now,
+        )
         try:
-            job = self.jobs.create(
-                nodes=names,
-                ping_count=payload.ping_count,
-                max_workers=payload.max_workers,
-                flow_timeout_seconds=payload.flow_timeout_seconds,
-                pair_count=pair_count,
-                generation=generation,
-            )
-        except ConnectivityJobCapacityError as exc:
-            raise APIError(429, str(exc)) from exc
+            self.jobs.create(job)
+        except JobCapacityError as exc:
+            raise APIError(
+                429,
+                "Connectivity check limit reached. Wait for a running check to finish.",
+            ) from exc
         except Exception as exc:
             logger.exception("Failed to register a connectivity job.")
             raise APIError(

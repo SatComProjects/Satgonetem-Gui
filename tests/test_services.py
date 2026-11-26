@@ -22,11 +22,12 @@ from satgonetem_gui.schemas import (
 from satgonetem_gui.services import connectivity_service
 from satgonetem_gui.services.addressability_service import AddressabilityService
 from satgonetem_gui.services.connectivity_service import (
-    ConnectivityJobRegistry,
+    ConnectivityJob,
     ConnectivityService,
 )
 from satgonetem_gui.services.coverage_service import CoverageService
 from satgonetem_gui.services.experiment_service import ExperimentService
+from satgonetem_gui.services.job_registry import BoundedJobRegistry
 from satgonetem_gui.services.ports import NetworkOperationError, TrafficPoll
 from satgonetem_gui.services.project_service import ProjectService
 from satgonetem_gui.services.routing_service import RoutingService
@@ -2289,22 +2290,33 @@ def test_connectivity_rejects_a_fifth_running_job() -> None:
         _wait_for_connectivity(service, job_id)
 
 
-def test_connectivity_registry_prunes_expired_terminal_jobs() -> None:
-    """Terminal jobs are removed after the one-hour in-memory TTL."""
-    now = 0.0
-    registry = ConnectivityJobRegistry(
-        max_jobs=4,
-        ttl_seconds=10,
-        clock=lambda: now,
-    )
-    job = registry.create(
+def _connectivity_job(
+    job_id: str = "c1",
+    clock=time.time,
+) -> ConnectivityJob:
+    """Build one connectivity job record for registry-level tests."""
+    return ConnectivityJob(
+        job_id=job_id,
         nodes=["Sat0", "Sat1"],
         ping_count=1,
         max_workers=1,
         flow_timeout_seconds=1.0,
         pair_count=2,
         generation=1,
+        clock=clock,
     )
+
+
+def test_connectivity_registry_prunes_expired_terminal_jobs() -> None:
+    """Terminal jobs are removed after the one-hour in-memory TTL."""
+    now = 0.0
+    registry = BoundedJobRegistry[ConnectivityJob](
+        max_jobs=4,
+        ttl_seconds=10,
+        clock=lambda: now,
+    )
+    job = _connectivity_job(clock=lambda: now)
+    registry.create(job)
     assert job.transition(
         "done",
         summary={"pairs": 2, "reachable": 2, "unreachable": 0},
@@ -2319,15 +2331,9 @@ def test_connectivity_registry_prunes_expired_terminal_jobs() -> None:
 
 def test_connectivity_terminal_transitions_are_immutable() -> None:
     """Once a job is terminal, a late worker result cannot overwrite it."""
-    registry = ConnectivityJobRegistry(max_jobs=1)
-    job = registry.create(
-        nodes=["Sat0", "Sat1"],
-        ping_count=1,
-        max_workers=1,
-        flow_timeout_seconds=1.0,
-        pair_count=2,
-        generation=1,
-    )
+    registry = BoundedJobRegistry[ConnectivityJob](max_jobs=1)
+    job = _connectivity_job()
+    registry.create(job)
 
     assert job.transition("done", summary={"pairs": 2}, results=[]) is True
     assert job.transition("error", error="late failure") is False
@@ -2337,25 +2343,13 @@ def test_connectivity_terminal_transitions_are_immutable() -> None:
 
 def test_connectivity_registry_evicts_terminal_jobs_before_capacity() -> None:
     """Finished jobs free their slot instead of blocking new checks."""
-    registry = ConnectivityJobRegistry(max_jobs=1)
-    first = registry.create(
-        nodes=["Sat0", "Sat1"],
-        ping_count=1,
-        max_workers=1,
-        flow_timeout_seconds=1.0,
-        pair_count=2,
-        generation=1,
-    )
+    registry = BoundedJobRegistry[ConnectivityJob](max_jobs=1)
+    first = _connectivity_job("first")
+    registry.create(first)
     first.transition("done", summary={"pairs": 2}, results=[])
 
-    second = registry.create(
-        nodes=["Sat0", "Sat1"],
-        ping_count=1,
-        max_workers=1,
-        flow_timeout_seconds=1.0,
-        pair_count=2,
-        generation=1,
-    )
+    second = _connectivity_job("second")
+    registry.create(second)
 
     assert registry.get(first.job_id) is None
     assert registry.get(second.job_id) is second
