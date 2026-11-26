@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from typing import Awaitable, Callable
 
 from ..errors import APIError
 from .ports import NetworkController, NetworkOperationError, PathReader
@@ -115,91 +116,82 @@ class RoutingService:
                 )
             raise
 
-    async def apply(self, method: str) -> None:
-        """Apply addressing, then initialize the requested routing method."""
+    async def _execute_network_mutation(
+        self,
+        operation: Callable[[], Awaitable[None]],
+        *,
+        log_message: str,
+        failure_message: str,
+    ) -> None:
+        """Run one controller mutation behind the lock, lease, and error mapping."""
         async with self._operation_lock_for_loop():
             with self.topology.network_operation():
-                await self._apply(method)
+                try:
+                    await operation()
+                except APIError:
+                    raise
+                except NetworkOperationError as exc:
+                    logger.exception(log_message)
+                    raise APIError(500, str(exc)) from exc
+                except Exception as exc:
+                    logger.exception(log_message)
+                    raise APIError(500, failure_message) from exc
+
+    async def apply(self, method: str) -> None:
+        """Apply addressing, then initialize the requested routing method."""
+        await self._execute_network_mutation(
+            lambda: self._apply(method),
+            log_message="Network operation failed while applying routing.",
+            failure_message="Failed to apply addressing and routing.",
+        )
 
     async def _apply(self, method: str) -> None:
         topology, generation = self.topology.context()
         if not self.topology.gonetem_is_on():
             raise APIError(409, "GoNetEm is not running. Start containers first.")
-        try:
-            await self._run_controller(self.controller.apply_addressing, topology)
-            self._require_current_project(generation)
-            self.topology.set_addressing_applied(True)
-            await self._run_controller(
-                self.controller.init_routing, topology, method
-            )
-            self._require_current_project(generation)
-        except APIError:
-            raise
-        except NetworkOperationError as exc:
-            logger.exception("Network operation failed while applying routing.")
-            raise APIError(500, str(exc)) from exc
-        except Exception as exc:
-            logger.exception("Failed to apply addressing and routing.")
-            raise APIError(500, "Failed to apply addressing and routing.") from exc
+        await self._run_controller(self.controller.apply_addressing, topology)
+        self._require_current_project(generation)
+        self.topology.set_addressing_applied(True)
+        await self._run_controller(self.controller.init_routing, topology, method)
+        self._require_current_project(generation)
 
     async def delete(self) -> None:
         """Delete installed routing state."""
-        async with self._operation_lock_for_loop():
-            with self.topology.network_operation():
-                await self._delete()
+        await self._execute_network_mutation(
+            self._delete,
+            log_message="Network operation failed while deleting routing.",
+            failure_message="Failed to delete routing.",
+        )
 
     async def _delete(self) -> None:
         topology, generation = self.topology.context()
-        try:
-            await self._run_controller(self.controller.delete_routing, topology)
-            self._require_current_project(generation)
-            self.topology.set_addressing_applied(False)
-        except APIError:
-            raise
-        except NetworkOperationError as exc:
-            logger.exception("Network operation failed while deleting routing.")
-            raise APIError(500, str(exc)) from exc
-        except Exception as exc:
-            logger.exception("Failed to delete routing.")
-            raise APIError(500, "Failed to delete routing.") from exc
+        await self._run_controller(self.controller.delete_routing, topology)
+        self._require_current_project(generation)
+        self.topology.set_addressing_applied(False)
 
     async def start_gonetem(self) -> None:
         """Start the emulated network containers."""
-        async with self._operation_lock_for_loop():
-            with self.topology.network_operation():
-                await self._start_gonetem()
+        await self._execute_network_mutation(
+            self._start_gonetem,
+            log_message="Network operation failed while starting GoNetEm.",
+            failure_message="Failed to start GoNetEm.",
+        )
 
     async def _start_gonetem(self) -> None:
         topology, generation = self.topology.context()
-        try:
-            await self._run_controller(self.controller.start_gonetem, topology)
-            self._require_current_project(generation)
-        except APIError:
-            raise
-        except NetworkOperationError as exc:
-            logger.exception("Network operation failed while starting GoNetem.")
-            raise APIError(500, str(exc)) from exc
-        except Exception as exc:
-            logger.exception("Failed to start GoNetem.")
-            raise APIError(500, "Failed to start GoNetem.") from exc
+        await self._run_controller(self.controller.start_gonetem, topology)
+        self._require_current_project(generation)
 
     async def stop_gonetem(self) -> None:
         """Stop the emulated network containers."""
-        async with self._operation_lock_for_loop():
-            with self.topology.network_operation():
-                await self._stop_gonetem()
+        await self._execute_network_mutation(
+            self._stop_gonetem,
+            log_message="Network operation failed while stopping GoNetEm.",
+            failure_message="Failed to stop GoNetEm.",
+        )
 
     async def _stop_gonetem(self) -> None:
         topology, generation = self.topology.context()
-        try:
-            await self._run_controller(self.controller.stop_gonetem, topology)
-            self._require_current_project(generation)
-            self.topology.set_addressing_applied(False)
-        except APIError:
-            raise
-        except NetworkOperationError as exc:
-            logger.exception("Network operation failed while stopping GoNetem.")
-            raise APIError(500, str(exc)) from exc
-        except Exception as exc:
-            logger.exception("Failed to stop GoNetem.")
-            raise APIError(500, "Failed to stop GoNetem.") from exc
+        await self._run_controller(self.controller.stop_gonetem, topology)
+        self._require_current_project(generation)
+        self.topology.set_addressing_applied(False)
