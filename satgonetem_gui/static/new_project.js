@@ -1,4 +1,5 @@
 import { api } from "./api.js?v=4";
+import { setStatus } from "./dom.js";
 import { mergeStations, removeStationAt } from "./ground_stations_model.js?v=3";
 import {
   normalizeProjectName,
@@ -10,7 +11,7 @@ import {
   phaseLabel,
   progressPercent,
 } from "./preflight_model.js?v=1";
-import { runPreflight } from "./preflight_ui.js?v=1";
+import { runPreflight } from "./preflight_ui.js?v=2";
 
   var shells = [];
   var grounds = [];
@@ -58,11 +59,11 @@ import { runPreflight } from "./preflight_ui.js?v=1";
         preflightPayload(),
       );
     } catch (error) {
-      if (preflightMsg) {
-        preflightMsg.textContent =
-          "Readiness check failed: " + String(error.message || error);
-        preflightMsg.style.color = "var(--bad)";
-      }
+      setStatus(
+        preflightMsg,
+        "Readiness check failed: " + String(error.message || error),
+        true,
+      );
       return null;
     } finally {
       if (preflightRun) preflightRun.disabled = false;

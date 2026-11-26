@@ -1,5 +1,6 @@
 /** Deterministic network topology graph page. */
 import { api } from "./api.js?v=4";
+import { byId, setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import { linkKey, pathChain, pathLinkKeys } from "./path_model.js?v=1";
 import {
@@ -26,22 +27,12 @@ let pollTimer = null;
 let searchTimer = null;
 let fetching = false;
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("topo-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("topo-msg"), text, isError);
 }
 
 function setPathMessage(text, isError = false) {
-  const element = byId("topo-path-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("topo-path-msg"), text, isError);
 }
 
 function filters() {
@@ -382,17 +373,11 @@ function clearPath() {
 }
 
 function historyMessage(text, isError = false) {
-  const element = byId("topo-history-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("topo-history-msg"), text, isError);
 }
 
 function compareMessage(text, isError = false) {
-  const element = byId("topo-compare-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("topo-compare-msg"), text, isError);
 }
 
 function fillSnapshotSelect(select, records) {

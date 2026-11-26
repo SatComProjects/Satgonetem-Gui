@@ -217,6 +217,13 @@ label {
   font-size: 0.85rem;
 }
 
+/* Error state for dynamic status messages. static/dom.js toggles this class
+ * instead of writing an inline colour, so it must win over the page-level
+ * message colours and the .muted base colour above. */
+.is-error {
+  color: var(--bad) !important;
+}
+
 .status-dot {
   display: inline-block;
   width: 10px;

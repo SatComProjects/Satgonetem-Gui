@@ -6,8 +6,9 @@
  * GoNetem and to apply or delete addressing and routing.
  */
 import { api } from "./api.js?v=4";
-import { initSimulationControls } from "./simulation_controls.js?v=1";
-import { runPreflight } from "./preflight_ui.js?v=1";
+import { setStatus } from "./dom.js";
+import { initSimulationControls } from "./simulation_controls.js?v=2";
+import { runPreflight } from "./preflight_ui.js?v=2";
 
 const POLL_INTERVAL_MS = 2000;
 const simulation = initSimulationControls({ poll: false });
@@ -103,16 +104,11 @@ function applyRoutingStatus(data) {
  * @param {boolean} [isError]
  */
 function showRoutingMsg(text, isError) {
-  var msg = el("routing-msg");
-  msg.textContent = text;
-  msg.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(el("routing-msg"), text, isError);
 }
 
 function showDashboardMsg(text, isError) {
-  var msg = el("dashboard-msg");
-  if (!msg) return;
-  msg.textContent = text;
-  msg.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(el("dashboard-msg"), text, isError);
 }
 
 async function pollStatus() {
@@ -230,12 +226,11 @@ async function refreshPreflight() {
       msgElement: el("preflight-msg"),
     });
   } catch (err) {
-    const message = el("preflight-msg");
-    if (message) {
-      message.textContent =
-        "Readiness check failed: " + (err.message || "network error");
-      message.style.color = "var(--bad)";
-    }
+    setStatus(
+      el("preflight-msg"),
+      "Readiness check failed: " + (err.message || "network error"),
+      true,
+    );
   } finally {
     preflightInFlight = false;
     if (button) button.disabled = false;

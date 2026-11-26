@@ -1,5 +1,6 @@
 /** Topology health card controller for the Nodes page. */
 import { api } from "./api.js?v=4";
+import { byId, downloadBlob, setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   formatItemCount,
@@ -11,15 +12,8 @@ import {
 let busy = false;
 let projectLoaded = false;
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("topology-health-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("topology-health-msg"), text, isError);
 }
 
 function exportButtons() {
@@ -93,17 +87,11 @@ async function exportTopology(format, button) {
       `/api/topology/export?format=${encodeURIComponent(format)}`,
       { timeout: 60000 },
     );
-    const blob = new Blob([data.content], {
-      type: data.content_type || "text/plain",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = data.filename || `topology.${format}`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadBlob(
+      data.filename || `topology.${format}`,
+      data.content,
+      data.content_type || "text/plain",
+    );
     setMessage(`Downloaded ${data.filename || format}.`);
   } catch (error) {
     setMessage(

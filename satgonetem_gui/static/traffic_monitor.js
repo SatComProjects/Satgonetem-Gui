@@ -1,5 +1,6 @@
 /** Live traffic monitor page. */
 import { api } from "./api.js?v=4";
+import { byId, downloadBlob, setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   appendSample,
@@ -18,15 +19,8 @@ let inFlight = false;
 let pollTimer = null;
 let chart = null;
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("monitor-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("monitor-msg"), text, isError);
 }
 
 function setNote(text) {
@@ -210,24 +204,12 @@ function clearSamples() {
   setNote("");
 }
 
-function download(filename, content, contentType) {
-  const blob = new Blob([content], { type: contentType });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
 function exportCsv() {
   if (!samples.length) {
     setMessage("No samples to export.", true);
     return;
   }
-  download("traffic-monitor.csv", samplesToCsv(samples), "text/csv");
+  downloadBlob("traffic-monitor.csv", samplesToCsv(samples), "text/csv");
   setMessage("Exported traffic-monitor.csv.");
 }
 
@@ -236,7 +218,7 @@ function exportJson() {
     setMessage("No samples to export.", true);
     return;
   }
-  download("traffic-monitor.json", samplesToJson(samples), "application/json");
+  downloadBlob("traffic-monitor.json", samplesToJson(samples), "application/json");
   setMessage("Exported traffic-monitor.json.");
 }
 

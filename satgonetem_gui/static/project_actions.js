@@ -1,5 +1,6 @@
 /** Load/save project actions shared by every page. */
 import { api } from "./api.js?v=4";
+import { downloadBlob } from "./dom.js";
 
 function initLoad() {
   const link = document.getElementById("loadProjectLink");
@@ -40,17 +41,11 @@ function initSave() {
     link.textContent = "Saving…";
     try {
       const data = await api.get("/api/project/save", { timeout: 600000 });
-      const blob = new Blob([data.content], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = data.filename || "project.json";
-      document.body.appendChild(anchor);
-      anchor.click();
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-        anchor.remove();
-      }, 0);
+      downloadBlob(
+        data.filename || "project.json",
+        data.content,
+        "application/json",
+      );
     } catch (error) {
       alert(`Failed to save project: ${error.message || error}`);
     } finally {

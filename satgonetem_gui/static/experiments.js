@@ -1,5 +1,6 @@
 /** Server-side experiment runs page controller. */
 import { api } from "./api.js?v=4";
+import { byId, downloadBlob, setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   DEFAULT_SCENARIO,
@@ -36,36 +37,20 @@ let compareChart = null;
 let compareData = [];
 let compareMetric = "tx_bps";
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("experiments-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("experiments-msg"), text, isError);
 }
 
 function setStartStatus(text, isError = false) {
-  const element = byId("experiment-start-status");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("experiment-start-status"), text, isError);
 }
 
 function setDetailStatus(text, isError = false) {
-  const element = byId("experiment-detail-status");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("experiment-detail-status"), text, isError);
 }
 
 function setChartMessage(id, text, isError = false) {
-  const element = byId(id);
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId(id), text, isError);
 }
 
 function clearTimeoutIfSet(timer) {
@@ -247,17 +232,11 @@ async function downloadArtifact(runId, name) {
       `/api/experiments/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`,
       { timeout: 60000 },
     );
-    const blob = new Blob([data.content], {
-      type: data.content_type || "text/plain",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = data.filename || name;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadBlob(
+      data.filename || name,
+      data.content,
+      data.content_type || "text/plain",
+    );
     setMessage(`Downloaded ${data.filename || name}.`);
   } catch (error) {
     setMessage(error.message || "Could not download artifact.", true);

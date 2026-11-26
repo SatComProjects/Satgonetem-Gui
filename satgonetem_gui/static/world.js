@@ -1,5 +1,6 @@
 import { api, ApiError } from "./api.js?v=4";
-import { initSimulationControls } from "./simulation_controls.js?v=1";
+import { setStatus } from "./dom.js";
+import { initSimulationControls } from "./simulation_controls.js?v=2";
 import { linkWidth, usageColor } from "./links_model.js?v=1";
 import {
     linkKey,
@@ -591,10 +592,7 @@ function updateLinks(links) {
  * Fetch satellites, ground stations, and links from the API, then update the view.
  */
 async function showWorldMsg(text, isError = false) {
-    const element = document.getElementById("world-msg");
-    if (!element) return;
-    element.textContent = text;
-    element.style.color = isError ? "var(--bad)" : "var(--muted)";
+    setStatus(document.getElementById("world-msg"), text, isError);
 }
 
 async function updateWorld() {
@@ -684,10 +682,7 @@ function togglePanel() {
 }
 
 function setWorldPathMsg(text, isError = false) {
-    const element = document.getElementById("world-path-msg");
-    if (!element) return;
-    element.textContent = text;
-    element.style.color = isError ? "var(--bad)" : "var(--muted)";
+    setStatus(document.getElementById("world-path-msg"), text, isError);
 }
 
 function fillWorldPathSelect(select, nodes) {
@@ -830,10 +825,7 @@ function clearWorldPath() {
 }
 
 function setUsageMessage(text, isError = false) {
-    const element = document.getElementById("world-usage-msg");
-    if (!element) return;
-    element.textContent = text;
-    element.style.color = isError ? "var(--bad)" : "var(--muted)";
+    setStatus(document.getElementById("world-usage-msg"), text, isError);
 }
 
 function rerenderLinks() {

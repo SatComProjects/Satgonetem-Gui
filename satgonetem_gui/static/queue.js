@@ -1,5 +1,6 @@
 /** Shared traffic job queue, persistence, polling, and result charts. */
 import { api, ApiError } from "./api.js?v=4";
+import { byId, downloadBlob } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   addItem,
@@ -62,10 +63,6 @@ function destroyCharts() {
       /* a detached chart is already harmless */
     }
   }
-}
-
-function byId(id) {
-  return document.getElementById(id);
 }
 
 function jqSave() {
@@ -827,30 +824,11 @@ function historyFileId(record) {
 }
 
 function downloadText(filename, text, type) {
-  let url = null;
   try {
-    const blob = new Blob([text], { type });
-    url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.style.display = "none";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    downloadBlob(filename, text, type);
     return true;
   } catch {
     return false;
-  } finally {
-    if (url) {
-      setTimeout(() => {
-        try {
-          URL.revokeObjectURL(url);
-        } catch {
-          /* the download already started */
-        }
-      }, 0);
-    }
   }
 }
 

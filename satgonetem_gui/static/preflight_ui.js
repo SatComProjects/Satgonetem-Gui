@@ -2,6 +2,7 @@
  * Shared preflight rendering for the Dashboard and New Project pages.
  */
 import { api } from "./api.js?v=4";
+import { setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   formatEstimate,
@@ -81,12 +82,11 @@ function renderEstimate(estimate, element) {
  * }} targets
  */
 export function renderPreflight(data, targets = {}) {
-  if (targets.msgElement) {
-    targets.msgElement.textContent = preflightSummary(data);
-    targets.msgElement.style.color = hasBlockingCheck(data?.checks)
-      ? "var(--bad)"
-      : "var(--muted)";
-  }
+  setStatus(
+    targets.msgElement,
+    preflightSummary(data),
+    hasBlockingCheck(data?.checks),
+  );
   renderChecks(data, targets.checksElement);
   renderEstimate(data?.estimate, targets.estimateElement);
 }
@@ -97,10 +97,7 @@ export function renderPreflight(data, targets = {}) {
  * @returns {Promise<object>}
  */
 export async function runPreflight(targets, payload = undefined) {
-  if (targets.msgElement) {
-    targets.msgElement.textContent = "Checking...";
-    targets.msgElement.style.color = "var(--muted)";
-  }
+  setStatus(targets.msgElement, "Checking...");
   const data = await fetchPreflight(payload);
   renderPreflight(data, targets);
   return data;

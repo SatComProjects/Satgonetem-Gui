@@ -1,5 +1,6 @@
 /** Throughput matrix page controller. */
 import { api } from "./api.js?v=4";
+import { byId, downloadBlob, setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   formatThroughput,
@@ -12,22 +13,12 @@ let jobId = null;
 let pollTimer = null;
 let busy = false;
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("matrix-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("matrix-msg"), text, isError);
 }
 
 function setProgress(text, isError = false) {
-  const element = byId("matrix-progress");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("matrix-progress"), text, isError);
 }
 
 async function loadNodes() {
@@ -192,17 +183,11 @@ async function exportMatrix(format) {
     const data = await api.get(
       `/api/traffic/matrix/${encodeURIComponent(jobId)}/export?format=${encodeURIComponent(format)}`,
     );
-    const blob = new Blob([data.content], {
-      type: data.content_type || "text/plain",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = data.filename || `traffic-matrix.${format}`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadBlob(
+      data.filename || `traffic-matrix.${format}`,
+      data.content,
+      data.content_type || "text/plain",
+    );
     setMessage(`Downloaded ${data.filename || format}.`);
   } catch (error) {
     setMessage(error.message || "Could not export the matrix.", true);

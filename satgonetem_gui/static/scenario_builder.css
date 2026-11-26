@@ -377,7 +377,7 @@
   box-shadow: none;
 }
 
-/* Base stays muted; scenario_builder.js sets the error colour inline so a
+/* Base stays muted; static/dom.js toggles the shared .is-error class so a
  * validation failure can tint the message without a second class contract. */
 .sb-msg {
   display: flex;

@@ -1,4 +1,5 @@
 /** Global keyboard shortcuts and the help dialog. */
+import { byId } from "./dom.js";
 import {
   hasShortcutModifier,
   isEditableTarget,
@@ -11,10 +12,6 @@ const PREFIX_TIMEOUT_MS = 900;
 let goPending = false;
 let goTimer = null;
 let helpOpener = null;
-
-function byId(id) {
-  return document.getElementById(id);
-}
 
 function resultsOpen() {
   const modal = byId("results-modal");

@@ -1,5 +1,6 @@
 /** Connectivity matrix page controller. */
 import { api } from "./api.js?v=4";
+import { byId, downloadBlob, setStatus } from "./dom.js";
 import { escapeHtml } from "./escape.js";
 import {
   formatLoss,
@@ -13,22 +14,12 @@ import {
 const MAX_NODES = 32;
 const POLL_INTERVAL_MS = 1000;
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function setMessage(text, isError = false) {
-  const element = byId("connectivity-msg");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--muted)";
+  setStatus(byId("connectivity-msg"), text, isError);
 }
 
-function setStatus(text, isError = false) {
-  const element = byId("connectivity-status");
-  if (!element) return;
-  element.textContent = text;
-  element.style.color = isError ? "var(--bad)" : "var(--text)";
+function setRunStatus(text, isError = false) {
+  setStatus(byId("connectivity-status"), text, isError);
 }
 
 const state = {
@@ -151,7 +142,7 @@ function startJob() {
   if (heatmap) heatmap.replaceChildren();
   const empty = byId("connectivity-empty");
   if (empty) empty.hidden = false;
-  setStatus("Starting connectivity check...");
+  setRunStatus("Starting connectivity check...");
 
   api
     .post(
@@ -166,7 +157,7 @@ function startJob() {
     )
     .then((data) => {
       state.jobId = data.job_id;
-      setStatus("Running connectivity check...");
+      setRunStatus("Running connectivity check...");
       pollJob();
     })
     .catch((error) => {
@@ -174,7 +165,7 @@ function startJob() {
       updateSelectionUi();
       const progress = byId("connectivity-progress");
       if (progress) progress.hidden = true;
-      setStatus("Connectivity check failed to start.", true);
+      setRunStatus("Connectivity check failed to start.", true);
       setMessage(error.message || "Could not start connectivity check.", true);
     });
 }
@@ -194,7 +185,7 @@ async function pollJob() {
     );
     state.latest = data;
     if (data.status === "running") {
-      setStatus(`Running ${data.pair_count || 0} ordered pings...`);
+      setRunStatus(`Running ${data.pair_count || 0} ordered pings...`);
       const summary = byId("connectivity-summary");
       if (summary) {
         summary.textContent = `${data.nodes?.length || state.selected.size} nodes \u00b7 ${data.pair_count || 0} ordered pairs`;
@@ -207,12 +198,12 @@ async function pollJob() {
     const progress = byId("connectivity-progress");
     if (progress) progress.hidden = true;
     if (data.status === "error") {
-      setStatus("Connectivity check failed.", true);
+      setRunStatus("Connectivity check failed.", true);
       setMessage(data.error || "Connectivity check failed.", true);
       return;
     }
     if (data.status === "done") {
-      setStatus("Connectivity check complete.");
+      setRunStatus("Connectivity check complete.");
       setMessage("");
       renderMatrix(data);
     }
@@ -221,7 +212,7 @@ async function pollJob() {
     updateSelectionUi();
     const progress = byId("connectivity-progress");
     if (progress) progress.hidden = true;
-    setStatus("Connectivity status refresh failed.", true);
+    setRunStatus("Connectivity status refresh failed.", true);
     setMessage(error.message || "Could not refresh connectivity status.", true);
   }
 }
@@ -294,17 +285,11 @@ async function exportMatrix(format) {
       `/api/diagnostics/connectivity/${encodeURIComponent(state.jobId)}/export?format=${encodeURIComponent(format)}`,
       { timeout: 60000 },
     );
-    const blob = new Blob([data.content], {
-      type: data.content_type || "text/csv",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = data.filename || `connectivity.${format}`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    downloadBlob(
+      data.filename || `connectivity.${format}`,
+      data.content,
+      data.content_type || "text/csv",
+    );
     setMessage(`Exported ${format.toUpperCase()}.`);
   } catch (error) {
     setMessage(error.message || `Could not export ${format}.`, true);
