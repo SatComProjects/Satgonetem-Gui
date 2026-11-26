@@ -8,7 +8,9 @@ import os
 
 import pytest
 
-from satgonetem_gui.adapters.satgonetem_topology import SatGoNetemTopologyAdapter
+from satgonetem_gui.adapters.network_adapter import NetworkAdapter
+from satgonetem_gui.adapters.project_adapter import ProjectAdapter
+from satgonetem_gui.adapters.topology_reader import TopologyReaderAdapter
 from satgonetem_gui.schemas import ProjectCreateRequest
 from tests.factories import project_payload
 
@@ -21,21 +23,23 @@ pytestmark = pytest.mark.slow
 )
 def test_real_container_routing_lifecycle(settings) -> None:
     """Start, address, route, delete, and stop a real container network."""
-    adapter = SatGoNetemTopologyAdapter(settings)
-    result = adapter.build(ProjectCreateRequest(**project_payload("ContainerContract")))
+    project = ProjectAdapter(settings)
+    network = NetworkAdapter()
+    reader = TopologyReaderAdapter()
+    result = project.build(ProjectCreateRequest(**project_payload("ContainerContract")))
     topology = result.topology_manager
     try:
-        adapter.start_gonetem(topology)
-        assert adapter.gonetem_is_on(topology) is True
+        network.start_gonetem(topology)
+        assert reader.gonetem_is_on(topology) is True
 
-        adapter.apply_addressing(topology)
-        adapter.init_routing(topology, "static")
-        status = adapter.routing_status(topology)
+        network.apply_addressing(topology)
+        network.init_routing(topology, "static")
+        status = network.routing_status(topology)
         assert status["gonetem_is_on"] is True
         assert status["routing_initiated"] is True
 
-        adapter.delete_routing(topology)
-        assert adapter.routing_status(topology)["routing_initiated"] is False
+        network.delete_routing(topology)
+        assert network.routing_status(topology)["routing_initiated"] is False
     finally:
-        adapter.stop_gonetem(topology)
-        assert adapter.gonetem_is_on(topology) is False
+        network.stop_gonetem(topology)
+        assert reader.gonetem_is_on(topology) is False
