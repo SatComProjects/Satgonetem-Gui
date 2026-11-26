@@ -19,6 +19,7 @@ from ..errors import APIError
 from ..schemas import ExperimentStartRequest
 from ..storage import write_text_atomic
 from ..time_utils import utc_timestamp
+from .job_registry import BoundedJobRegistry, JobCapacityError
 from .ports import ExperimentGateway
 from .topology_service import TopologyService
 
@@ -26,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT_RUNS = 2
 MAX_LIVE_RUNS = 1
+# Finished runs are also persisted on disk; the in-memory list is only a cache.
+MAX_MEMORY_RUNS = 100
 TERMINAL_TTL_SECONDS = 3600.0
 RUN_ID_PREFIX = "exp-"
 MAX_METRICS_TAIL = 2000
@@ -121,8 +124,13 @@ class ExperimentService:
         if not _is_within(run_root, self._save_root):
             raise ValueError("Experiment run root must be inside the save root.")
         self._run_root = run_root
-        self._jobs: dict[str, ExperimentRunJob] = {}
-        self._pending_runs = 0
+        self._jobs = BoundedJobRegistry[ExperimentRunJob](
+            max_jobs=MAX_MEMORY_RUNS,
+            max_active=MAX_CONCURRENT_RUNS,
+            ttl_seconds=TERMINAL_TTL_SECONDS,
+            clock=clock,
+            job_id=lambda job: job.run_id,
+        )
         self._pending_live = 0
         self._lock = threading.RLock()
 
@@ -228,8 +236,7 @@ class ExperimentService:
             entries[entry["run_id"]] = entry
 
         with self._lock:
-            running = [job for job in self._jobs.values() if not job.terminal]
-            running_entries = [self._job_entry(job) for job in running]
+            running_entries = [self._job_entry(job) for job in self._jobs.running()]
         for entry in running_entries:
             entries[entry["run_id"]] = entry
 
@@ -322,52 +329,42 @@ class ExperimentService:
     def _reserve(self, mode: str) -> None:
         """Reserve a run slot before file or validation work begins."""
         with self._lock:
-            self._prune_locked(self._clock())
-            running = [job for job in self._jobs.values() if not job.terminal]
             if mode == "live":
-                live_count = self._pending_live + sum(1 for job in running if job.mode == "live")
+                live_count = self._pending_live + sum(
+                    1 for job in self._jobs.running() if job.mode == "live"
+                )
                 if live_count >= MAX_LIVE_RUNS:
                     raise APIError(
                         409,
                         "A live experiment is already running.",
                     )
-            if len(running) + self._pending_runs >= MAX_CONCURRENT_RUNS:
+            try:
+                self._jobs.reserve()
+            except JobCapacityError as exc:
                 raise APIError(
                     429,
                     "Experiment run limit reached. Wait for a running run to finish.",
-                )
-            self._pending_runs += 1
+                ) from exc
             if mode == "live":
                 self._pending_live += 1
 
     def _release(self, mode: str) -> None:
         """Release a reserved slot that never turned into a job."""
         with self._lock:
-            self._pending_runs = max(0, self._pending_runs - 1)
             if mode == "live":
                 self._pending_live = max(0, self._pending_live - 1)
+            self._jobs.release()
 
     def _commit(self, job: ExperimentRunJob, mode: str) -> None:
         """Promote a reservation into a running job."""
         with self._lock:
-            self._pending_runs = max(0, self._pending_runs - 1)
+            self._jobs.commit(job)
             if mode == "live":
                 self._pending_live = max(0, self._pending_live - 1)
-            self._jobs[job.run_id] = job
 
     def _prune(self) -> None:
         """Drop terminal jobs older than the in-memory TTL."""
-        with self._lock:
-            self._prune_locked(self._clock())
-
-    def _prune_locked(self, now: float) -> None:
-        expired = [
-            run_id
-            for run_id, job in self._jobs.items()
-            if job.terminal and now - job.updated_at >= TERMINAL_TTL_SECONDS
-        ]
-        for run_id in expired:
-            del self._jobs[run_id]
+        self._jobs.prune()
 
     # ------------------------------------------------------------------
     # Worker
