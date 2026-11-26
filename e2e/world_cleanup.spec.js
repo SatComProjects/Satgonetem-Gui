@@ -50,17 +50,19 @@ test("world view releases its timers and Cesium input handler on pagehide", asyn
 
   // Let the 2-second poll loop settle so its next timeout is scheduled.
   await page.waitForTimeout(2500);
-  const pollsBeforePagehide = satellitePolls;
 
   await page.evaluate(() => {
     window.dispatchEvent(new Event("pagehide"));
     window.dispatchEvent(new Event("pagehide"));
   });
-
   const teardown = await page.evaluate(() => window.__worldTeardown);
+
+  // Let any request already in flight reach the route handler before sampling.
+  await page.waitForTimeout(500);
+  const pollsAfterTeardown = satellitePolls;
   await page.waitForTimeout(2500);
 
-  expect(satellitePolls).toBe(pollsBeforePagehide);
+  expect(satellitePolls).toBe(pollsAfterTeardown);
   expect(teardown.clearedTimers).toBeGreaterThan(0);
   expect(teardown.destroyedHandlers).toBe(1);
 });
