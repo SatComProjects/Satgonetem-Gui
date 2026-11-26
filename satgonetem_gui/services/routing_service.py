@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from contextlib import contextmanager
 
 from ..errors import APIError
 from .ports import NetworkController, NetworkOperationError, PathReader
@@ -77,19 +76,6 @@ class RoutingService:
             self._operation_loop = loop
         return self._operation_lock
 
-    @contextmanager
-    def _network_operation(self):
-        """Reserve the session's network slot for one mutation."""
-        if not self.topology.session.begin_network_operation():
-            raise APIError(
-                409,
-                "A project operation is already running.",
-            )
-        try:
-            yield
-        finally:
-            self.topology.session.end_network_operation()
-
     async def _run_controller(self, func, *args):
         """Run a blocking controller call without abandoning it on cancellation."""
         if self._worker is not None and not self._worker.done():
@@ -132,7 +118,7 @@ class RoutingService:
     async def apply(self, method: str) -> None:
         """Apply addressing, then initialize the requested routing method."""
         async with self._operation_lock_for_loop():
-            with self._network_operation():
+            with self.topology.network_operation():
                 await self._apply(method)
 
     async def _apply(self, method: str) -> None:
@@ -159,7 +145,7 @@ class RoutingService:
     async def delete(self) -> None:
         """Delete installed routing state."""
         async with self._operation_lock_for_loop():
-            with self._network_operation():
+            with self.topology.network_operation():
                 await self._delete()
 
     async def _delete(self) -> None:
@@ -180,7 +166,7 @@ class RoutingService:
     async def start_gonetem(self) -> None:
         """Start the emulated network containers."""
         async with self._operation_lock_for_loop():
-            with self._network_operation():
+            with self.topology.network_operation():
                 await self._start_gonetem()
 
     async def _start_gonetem(self) -> None:
@@ -200,7 +186,7 @@ class RoutingService:
     async def stop_gonetem(self) -> None:
         """Stop the emulated network containers."""
         async with self._operation_lock_for_loop():
-            with self._network_operation():
+            with self.topology.network_operation():
                 await self._stop_gonetem()
 
     async def _stop_gonetem(self) -> None:

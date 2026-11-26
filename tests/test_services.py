@@ -287,6 +287,25 @@ def test_topology_status_is_empty_without_a_project() -> None:
     assert service.status()["satellites"] == 0
 
 
+def test_topology_network_operation_lease_is_exclusive() -> None:
+    """The lease holds one mutation at a time and releases on exit."""
+    session = _loaded_session()
+    service = TopologyService(session, FakeReader())
+
+    with service.network_operation():
+        assert session.network_operation is True
+        assert service.begin_network_operation() is False
+        with pytest.raises(APIError) as error:
+            with service.network_operation():
+                pass
+        assert error.value.status_code == 409
+
+    assert session.network_operation is False
+    assert service.begin_network_operation() is True
+    service.end_network_operation()
+    assert session.network_operation is False
+
+
 def test_topology_context_returns_the_topology_and_generation_together() -> None:
     """Routing reads both values from one session snapshot."""
     session = _loaded_session()
@@ -2379,6 +2398,12 @@ class FakeExperimentTopology:
 
     def network_running(self) -> bool:
         return self.running
+
+    def begin_network_operation(self) -> bool:
+        return self.session.begin_network_operation()
+
+    def end_network_operation(self) -> None:
+        self.session.end_network_operation()
 
 
 class FakeExperimentGateway:

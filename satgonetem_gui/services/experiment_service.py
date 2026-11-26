@@ -151,18 +151,15 @@ class ExperimentService:
         network_reserved = False
         try:
             if payload.mode == "live":
-                session = getattr(self.topology, "session", None)
-                begin_network = getattr(session, "begin_network_operation", None)
-                if callable(begin_network):
-                    if not begin_network():
-                        raise APIError(
-                            409,
-                            "A project or network operation is already running.",
-                        )
-                    network_reserved = True
+                if not self.topology.begin_network_operation():
+                    raise APIError(
+                        409,
+                        "A project or network operation is already running.",
+                    )
+                network_reserved = True
         except Exception:
             if network_reserved:
-                self.topology.session.end_network_operation()
+                self.topology.end_network_operation()
             self._release(payload.mode)
             raise
 
@@ -202,7 +199,7 @@ class ExperimentService:
         finally:
             if not committed:
                 if network_reserved:
-                    self.topology.session.end_network_operation()
+                    self.topology.end_network_operation()
                 self._release(payload.mode)
 
         thread = threading.Thread(
@@ -452,7 +449,7 @@ class ExperimentService:
             release_network = job.holds_network
             job.holds_network = False
         if release_network:
-            self.topology.session.end_network_operation()
+            self.topology.end_network_operation()
 
     # ------------------------------------------------------------------
     # Artifacts and catalog
