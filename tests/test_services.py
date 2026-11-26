@@ -716,6 +716,7 @@ def test_capacity_rejection_stops_the_unregistered_flow() -> None:
         service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
 
     assert error.value.status_code == 429
+    assert error.value.message == "Traffic job limit reached."
     assert gateway.poll_calls == 1
     assert len(gateway.stopped) == 1
 
@@ -2372,6 +2373,25 @@ def test_connectivity_registry_evicts_terminal_jobs_before_capacity() -> None:
 
     assert registry.get(first.job_id) is None
     assert registry.get(second.job_id) is second
+
+
+def test_connectivity_jobs_share_the_registry_clock() -> None:
+    """TTL pruning and job timestamps use the same injectable clock."""
+    registry = BoundedJobRegistry[ConnectivityJob](
+        max_jobs=4,
+        max_active=4,
+        clock=lambda: 42.0,
+    )
+    service = ConnectivityService(_ready_topology(), FakeConnectivityController(), registry)
+
+    job_id = service.start(_connectivity_payload())
+    _wait_for_connectivity(service, job_id)
+    job = registry.get(job_id)
+
+    assert job is not None
+    assert job.created_at == 42.0
+    assert job.updated_at == 42.0
+    assert job.clock() == 42.0
 
 
 # ---------------------------------------------------------------------------

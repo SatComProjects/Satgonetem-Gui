@@ -164,6 +164,7 @@ class ExperimentService:
             raise
 
         committed = False
+        reservation_held = True
         run_dir: Path | None = None
         try:
             run_id, run_dir = self._create_run_dir()
@@ -183,6 +184,9 @@ class ExperimentService:
                 created_at=self._clock(),
                 updated_at=self._clock(),
             )
+            # The registry consumes the reservation on commit, even if the
+            # record cannot be stored, so the failure path must not release it.
+            reservation_held = False
             self._commit(job, payload.mode)
             committed = True
         except ValueError as exc:
@@ -200,7 +204,8 @@ class ExperimentService:
             if not committed:
                 if network_reserved:
                     self.topology.end_network_operation()
-                self._release(payload.mode)
+                if reservation_held:
+                    self._release(payload.mode)
 
         thread = threading.Thread(
             target=self._worker,
@@ -355,9 +360,11 @@ class ExperimentService:
     def _commit(self, job: ExperimentRunJob, mode: str) -> None:
         """Promote a reservation into a running job."""
         with self._lock:
-            self._jobs.commit(job)
-            if mode == "live":
-                self._pending_live = max(0, self._pending_live - 1)
+            try:
+                self._jobs.commit(job)
+            finally:
+                if mode == "live":
+                    self._pending_live = max(0, self._pending_live - 1)
 
     def _prune(self) -> None:
         """Drop terminal jobs older than the in-memory TTL."""

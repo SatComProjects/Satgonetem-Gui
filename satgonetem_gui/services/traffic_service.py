@@ -209,7 +209,7 @@ class TrafficService:
             job = self._create_job(kind, flow, request)
         except JobCapacityError as exc:
             self._stop_flow(flow)
-            raise APIError(429, str(exc)) from exc
+            raise APIError(429, "Traffic job limit reached.") from exc
         except Exception as exc:
             self._stop_flow(flow)
             logger.exception("Failed to register a %s traffic job.", kind)

@@ -198,6 +198,7 @@ class ConnectivityService:
             generation=generation,
             created_at=now,
             updated_at=now,
+            clock=self.jobs.clock,
         )
         try:
             self.jobs.create(job)

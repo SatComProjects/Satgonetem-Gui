@@ -93,10 +93,19 @@ class BoundedJobRegistry(Generic[JobT]):
                 self._pending -= 1
 
     def commit(self, job: JobT) -> JobT:
-        """Promote a reservation into a registered job."""
+        """Promote a reservation into a registered job.
+
+        The reservation is consumed whether or not the record can be stored, so
+        a failed commit never strands an active slot.
+        """
         with self._lock:
-            self._make_room_locked()
-            self._insert_locked(job)
+            try:
+                self._make_room_locked()
+                self._insert_locked(job)
+            except JobCapacityError:
+                if self._pending > 0:
+                    self._pending -= 1
+                raise
             if self._pending > 0:
                 self._pending -= 1
         return job

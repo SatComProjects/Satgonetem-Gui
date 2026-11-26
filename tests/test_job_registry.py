@@ -51,7 +51,7 @@ def test_total_capacity_rejects_a_new_job_while_slots_are_active() -> None:
 
 def test_finished_jobs_are_evicted_before_capacity_is_rejected() -> None:
     """The oldest terminal record frees the slot first."""
-    registry = _registry(max_jobs=1)
+    registry = _registry(max_jobs=1, clock=lambda: 0.0)
     registry.create(FakeJob("old", updated_at=1.0, terminal=True))
 
     created = registry.create(FakeJob("new"))
@@ -100,6 +100,22 @@ def test_reservation_holds_an_active_slot_until_commit_or_release() -> None:
     job = FakeJob("committed")
     assert registry.commit(job) is job
     assert registry.get("committed") is job
+    with pytest.raises(JobCapacityError):
+        registry.reserve()
+
+
+def test_failed_commit_releases_its_reservation() -> None:
+    """A commit that cannot store the record must not strand an active slot."""
+    registry = _registry(max_jobs=1, max_active=2, clock=lambda: 0.0)
+    registry.create(FakeJob("running"))
+    registry.reserve()
+
+    with pytest.raises(JobCapacityError):
+        registry.commit(FakeJob("overflow"))
+
+    # The reservation is gone: exactly one more reservation fits the one free
+    # active slot, instead of the reservation leaking and blocking it forever.
+    registry.reserve()
     with pytest.raises(JobCapacityError):
         registry.reserve()
 
