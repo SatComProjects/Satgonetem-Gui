@@ -63,6 +63,9 @@ let usageEnabled = false;
 let usageAvailable = false;
 let usageByLink = new Map();
 let usageTimer = null;
+let pollTimer = null;
+let clickHandler = null;
+let worldDisposed = false;
 let usageInFlight = false;
 const nodeInfo = new Map();
 const inspector = { node: null, isolate: false, signature: "" };
@@ -887,10 +890,6 @@ function bindUsageControl() {
     const checkbox = document.getElementById("cb-link-usage");
     if (!checkbox) return;
     checkbox.addEventListener("change", () => setUsageEnabled(checkbox.checked));
-    window.addEventListener("pagehide", () => {
-        if (usageTimer !== null) clearInterval(usageTimer);
-        usageTimer = null;
-    }, { once: true });
 }
 
 function bindWorldPathControls() {
@@ -902,11 +901,27 @@ function bindWorldPathControls() {
         ?.addEventListener("click", clearWorldPath);
 }
 
-let pollTimer = null;
+function cleanupWorld() {
+    worldDisposed = true;
+    if (pollTimer !== null) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+    }
+    if (usageTimer !== null) {
+        clearInterval(usageTimer);
+        usageTimer = null;
+    }
+    if (clickHandler !== null) {
+        clickHandler.destroy();
+        clickHandler = null;
+    }
+}
+
+window.addEventListener("pagehide", cleanupWorld, { once: true });
 
 function poll() {
     updateWorld().finally(() => {
-        pollTimer = setTimeout(poll, 2000);
+        if (!worldDisposed) pollTimer = setTimeout(poll, 2000);
     });
 }
 
@@ -988,7 +1003,7 @@ function startWorld() {
 
     // Clicking a satellite dot or its coverage circle selects it (dims all others).
     // Clicking empty space or a ground station deselects.
-    const clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     clickHandler.setInputAction((click) => {
         const picked = viewer.scene.pick(click.position);
         let nodeName = null;
