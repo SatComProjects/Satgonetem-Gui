@@ -1,9 +1,12 @@
 """Host and cross-origin protections for the local control panel."""
 
+import json
+
 from fastapi.testclient import TestClient
 
 from satgonetem_gui.app import create_app
 from satgonetem_gui.config import Settings
+from satgonetem_gui.errors import error_response
 
 
 def _make_app(tmp_path, host="127.0.0.1"):
@@ -40,6 +43,38 @@ def test_same_origin_mutation_is_not_rejected_by_the_guard(client) -> None:
     )
 
     assert response.status_code == 404
+
+
+def test_guard_rejections_use_the_shared_error_envelope(client, monkeypatch) -> None:
+    """Guard failures reuse the one error envelope instead of an ad hoc body."""
+    import satgonetem_gui.app as app_module
+
+    calls = []
+    original = app_module.error_response
+
+    def spy(status_code, message, details=None, headers=None):
+        calls.append((status_code, message))
+        return original(status_code, message, details, headers)
+
+    monkeypatch.setattr(app_module, "error_response", spy)
+
+    host_response = client.get("/api/status", headers={"Host": "evil.example"})
+    origin_response = client.post(
+        "/api/routing/apply",
+        headers={"Origin": "https://evil.example"},
+        json={"method": "static"},
+    )
+
+    assert host_response.status_code == 400
+    assert origin_response.status_code == 403
+    assert calls == [
+        (400, "Invalid Host header."),
+        (403, "Cross-origin request rejected."),
+    ]
+    assert host_response.json() == json.loads(error_response(400, "Invalid Host header.").body)
+    assert origin_response.json() == json.loads(
+        error_response(403, "Cross-origin request rejected.").body
+    )
 
 
 def test_malformed_host_header_returns_a_guard_response(tmp_path) -> None:

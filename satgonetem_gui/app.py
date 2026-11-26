@@ -7,7 +7,6 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -18,7 +17,7 @@ from .adapters.link_budget_adapter import SatGoNetemLinkBudgetAdapter
 from .adapters.satgonetem_topology import SatGoNetemTopologyAdapter
 from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
 from .config import Settings, load_settings
-from .errors import install_error_handlers
+from .errors import error_response, install_error_handlers
 from .resources import GROUND_STATIONS_DIR
 from .routes import (
     addressability,
@@ -83,6 +82,44 @@ def _allowed_hosts(settings: Settings) -> list[str]:
     return sorted(host.lower() for host in hosts)
 
 
+def _validate_request_origin(
+    host_header: str,
+    origin: str | None,
+    *,
+    unsafe_method: bool,
+    allowed_names: set[str],
+) -> tuple[int, str] | None:
+    """Return a rejection status/message, or ``None`` for a trusted request.
+
+    The ``Host`` header is parsed once, and both the host and the optional
+    browser ``Origin`` header are validated against the same allowlist.
+    """
+    try:
+        request_host = urlsplit(f"//{host_header}")
+        host_name = (request_host.hostname or "").lower()
+    except ValueError:
+        return 400, "Invalid Host header."
+    if host_name not in allowed_names:
+        return 400, "Invalid Host header."
+    if not unsafe_method or not origin:
+        return None
+    try:
+        parsed_origin = urlsplit(origin)
+        origin_host = (parsed_origin.hostname or "").lower()
+        default_port = 443 if parsed_origin.scheme == "https" else 80
+        origin_port = parsed_origin.port or default_port
+        request_port = request_host.port or default_port
+    except ValueError:
+        return 403, "Cross-origin request rejected."
+    if (
+        origin_host.strip("[]") not in allowed_names
+        or host_name != origin_host
+        or origin_port != request_port
+    ):
+        return 403, "Cross-origin request rejected."
+    return None
+
+
 def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
     """Reject untrusted Host headers and cross-origin browser mutations."""
     allowed_names = {host.strip("[]").lower() for host in hosts} | {
@@ -94,54 +131,15 @@ def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
 
     @app.middleware("http")
     async def request_guard(request, call_next):
-        host_header = request.headers.get("host", "")
-        try:
-            host_name = (urlsplit(f"//{host_header}").hostname or "").lower()
-        except ValueError:
-            return JSONResponse(
-                status_code=400,
-                content={"ok": False, "error": "Invalid Host header."},
-            )
-        if host_name not in allowed_names:
-            return JSONResponse(
-                status_code=400,
-                content={"ok": False, "error": "Invalid Host header."},
-            )
-
-        if request.method in UNSAFE_METHODS:
-            origin = request.headers.get("origin")
-            if origin:
-                try:
-                    parsed_origin = urlsplit(origin)
-                    origin_host = (parsed_origin.hostname or "").lower()
-                    origin_port = parsed_origin.port or (
-                        443 if parsed_origin.scheme == "https" else 80
-                    )
-                    parsed_host = urlsplit(f"//{host_header}")
-                    request_port = parsed_host.port or (
-                        443 if parsed_origin.scheme == "https" else 80
-                    )
-                except ValueError:
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "ok": False,
-                            "error": "Cross-origin request rejected.",
-                        },
-                    )
-                same_host = (parsed_host.hostname or "").lower() == origin_host
-                if (
-                    origin_host.strip("[]") not in allowed_names
-                    or not same_host
-                    or origin_port != request_port
-                ):
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "ok": False,
-                            "error": "Cross-origin request rejected.",
-                        },
-                    )
+        rejection = _validate_request_origin(
+            request.headers.get("host", ""),
+            request.headers.get("origin"),
+            unsafe_method=request.method in UNSAFE_METHODS,
+            allowed_names=allowed_names,
+        )
+        if rejection is not None:
+            status_code, message = rejection
+            return error_response(status_code, message)
         response = await call_next(request)
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
