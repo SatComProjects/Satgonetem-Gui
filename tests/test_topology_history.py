@@ -1,5 +1,7 @@
 """Unit tests for bounded topology snapshot history and comparison."""
 
+import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -78,12 +80,33 @@ def test_record_and_dedupe_by_step() -> None:
 def test_record_uses_topology_status_not_raw_topology_attributes() -> None:
     """Step and time come from the service boundary, not core object internals."""
     service, topology = _service()
+    topology.step = 7
 
     result = service.record()
 
     assert result["recorded"] is True
-    assert result["step"] == 0
+    assert result["step"] == 7
     assert service.list_snapshots()["snapshots"][0]["time"] == "T0"
+
+
+def test_concurrent_records_store_a_step_once() -> None:
+    """Overlapping polls must not append duplicate snapshots for one step."""
+    topology = FakeHistoryTopology()
+    service = TopologyHistoryService(topology)
+    original_nodes = topology.nodes
+
+    def slow_nodes():
+        time.sleep(0.05)
+        return original_nodes()
+
+    topology.nodes = slow_nodes
+    threads = [threading.Thread(target=service.record) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert len(service.list_snapshots()["snapshots"]) == 1
 
 
 def test_record_reads_nodes_and_links_without_holding_the_lock() -> None:

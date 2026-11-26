@@ -51,11 +51,19 @@ class TopologyHistoryService:
     def __init__(self, topology: TopologyService) -> None:
         self.topology = topology
         self._lock = threading.Lock()
+        self._record_lock = threading.Lock()
         self._snapshots: deque[TopologySnapshot] = deque()
         self._generation: int | None = None
 
     def record(self) -> dict[str, Any]:
         """Record the current step once; repeated polls at the same step are no-ops."""
+        # Serialize whole recordings so two concurrent polls cannot both pass
+        # the dedupe check below and append the same step. Reads stay outside
+        # ``_lock``; only listing/comparison requests use that lock.
+        with self._record_lock:
+            return self._record()
+
+    def _record(self) -> dict[str, Any]:
         # Read observable state through the service boundary: the concrete
         # topology object is opaque to this service.
         status = self.topology.status()
@@ -108,6 +116,14 @@ class TopologyHistoryService:
                     "ok": True,
                     "recorded": False,
                     "reason": "project changed",
+                    "step": step,
+                    "snapshot_count": len(self._snapshots),
+                }
+            if self._snapshots and self._snapshots[-1].step == step:
+                return {
+                    "ok": True,
+                    "recorded": False,
+                    "reason": "step unchanged",
                     "step": step,
                     "snapshot_count": len(self._snapshots),
                 }
