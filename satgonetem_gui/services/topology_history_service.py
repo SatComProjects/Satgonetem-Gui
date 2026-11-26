@@ -56,12 +56,15 @@ class TopologyHistoryService:
 
     def record(self) -> dict[str, Any]:
         """Record the current step once; repeated polls at the same step are no-ops."""
-        topology, generation = self.topology.context()
+        # Read observable state through the service boundary: the concrete
+        # topology object is opaque to this service.
+        status = self.topology.status()
+        step = int(status.get("current_step") or 0)
+        current_time = status.get("current_time")
+        _topology, generation = self.topology.context()
+
         with self._lock:
-            if self._generation != generation:
-                self._snapshots.clear()
-                self._generation = generation
-            step = int(getattr(topology, "current_time_step", 0) or 0)
+            self._adopt_generation_locked(generation)
             if self._snapshots and self._snapshots[-1].step == step:
                 return {
                     "ok": True,
@@ -70,28 +73,44 @@ class TopologyHistoryService:
                     "step": step,
                     "snapshot_count": len(self._snapshots),
                 }
-            nodes = {
-                str(node["name"]): {
-                    "name": str(node["name"]),
-                    "type": node.get("type", ""),
-                    "city": node.get("city"),
-                    "shell": node.get("shell"),
-                }
-                for node in self.topology.nodes()
-                if node.get("name")
+
+        # Expensive topology reads happen outside the lock so a large topology
+        # does not serialize listing or comparison requests.
+        nodes = {
+            str(node["name"]): {
+                "name": str(node["name"]),
+                "type": node.get("type", ""),
+                "city": node.get("city"),
+                "shell": node.get("shell"),
             }
-            links = {}
-            for link in self.topology.links():
-                if not link.get("src") or not link.get("dst"):
-                    continue
-                links[_link_key(link["src"], link["dst"])] = _link_record(link)
-            snapshot = TopologySnapshot(
-                step=step,
-                time=(str(getattr(topology, "current_time", "") or "") or None),
-                recorded_at=_utc_timestamp(),
-                nodes=nodes,
-                links=links,
-            )
+            for node in self.topology.nodes()
+            if node.get("name")
+        }
+        links = {}
+        for link in self.topology.links():
+            if not link.get("src") or not link.get("dst"):
+                continue
+            links[_link_key(link["src"], link["dst"])] = _link_record(link)
+        snapshot = TopologySnapshot(
+            step=step,
+            time=(str(current_time) if current_time else None),
+            recorded_at=_utc_timestamp(),
+            nodes=nodes,
+            links=links,
+        )
+
+        with self._lock:
+            if self.topology.generation != generation:
+                # The project was replaced while the snapshot was collected;
+                # drop the stale snapshot instead of recording mixed state.
+                self._adopt_generation_locked(self.topology.generation)
+                return {
+                    "ok": True,
+                    "recorded": False,
+                    "reason": "project changed",
+                    "step": step,
+                    "snapshot_count": len(self._snapshots),
+                }
             self._snapshots.append(snapshot)
             self._enforce_limits_locked()
             return {
@@ -167,6 +186,12 @@ class TopologyHistoryService:
                 "added_nodes": sorted(set(after.nodes) - set(before.nodes)),
                 "removed_nodes": sorted(set(before.nodes) - set(after.nodes)),
             }
+
+    def _adopt_generation_locked(self, generation: int) -> None:
+        """Reset recorded history when the loaded project generation changes."""
+        if self._generation != generation:
+            self._snapshots.clear()
+            self._generation = generation
 
     def _find_locked(self, step: int) -> TopologySnapshot:
         for snapshot in self._snapshots:
