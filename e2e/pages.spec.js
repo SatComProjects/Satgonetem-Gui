@@ -56,15 +56,19 @@ test("queue items add and remove by stable ID", async ({ page }) => {
   await page.goto("/traffic");
   await page.waitForLoadState("networkidle");
 
-  await page.evaluate(async () => {
-    const queue = await import("/static/queue.js?v=24");
+  const queueUrl = await page.evaluate(() => {
+    const script = document.querySelector('script[src*="/static/queue.js"]');
+    return script ? script.getAttribute("src") : "/static/queue.js";
+  });
+  await page.evaluate(async (url) => {
+    const queue = await import(url);
     queue.jqAdd({
       kind: "ping",
       payload: { src: "Sat0", dst: "Sat1" },
       label: "queue regression",
       delay: 0,
     });
-  });
+  }, queueUrl);
 
   await expect(page.locator(".queue-item")).toHaveCount(1);
   await page.locator('[data-action="remove"]').click();
