@@ -99,7 +99,10 @@ jobs:
               names = set(archive.namelist())
 
           required = {
-              "satgonetem_gui/adapters/satgonetem_topology.py",
+              "satgonetem_gui/adapters/core.py",
+              "satgonetem_gui/adapters/network_adapter.py",
+              "satgonetem_gui/adapters/project_adapter.py",
+              "satgonetem_gui/adapters/topology_reader.py",
               "satgonetem_gui/routes/projects.py",
               "satgonetem_gui/services/project_service.py",
               "satgonetem_gui/config.py",
