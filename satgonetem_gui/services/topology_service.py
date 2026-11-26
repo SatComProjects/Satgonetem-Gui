@@ -1,6 +1,7 @@
-"""Read-only topology queries."""
+"""Read-only topology queries and project-wide operation gates."""
 
 import re
+from contextlib import contextmanager
 from typing import Any, cast
 
 from ..errors import APIError
@@ -109,6 +110,28 @@ class TopologyService:
     def gonetem_is_on(self) -> bool:
         """Return whether the containers are running."""
         return self.reader.gonetem_is_on(self.require_topology())
+
+    def begin_network_operation(self) -> bool:
+        """Reserve the project's single network-operation slot."""
+        return self.session.begin_network_operation()
+
+    def end_network_operation(self) -> None:
+        """Release the project's network-operation slot."""
+        self.session.end_network_operation()
+
+    @contextmanager
+    def network_operation(self):
+        """Hold the network-operation slot for one mutation.
+
+        Raises the common 409 when a project build or another network mutation
+        already owns the slot.
+        """
+        if not self.begin_network_operation():
+            raise APIError(409, "A project operation is already running.")
+        try:
+            yield
+        finally:
+            self.end_network_operation()
 
     def network_running(self) -> bool:
         """Return container state without requiring a loaded project."""

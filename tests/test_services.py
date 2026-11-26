@@ -22,11 +22,12 @@ from satgonetem_gui.schemas import (
 from satgonetem_gui.services import connectivity_service
 from satgonetem_gui.services.addressability_service import AddressabilityService
 from satgonetem_gui.services.connectivity_service import (
-    ConnectivityJobRegistry,
+    ConnectivityJob,
     ConnectivityService,
 )
 from satgonetem_gui.services.coverage_service import CoverageService
 from satgonetem_gui.services.experiment_service import ExperimentService
+from satgonetem_gui.services.job_registry import BoundedJobRegistry
 from satgonetem_gui.services.ports import NetworkOperationError, TrafficPoll
 from satgonetem_gui.services.project_service import ProjectService
 from satgonetem_gui.services.routing_service import RoutingService
@@ -284,6 +285,25 @@ def test_topology_status_is_empty_without_a_project() -> None:
 
     assert service.status()["constellation_loaded"] is False
     assert service.status()["satellites"] == 0
+
+
+def test_topology_network_operation_lease_is_exclusive() -> None:
+    """The lease holds one mutation at a time and releases on exit."""
+    session = _loaded_session()
+    service = TopologyService(session, FakeReader())
+
+    with service.network_operation():
+        assert session.network_operation is True
+        assert service.begin_network_operation() is False
+        with pytest.raises(APIError) as error:
+            with service.network_operation():
+                pass
+        assert error.value.status_code == 409
+
+    assert session.network_operation is False
+    assert service.begin_network_operation() is True
+    service.end_network_operation()
+    assert session.network_operation is False
 
 
 def test_topology_context_returns_the_topology_and_generation_together() -> None:
@@ -696,6 +716,7 @@ def test_capacity_rejection_stops_the_unregistered_flow() -> None:
         service.start("ping", PingRequest(src="Sat0", dst="Sat0"))
 
     assert error.value.status_code == 429
+    assert error.value.message == "Traffic job limit reached."
     assert gateway.poll_calls == 1
     assert len(gateway.stopped) == 1
 
@@ -2289,22 +2310,33 @@ def test_connectivity_rejects_a_fifth_running_job() -> None:
         _wait_for_connectivity(service, job_id)
 
 
-def test_connectivity_registry_prunes_expired_terminal_jobs() -> None:
-    """Terminal jobs are removed after the one-hour in-memory TTL."""
-    now = 0.0
-    registry = ConnectivityJobRegistry(
-        max_jobs=4,
-        ttl_seconds=10,
-        clock=lambda: now,
-    )
-    job = registry.create(
+def _connectivity_job(
+    job_id: str = "c1",
+    clock=time.time,
+) -> ConnectivityJob:
+    """Build one connectivity job record for registry-level tests."""
+    return ConnectivityJob(
+        job_id=job_id,
         nodes=["Sat0", "Sat1"],
         ping_count=1,
         max_workers=1,
         flow_timeout_seconds=1.0,
         pair_count=2,
         generation=1,
+        clock=clock,
     )
+
+
+def test_connectivity_registry_prunes_expired_terminal_jobs() -> None:
+    """Terminal jobs are removed after the one-hour in-memory TTL."""
+    now = 0.0
+    registry = BoundedJobRegistry[ConnectivityJob](
+        max_jobs=4,
+        ttl_seconds=10,
+        clock=lambda: now,
+    )
+    job = _connectivity_job(clock=lambda: now)
+    registry.create(job)
     assert job.transition(
         "done",
         summary={"pairs": 2, "reachable": 2, "unreachable": 0},
@@ -2319,15 +2351,9 @@ def test_connectivity_registry_prunes_expired_terminal_jobs() -> None:
 
 def test_connectivity_terminal_transitions_are_immutable() -> None:
     """Once a job is terminal, a late worker result cannot overwrite it."""
-    registry = ConnectivityJobRegistry(max_jobs=1)
-    job = registry.create(
-        nodes=["Sat0", "Sat1"],
-        ping_count=1,
-        max_workers=1,
-        flow_timeout_seconds=1.0,
-        pair_count=2,
-        generation=1,
-    )
+    registry = BoundedJobRegistry[ConnectivityJob](max_jobs=1)
+    job = _connectivity_job()
+    registry.create(job)
 
     assert job.transition("done", summary={"pairs": 2}, results=[]) is True
     assert job.transition("error", error="late failure") is False
@@ -2337,28 +2363,35 @@ def test_connectivity_terminal_transitions_are_immutable() -> None:
 
 def test_connectivity_registry_evicts_terminal_jobs_before_capacity() -> None:
     """Finished jobs free their slot instead of blocking new checks."""
-    registry = ConnectivityJobRegistry(max_jobs=1)
-    first = registry.create(
-        nodes=["Sat0", "Sat1"],
-        ping_count=1,
-        max_workers=1,
-        flow_timeout_seconds=1.0,
-        pair_count=2,
-        generation=1,
-    )
+    registry = BoundedJobRegistry[ConnectivityJob](max_jobs=1)
+    first = _connectivity_job("first")
+    registry.create(first)
     first.transition("done", summary={"pairs": 2}, results=[])
 
-    second = registry.create(
-        nodes=["Sat0", "Sat1"],
-        ping_count=1,
-        max_workers=1,
-        flow_timeout_seconds=1.0,
-        pair_count=2,
-        generation=1,
-    )
+    second = _connectivity_job("second")
+    registry.create(second)
 
     assert registry.get(first.job_id) is None
     assert registry.get(second.job_id) is second
+
+
+def test_connectivity_jobs_share_the_registry_clock() -> None:
+    """TTL pruning and job timestamps use the same injectable clock."""
+    registry = BoundedJobRegistry[ConnectivityJob](
+        max_jobs=4,
+        max_active=4,
+        clock=lambda: 42.0,
+    )
+    service = ConnectivityService(_ready_topology(), FakeConnectivityController(), registry)
+
+    job_id = service.start(_connectivity_payload())
+    _wait_for_connectivity(service, job_id)
+    job = registry.get(job_id)
+
+    assert job is not None
+    assert job.created_at == 42.0
+    assert job.updated_at == 42.0
+    assert job.clock() == 42.0
 
 
 # ---------------------------------------------------------------------------
@@ -2385,6 +2418,12 @@ class FakeExperimentTopology:
 
     def network_running(self) -> bool:
         return self.running
+
+    def begin_network_operation(self) -> bool:
+        return self.session.begin_network_operation()
+
+    def end_network_operation(self) -> None:
+        self.session.end_network_operation()
 
 
 class FakeExperimentGateway:

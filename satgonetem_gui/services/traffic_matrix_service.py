@@ -14,6 +14,8 @@ from typing import Any
 
 from ..errors import APIError
 from ..schemas import Iperf3Request, TrafficMatrixRequest
+from ..time_utils import utc_timestamp
+from .job_registry import BoundedJobRegistry, JobCapacityError
 from .topology_service import TopologyService
 from .traffic_service import TrafficService
 
@@ -25,10 +27,6 @@ MAX_ACTIVE_JOBS = 2
 MAX_JOBS = 20
 TERMINAL_TTL_SECONDS = 3600.0
 PAIR_POLL_INTERVAL_SECONDS = 0.25
-
-
-def _utc_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
@@ -44,7 +42,7 @@ class MatrixJob:
     status: str = "running"
     results: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
-    started_at: str = field(default_factory=_utc_timestamp)
+    started_at: str = field(default_factory=utc_timestamp)
     finished_at: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -57,6 +55,11 @@ class MatrixJob:
     @property
     def pairs_completed(self) -> int:
         return len(self.results)
+
+    @property
+    def terminal(self) -> bool:
+        """Return True once the matrix reached a terminal state."""
+        return self.status != "running"
 
 
 class TrafficMatrixService:
@@ -74,8 +77,12 @@ class TrafficMatrixService:
         self.traffic = traffic
         self.poll_interval = poll_interval
         self.clock = clock
-        self._jobs: dict[str, MatrixJob] = {}
-        self._lock = threading.Lock()
+        self._jobs = BoundedJobRegistry[MatrixJob](
+            max_jobs=MAX_JOBS,
+            max_active=MAX_ACTIVE_JOBS,
+            ttl_seconds=TERMINAL_TTL_SECONDS,
+            clock=clock,
+        )
 
     def start(self, payload: TrafficMatrixRequest) -> str:
         """Validate preconditions and start one background matrix."""
@@ -104,25 +111,23 @@ class TrafficMatrixService:
                 f"At most {MAX_MATRIX_NODES} nodes can be compared.",
             )
 
-        with self._lock:
-            self._prune_locked()
-            active = [job for job in self._jobs.values() if job.status == "running"]
-            if len(active) >= MAX_ACTIVE_JOBS:
-                raise APIError(429, "A throughput matrix is already running.")
-            job_id = (
-                f"mx-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(4)}"
-            )
-            job = MatrixJob(
-                job_id=job_id,
-                nodes=nodes,
-                duration_s=payload.duration_s,
-                concurrency=payload.concurrency,
-                timeout_s=payload.timeout_s,
-                generation=generation,
-                created_at=self.clock(),
-                updated_at=self.clock(),
-            )
-            self._jobs[job_id] = job
+        job_id = (
+            f"mx-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(4)}"
+        )
+        job = MatrixJob(
+            job_id=job_id,
+            nodes=nodes,
+            duration_s=payload.duration_s,
+            concurrency=payload.concurrency,
+            timeout_s=payload.timeout_s,
+            generation=generation,
+            created_at=self.clock(),
+            updated_at=self.clock(),
+        )
+        try:
+            self._jobs.create(job)
+        except JobCapacityError as exc:
+            raise APIError(429, "A throughput matrix is already running.") from exc
 
         thread = threading.Thread(
             target=self._worker,
@@ -139,13 +144,12 @@ class TrafficMatrixService:
 
     def status(self, job_id: str) -> dict[str, Any]:
         """Return one matrix job snapshot, including matrix and flat results."""
-        with self._lock:
-            self._prune_locked()
-            job = self._jobs.get(job_id)
-            if job is None:
-                raise APIError(404, "Matrix job not found.")
-            with job.lock:
-                return self._snapshot_locked(job)
+        self._jobs.prune()
+        job = self._jobs.get(job_id)
+        if job is None:
+            raise APIError(404, "Matrix job not found.")
+        with job.lock:
+            return self._snapshot_locked(job)
 
     def export(self, job_id: str, export_format: str) -> dict[str, Any]:
         """Export one matrix as a CSV or JSON download envelope."""
@@ -219,14 +223,14 @@ class TrafficMatrixService:
                         job.updated_at = self.clock()
             with job.lock:
                 job.status = "done"
-                job.finished_at = _utc_timestamp()
+                job.finished_at = utc_timestamp()
                 job.updated_at = self.clock()
         except BaseException:  # noqa: BLE001 - keep the worker contained
             logger.exception("Traffic matrix worker failed.")
             with job.lock:
                 job.status = "error"
                 job.errors.append("Matrix worker stopped unexpectedly.")
-                job.finished_at = _utc_timestamp()
+                job.finished_at = utc_timestamp()
                 job.updated_at = self.clock()
 
     def _run_pair(self, job: MatrixJob, source: str, destination: str) -> dict[str, Any]:
@@ -304,7 +308,7 @@ class TrafficMatrixService:
         with job.lock:
             job.status = "error"
             job.errors.append(message)
-            job.finished_at = _utc_timestamp()
+            job.finished_at = utc_timestamp()
             job.updated_at = self.clock()
 
     @staticmethod
@@ -353,17 +357,3 @@ class TrafficMatrixService:
             "errors": list(job.errors),
         }
 
-    def _prune_locked(self) -> None:
-        now = self.clock()
-        expired = [
-            job_id
-            for job_id, job in self._jobs.items()
-            if job.status != "running" and now - job.updated_at >= TERMINAL_TTL_SECONDS
-        ]
-        for job_id in expired:
-            del self._jobs[job_id]
-        ordered = sorted(self._jobs.values(), key=lambda job: job.created_at)
-        while len(ordered) > MAX_JOBS:
-            job = ordered.pop(0)
-            if job.status != "running":
-                self._jobs.pop(job.job_id, None)

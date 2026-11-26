@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from contextlib import contextmanager
 from typing import Any, Callable
 
 from ..errors import APIError
@@ -47,19 +46,6 @@ class SimulationService:
             self._operation_lock = asyncio.Lock()
             self._operation_loop = loop
         return self._operation_lock
-
-    @contextmanager
-    def _network_operation(self):
-        """Reserve the session's network slot for one mutation."""
-        if not self.topology.session.begin_network_operation():
-            raise APIError(
-                409,
-                "A project operation is already running.",
-            )
-        try:
-            yield
-        finally:
-            self.topology.session.end_network_operation()
 
     async def _run_controller(self, func, *args: Any):
         """Run a blocking controller call without abandoning it on cancellation."""
@@ -111,7 +97,7 @@ class SimulationService:
         """Run one controller call behind the shared operation guards."""
         operation = getattr(func, "__name__", "simulation operation")
         async with self._operation_lock_for_loop():
-            with self._network_operation():
+            with self.topology.network_operation():
                 topology, generation = self.topology.context()
                 try:
                     if require_paused and self.controller.simulation_running(

@@ -2,7 +2,6 @@
 
 import logging
 import re
-from contextlib import contextmanager
 from typing import Any
 
 from ..errors import APIError
@@ -57,23 +56,10 @@ class AddressabilityService:
                 "the current project.",
             )
 
-    @contextmanager
-    def _network_operation(self):
-        """Reserve the session's network slot for one mutation."""
-        if not self.topology.session.begin_network_operation():
-            raise APIError(
-                409,
-                "A project operation is already running.",
-            )
-        try:
-            yield
-        finally:
-            self.topology.session.end_network_operation()
-
     def _set(self, enabled: bool, name: str | None) -> dict[str, Any]:
         """Run one mutation behind the session and generation guards."""
         topology, generation = self.topology.context()
-        with self._network_operation():
+        with self.topology.network_operation():
             try:
                 updated = self.controller.set_satellites_addressable(
                     topology,

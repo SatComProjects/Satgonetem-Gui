@@ -9,16 +9,13 @@ from typing import Any, Callable
 
 from ..errors import APIError
 from ..schemas import Hping3Request, Iperf3Request, PingRequest
+from .job_registry import BoundedJobRegistry, JobCapacityError
 from .ports import TrafficGateway
 from .topology_service import TopologyService
 
 logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = frozenset({"done", "error", "cancelled"})
-
-
-class JobCapacityError(RuntimeError):
-    """Raised when the job registry cannot evict enough terminal jobs."""
 
 
 @dataclass(frozen=True)
@@ -92,25 +89,31 @@ class TrafficJob:
             return response
 
 
-@dataclass
 class JobRegistry:
-    """Thread-safe, bounded job storage with TTL cleanup."""
+    """Traffic-job factory over the shared bounded registry.
 
-    max_jobs: int = 100
-    ttl_seconds: float = 3600.0
-    clock: Callable[[], float] = time.time
-    _jobs: dict[str, TrafficJob] = field(default_factory=dict)
-    _lock: threading.Lock = field(default_factory=threading.Lock)
+    Kept as a thin, traffic-specific facade so callers keep constructing jobs
+    with the traffic fields while capacity, eviction, and TTL behaviour come
+    from :class:`BoundedJobRegistry`.
+    """
 
-    def __post_init__(self) -> None:
-        if self.max_jobs < 1:
-            raise ValueError("max_jobs must be at least 1")
-        if self.ttl_seconds < 0:
-            raise ValueError("ttl_seconds must be non-negative")
+    def __init__(
+        self,
+        max_jobs: int = 100,
+        ttl_seconds: float = 3600.0,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        self.max_jobs = max_jobs
+        self.ttl_seconds = ttl_seconds
+        self.clock = clock
+        self._registry: BoundedJobRegistry[TrafficJob] = BoundedJobRegistry(
+            max_jobs=max_jobs,
+            ttl_seconds=ttl_seconds,
+            clock=clock,
+        )
 
     def __len__(self) -> int:
-        with self._lock:
-            return len(self._jobs)
+        return len(self._registry)
 
     def create(
         self,
@@ -120,60 +123,32 @@ class JobRegistry:
         dst: str,
         generation: int = 0,
     ) -> TrafficJob:
-        """Create a running job, pruning expired/finished entries if needed."""
-        with self._lock:
-            self._prune_locked(self.clock())
-            if len(self._jobs) >= self.max_jobs:
-                self._evict_terminal_locked()
-            if len(self._jobs) >= self.max_jobs:
-                raise JobCapacityError("Traffic job limit reached.")
-            now = self.clock()
-            job = TrafficJob(
-                job_id=f"j{uuid.uuid4().hex}",
-                kind=kind,
-                flow=flow,
-                src=src,
-                dst=dst,
-                created_at=now,
-                updated_at=now,
-                generation=generation,
-                clock=self.clock,
-            )
-            self._jobs[job.job_id] = job
-        return job
+        """Create and register one running traffic job."""
+        now = self.clock()
+        job = TrafficJob(
+            job_id=f"j{uuid.uuid4().hex}",
+            kind=kind,
+            flow=flow,
+            src=src,
+            dst=dst,
+            created_at=now,
+            updated_at=now,
+            generation=generation,
+            clock=self.clock,
+        )
+        return self._registry.create(job)
 
     def get(self, job_id: str) -> TrafficJob | None:
         """Return a job by ID."""
-        with self._lock:
-            return self._jobs.get(job_id)
+        return self._registry.get(job_id)
 
     def running(self) -> list[TrafficJob]:
         """Return a snapshot of jobs that have not reached a terminal state."""
-        with self._lock:
-            return [job for job in self._jobs.values() if not job.terminal]
+        return self._registry.running()
 
     def prune(self) -> None:
         """Remove terminal jobs older than the TTL."""
-        with self._lock:
-            self._prune_locked(self.clock())
-
-    def _prune_locked(self, now: float) -> None:
-        expired = [
-            job_id
-            for job_id, job in self._jobs.items()
-            if job.terminal and now - job.updated_at >= self.ttl_seconds
-        ]
-        for job_id in expired:
-            del self._jobs[job_id]
-
-    def _evict_terminal_locked(self) -> None:
-        terminal = sorted(
-            (job for job in self._jobs.values() if job.terminal),
-            key=lambda job: job.updated_at,
-        )
-        while len(self._jobs) >= self.max_jobs and terminal:
-            job = terminal.pop(0)
-            self._jobs.pop(job.job_id, None)
+        self._registry.prune()
 
 
 class TrafficService:
@@ -234,7 +209,7 @@ class TrafficService:
             job = self._create_job(kind, flow, request)
         except JobCapacityError as exc:
             self._stop_flow(flow)
-            raise APIError(429, str(exc)) from exc
+            raise APIError(429, "Traffic job limit reached.") from exc
         except Exception as exc:
             self._stop_flow(flow)
             logger.exception("Failed to register a %s traffic job.", kind)
