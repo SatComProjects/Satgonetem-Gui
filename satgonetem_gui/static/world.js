@@ -901,7 +901,10 @@ function bindWorldPathControls() {
         ?.addEventListener("click", clearWorldPath);
 }
 
-function cleanupWorld() {
+function cleanupWorld(event) {
+    // A persisted pagehide freezes the page into the back/forward cache; the
+    // view must stay usable when the browser restores it.
+    if (event?.persisted || worldDisposed) return;
     worldDisposed = true;
     if (pollTimer !== null) {
         clearTimeout(pollTimer);
@@ -917,7 +920,7 @@ function cleanupWorld() {
     }
 }
 
-window.addEventListener("pagehide", cleanupWorld, { once: true });
+window.addEventListener("pagehide", cleanupWorld);
 
 function poll() {
     updateWorld().finally(() => {
