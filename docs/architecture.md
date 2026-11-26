@@ -37,7 +37,10 @@ and adapter graph for each app.
 - `services/` - project lifecycle, topology views, satellite addressability,
   routing, simulation transport, traffic jobs.
 - `adapters/` - the only modules importing `TopologyManager` or concrete flow
-  classes.
+  classes. `core.py` owns shared runtime setup; `project_adapter.py` implements
+  the project gateway; `topology_reader.py` serves read-only topology views;
+  `network_adapter.py` owns routing, simulation, addressability, and
+  connectivity mutations; `satgonetem_traffic.py` owns concrete traffic flows.
 - `state.py` - `ProjectSession`, `ProjectTaskManager`, `RuntimeState`.
 - `schemas.py` - Pydantic request/response models.
 - `errors.py` - API exceptions and the common error envelope.
@@ -47,6 +50,40 @@ and adapter graph for each app.
 - `serializers.py` - traffic result shaping.
 - `resources.py` - `importlib.resources` access to bundled presets/config.
 - `data/` - packaged ground-station presets and sample GoNetem config.
+
+## Remediation Phase 2 changes
+
+- Added the generic `services/job_registry.py::BoundedJobRegistry` (bounded
+  storage, active slots, reservations, TTL pruning, terminal eviction) and
+  migrated the traffic, connectivity, matrix, and experiment job registries onto
+  it without changing their capacity or TTL contracts.
+- Added one network-operation lease on `TopologyService`
+  (`begin`/`end`/`network_operation()`), used by routing, simulation,
+  addressability, and experiments; the experiment service no longer duck-types
+  the project session.
+- Added `time_utils.py::utc_timestamp()` and collapsed the five identical
+  timestamp helpers. Routing mutations now share one
+  `_execute_network_mutation()` wrapper.
+
+## Remediation Phase 3 changes
+
+- Split the 953-line `adapters/satgonetem_topology.py` into `adapters/core.py`
+  (shared setup and endpoint policy), `project_adapter.py`
+  (`ProjectGateway`), `topology_reader.py` (`TopologyReader`, `LinkUsageReader`,
+  `PathReader`), and `network_adapter.py` (`NetworkController`,
+  `AddressabilityController`, `ConnectivityController`,
+  `SimulationController`); `app.py` composes the focused adapters.
+- Deduplicated response schemas: one `FileDownloadResponse`, one
+  `JobStartResponse`, and `TopologySnapshotSummary` reused for topology
+  comparison metadata. Wire payloads are unchanged; OpenAPI component names use
+  the shared models.
+- Replaced the textual architecture checks with AST-based import contracts:
+  routes/services cannot import the core or `adapters/`, concrete core symbols
+  and private hooks stay inside `adapters/`, and route handlers stay small.
+- Split the oversized tests to mirror production: `test_topology_adapter.py`
+  became `test_project_adapter.py`, `test_topology_reader.py`, and
+  `test_network_adapter.py`; `test_services.py` became per-service modules with
+  a shared `service_fakes.py`.
 
 ## Dependency rules
 
