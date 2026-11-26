@@ -18,6 +18,7 @@ from ..config import Settings
 from ..errors import APIError
 from ..schemas import ExperimentStartRequest
 from ..storage import write_text_atomic
+from ..time_utils import utc_timestamp
 from .ports import ExperimentGateway
 from .topology_service import TopologyService
 
@@ -54,11 +55,6 @@ _RUN_STATUSES = frozenset({"running", "done", "error"})
 _SCENARIO_FILENAME = "scenario.yaml"
 
 
-def _utc_timestamp() -> str:
-    """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(timezone.utc).isoformat()
-
-
 def _is_within(path: Path, root: Path) -> bool:
     """Return whether ``path`` is at or below ``root``."""
     try:
@@ -86,7 +82,7 @@ class ExperimentRunJob:
     scenario_path: Path
     run_dir: Path
     status: str = "running"
-    started_at: str = field(default_factory=_utc_timestamp)
+    started_at: str = field(default_factory=utc_timestamp)
     finished_at: str | None = None
     summary: dict[str, Any] | None = None
     errors: list[str] = field(default_factory=list)
@@ -438,7 +434,7 @@ class ExperimentService:
         errors: list[str],
     ) -> None:
         """Write provenance and move the in-memory job to a terminal state."""
-        finished_at = _utc_timestamp()
+        finished_at = utc_timestamp()
         try:
             self._write_provenance(job, status, finished_at)
         except Exception:  # noqa: BLE001 - a failed metadata write is reported

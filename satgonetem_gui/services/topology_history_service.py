@@ -3,10 +3,10 @@
 import threading
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
 from ..errors import APIError
+from ..time_utils import utc_timestamp
 from .topology_service import TopologyService
 
 
@@ -19,10 +19,6 @@ class TopologySnapshot:
     recorded_at: str
     nodes: dict[str, dict[str, Any]]
     links: dict[str, dict[str, Any]]
-
-
-def _utc_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _link_key(src: str, dst: str) -> str:
@@ -102,7 +98,7 @@ class TopologyHistoryService:
         snapshot = TopologySnapshot(
             step=step,
             time=(str(current_time) if current_time else None),
-            recorded_at=_utc_timestamp(),
+            recorded_at=utc_timestamp(),
             nodes=nodes,
             links=links,
         )

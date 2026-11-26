@@ -14,6 +14,7 @@ from typing import Any
 
 from ..errors import APIError
 from ..schemas import Iperf3Request, TrafficMatrixRequest
+from ..time_utils import utc_timestamp
 from .topology_service import TopologyService
 from .traffic_service import TrafficService
 
@@ -25,10 +26,6 @@ MAX_ACTIVE_JOBS = 2
 MAX_JOBS = 20
 TERMINAL_TTL_SECONDS = 3600.0
 PAIR_POLL_INTERVAL_SECONDS = 0.25
-
-
-def _utc_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
@@ -44,7 +41,7 @@ class MatrixJob:
     status: str = "running"
     results: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
-    started_at: str = field(default_factory=_utc_timestamp)
+    started_at: str = field(default_factory=utc_timestamp)
     finished_at: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -219,14 +216,14 @@ class TrafficMatrixService:
                         job.updated_at = self.clock()
             with job.lock:
                 job.status = "done"
-                job.finished_at = _utc_timestamp()
+                job.finished_at = utc_timestamp()
                 job.updated_at = self.clock()
         except BaseException:  # noqa: BLE001 - keep the worker contained
             logger.exception("Traffic matrix worker failed.")
             with job.lock:
                 job.status = "error"
                 job.errors.append("Matrix worker stopped unexpectedly.")
-                job.finished_at = _utc_timestamp()
+                job.finished_at = utc_timestamp()
                 job.updated_at = self.clock()
 
     def _run_pair(self, job: MatrixJob, source: str, destination: str) -> dict[str, Any]:
@@ -304,7 +301,7 @@ class TrafficMatrixService:
         with job.lock:
             job.status = "error"
             job.errors.append(message)
-            job.finished_at = _utc_timestamp()
+            job.finished_at = utc_timestamp()
             job.updated_at = self.clock()
 
     @staticmethod

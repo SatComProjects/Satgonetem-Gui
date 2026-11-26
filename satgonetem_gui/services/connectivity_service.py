@@ -8,11 +8,11 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Callable
 
 from ..errors import APIError
 from ..schemas import ConnectivityStartRequest
+from ..time_utils import utc_timestamp
 from .ports import ConnectivityController
 from .topology_service import TopologyService
 
@@ -35,11 +35,6 @@ CSV_HEADER = [
     "rtt_max_ms",
     "error",
 ]
-
-
-def _utc_timestamp() -> str:
-    """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _deduplicate(names: list[str]) -> list[str]:
@@ -73,7 +68,7 @@ class ConnectivityJob:
     summary: dict[str, Any] | None = None
     results: list[dict[str, Any]] | None = None
     error: str | None = None
-    started_at: str = field(default_factory=_utc_timestamp)
+    started_at: str = field(default_factory=utc_timestamp)
     finished_at: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -107,7 +102,7 @@ class ConnectivityJob:
                 self.results = results
             if error is not None:
                 self.error = error
-            self.finished_at = _utc_timestamp()
+            self.finished_at = utc_timestamp()
             self._finished_monotonic = time.monotonic()
             self.updated_at = self.clock()
             self._terminal.set()

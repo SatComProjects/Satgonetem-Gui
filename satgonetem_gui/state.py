@@ -10,16 +10,12 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
+from .time_utils import utc_timestamp
+
 logger = logging.getLogger(__name__)
-
-
-def _utc_timestamp() -> str:
-    """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 class ProjectState(str, Enum):
@@ -125,7 +121,7 @@ class ProjectSession:
             self.error = None
             self.phase = "validating"
             self.progress = 0
-            self.started_at = _utc_timestamp()
+            self.started_at = utc_timestamp()
             self.finished_at = None
             self._started_monotonic = time.monotonic()
             self._finished_monotonic = None
@@ -193,7 +189,7 @@ class ProjectSession:
             self.state = ProjectState.LOADED
             self.phase = "ready"
             self.progress = 100
-            self.finished_at = _utc_timestamp()
+            self.finished_at = utc_timestamp()
             self._finished_monotonic = time.monotonic()
             self.pending_name = None
             self.error = None
@@ -214,7 +210,7 @@ class ProjectSession:
             self.error = error or "Project operation failed."
             self.phase = "error"
             self.progress = 100
-            self.finished_at = _utc_timestamp()
+            self.finished_at = utc_timestamp()
             self._finished_monotonic = time.monotonic()
             self.pending_name = None
             self._active_token = None
