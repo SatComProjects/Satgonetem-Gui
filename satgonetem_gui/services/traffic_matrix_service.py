@@ -130,7 +130,11 @@ class TrafficMatrixService:
             name=f"traffic-matrix-{job_id}",
             daemon=True,
         )
-        thread.start()
+        try:
+            thread.start()
+        except Exception:
+            logger.exception("Could not start the traffic matrix worker.")
+            self._finalize_error(job, "Matrix worker could not start.")
         return job_id
 
     def status(self, job_id: str) -> dict[str, Any]:
@@ -273,7 +277,35 @@ class TrafficMatrixService:
                     snapshot.get("error") or "Flow failed.",
                 )
             time.sleep(self.poll_interval)
+        self._cancel_timed_out_flow(flow_id, source, destination)
         return self._pair_error(source, destination, "Pair timed out.")
+
+    def _cancel_timed_out_flow(self, flow_id: str, source: str, destination: str) -> None:
+        """Best-effort stop of a flow whose pair exceeded its deadline."""
+        try:
+            self.traffic.cancel(flow_id)
+        except APIError as exc:
+            if exc.status_code != 409:
+                logger.warning(
+                    "Could not cancel the timed-out matrix pair %s->%s: %s",
+                    source,
+                    destination,
+                    exc.message,
+                )
+        except Exception:
+            logger.exception(
+                "Could not cancel the timed-out matrix pair %s->%s.",
+                source,
+                destination,
+            )
+
+    def _finalize_error(self, job: MatrixJob, message: str) -> None:
+        """Move a job that never reached the worker to a terminal error state."""
+        with job.lock:
+            job.status = "error"
+            job.errors.append(message)
+            job.finished_at = _utc_timestamp()
+            job.updated_at = self.clock()
 
     @staticmethod
     def _pair_error(source: str, destination: str, error: str) -> dict[str, Any]:
