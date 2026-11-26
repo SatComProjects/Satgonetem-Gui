@@ -498,6 +498,185 @@ button.small,
   white-space: nowrap;
 }
 
+/* Page chrome primitives -------------------------------------------------
+ * Shared by the page stylesheets. Templates put these classes next to their
+ * own hooks (for example class="exp-page-head page-head"); the page
+ * stylesheet keeps only its visual accents: head gradients and decorations,
+ * stamps, heatmap scales, SVG node/edge classes, diff highlights, and the
+ * controls unique to that page.
+ *
+ * The primitives are scoped to .page-frame or .page-head so page stylesheets
+ * that have not opted in yet keep their current rendering.
+ */
+
+.page-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.page-frame > * {
+  min-width: 0;
+}
+
+.page-head {
+  position: relative;
+  overflow: hidden;
+  padding: 22px 24px 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+/* Keep the eyebrow, title, and lede above a page head's ::before/::after
+ * decorative layers. */
+.page-head > * {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.page-eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* Scoped to the page head on purpose: Dashboard, Nodes, and Traffic keep
+ * their legacy bare .page-title rule until that page set is migrated. */
+.page-head .page-title {
+  margin: 5px 0 8px;
+  font-size: clamp(1.55rem, 1.1rem + 1.4vw, 2.05rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.page-lede {
+  max-width: 66ch;
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.status-msg {
+  min-height: 1.35em;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* static/dom.js setStatus toggles .is-error on these regions. The global
+ * .is-error colour above still covers messages that are not status regions. */
+.status-msg.is-error {
+  color: var(--bad);
+}
+
+/* Filter/action toolbar used by page-level controls. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(18, 26, 34, 0.92), rgba(15, 22, 32, 0.92));
+}
+
+/* Canonical recipe for server-rendered tables. Tables the page scripts build
+ * keep their page classes until that markup gets a shared class. */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Card head, hint, and empty state --------------------------------------- */
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin-bottom: 14px;
+}
+
+.card-head > div {
+  min-width: 0;
+}
+
+.card-head .card-title {
+  margin: 0;
+}
+
+.card-hint {
+  max-width: 64ch;
+  margin: 4px 0 0;
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
+
+.empty-state {
+  border: 1px dashed #263344;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+/* Quiet secondary and disabled buttons inside a page frame. The :where()
+ * scoping keeps the specificity low so a page stylesheet loaded later still
+ * wins with an equal or higher specificity (for example the scenario
+ * builder's dashed Add/Remove buttons). */
+:where(.page-frame) .button.secondary {
+  border-color: var(--border-subtle);
+  background: #101823;
+  color: var(--muted);
+}
+
+:where(.page-frame) .button.secondary:where(:hover):where(:not(:disabled)) {
+  border-color: #2a394b;
+  background: #162130;
+  color: var(--text);
+}
+
+:where(.page-frame) .button:where(:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Shared page gutters and head scale down at the same breakpoints the page
+ * stylesheets already use. */
+@media (max-width: 760px) {
+  .page-head {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .page-frame {
+    gap: 14px;
+  }
+
+  .page-head {
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .page-head .page-title {
+    font-size: 1.5rem;
+  }
+}
+
 /* Global focus ring ------------------------------------------------------
  * Page-specific focus rules are more specific and keep working unchanged.
  */

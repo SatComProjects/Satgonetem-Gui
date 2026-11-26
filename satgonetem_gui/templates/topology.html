@@ -1,24 +1,24 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/topology_graph.css">
+  <link rel="stylesheet" href="/static/topology_graph.css?v=1">
 {% endblock %}
 
 {% block content %}
-<div class="topo-page">
+<div class="topo-page page-frame">
 
-  <header class="topo-page-head">
-    <p class="topo-eyebrow">Whole-network view</p>
-    <h2 class="topo-title">Network Topology</h2>
-    <p class="muted topo-lede">
+  <header class="topo-page-head page-head">
+    <p class="topo-eyebrow page-eyebrow">Whole-network view</p>
+    <h2 class="topo-title page-title">Network Topology</h2>
+    <p class="muted topo-lede page-lede">
       Deterministic 2D graph of the current satellites, ground stations, and links.
       Select nodes for details or trace a routing path.
     </p>
   </header>
 
-  <p class="muted topo-msg" id="topo-msg" aria-live="polite"></p>
+  <p class="muted topo-msg status-msg" id="topo-msg" aria-live="polite"></p>
 
-  <div class="topo-toolbar" role="group" aria-label="Topology filters">
+  <div class="topo-toolbar toolbar" role="group" aria-label="Topology filters">
     <label for="topo-shell">Shell
       <select id="topo-shell">
         <option value="all">All shells</option>
@@ -44,7 +44,7 @@
   <div class="topo-layout">
 
     <section class="card topo-graph-card" aria-labelledby="topo-graph-title">
-      <div class="topo-graph-head">
+      <div class="topo-graph-head card-head">
         <h3 class="card-title" id="topo-graph-title">Graph</h3>
         <div class="topo-legend" id="topo-legend">
           <span><i class="topo-swatch topo-satellite-swatch"></i>Satellite</span>
@@ -53,7 +53,7 @@
         </div>
       </div>
       <div class="topo-graph" id="topology-graph" role="img" aria-label="Network topology graph"></div>
-      <p class="topo-empty" id="topo-empty">
+      <p class="topo-empty empty-state" id="topo-empty">
         <strong>No topology loaded</strong>
         <span>Load a project to render the network graph.</span>
       </p>
@@ -78,7 +78,7 @@
           <button type="button" class="button small" id="topo-path-trace" disabled>Trace path</button>
           <button type="button" class="button small secondary" id="topo-path-clear" disabled>Clear</button>
         </div>
-        <p class="muted topo-path-msg" id="topo-path-msg" aria-live="polite"></p>
+        <p class="muted topo-path-msg status-msg" id="topo-path-msg" aria-live="polite"></p>
         <p class="topo-path-summary" id="topo-path-summary"></p>
       </div>
 
@@ -88,7 +88,7 @@
           <span class="muted topo-history-count" id="topo-snapshot-count"></span>
         </div>
         <button type="button" class="button small secondary" id="topo-record">Record snapshot</button>
-        <p class="muted topo-history-msg" id="topo-history-msg" aria-live="polite"></p>
+        <p class="muted topo-history-msg status-msg" id="topo-history-msg" aria-live="polite"></p>
         <div class="topo-history-grid">
           <label for="topo-compare-from">From
             <select id="topo-compare-from" disabled></select>
@@ -98,7 +98,7 @@
           </label>
         </div>
         <button type="button" class="button small" id="topo-compare" disabled>Compare steps</button>
-        <p class="muted topo-compare-msg" id="topo-compare-msg" aria-live="polite"></p>
+        <p class="muted topo-compare-msg status-msg" id="topo-compare-msg" aria-live="polite"></p>
         <div class="topo-compare-table" id="topo-compare-table"></div>
       </div>
 

@@ -1,30 +1,30 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/connectivity.css">
+  <link rel="stylesheet" href="/static/connectivity.css?v=1">
 {% endblock %}
 
 {% block content %}
-<div class="conn-page">
+<div class="conn-page page-frame">
 
-  <header class="conn-page-head">
+  <header class="conn-page-head page-head">
     <div class="conn-heading">
-      <p class="conn-eyebrow">Full-mesh diagnostics</p>
+      <p class="conn-eyebrow page-eyebrow">Full-mesh diagnostics</p>
       <h2 class="page-title">Connectivity Matrix</h2>
-      <p class="muted conn-lede">
+      <p class="muted conn-lede page-lede">
         Pings every ordered pair of addressable nodes. Containers and routing must be
         running before a check can start, and larger meshes take longer to finish.
       </p>
     </div>
   </header>
 
-  <p class="muted conn-msg" id="connectivity-msg" aria-live="polite"></p>
+  <p class="muted conn-msg status-msg" id="connectivity-msg" aria-live="polite"></p>
 
   <section class="card conn-setup-card" aria-labelledby="connectivity-setup-title">
-    <div class="conn-card-head">
+    <div class="conn-card-head card-head">
       <div>
         <h3 class="card-title" id="connectivity-setup-title">Run setup</h3>
-        <p class="muted conn-card-hint">
+        <p class="muted conn-card-hint card-hint">
           Choose the nodes to include, then tune how the pings are sent.
         </p>
       </div>
@@ -82,7 +82,7 @@
 
   <section class="card conn-status-card" id="connectivity-status-card"
            aria-labelledby="connectivity-status-title" hidden>
-    <div class="conn-card-head">
+    <div class="conn-card-head card-head">
       <h3 class="card-title" id="connectivity-status-title">Run status</h3>
       <span class="conn-status-text" id="connectivity-status" role="status" aria-live="polite">Idle</span>
     </div>
@@ -91,7 +91,7 @@
          aria-label="Connectivity check in progress" hidden>
       <span class="conn-progress-bar"></span>
     </div>
-    <p class="muted conn-empty" id="connectivity-empty">
+    <p class="muted conn-empty empty-state" id="connectivity-empty">
       No connectivity matrix yet. Select at least two nodes and run the check.
     </p>
     <div class="conn-export-row">
@@ -101,10 +101,10 @@
   </section>
 
   <section class="card conn-heatmap-card" aria-labelledby="connectivity-heatmap-title">
-    <div class="conn-card-head">
+    <div class="conn-card-head card-head">
       <div>
         <h3 class="card-title" id="connectivity-heatmap-title">Packet loss heatmap</h3>
-        <p class="muted conn-card-hint">
+        <p class="muted conn-card-hint card-hint">
           Rows are sources, columns are destinations. Cells show packet loss and average RTT; hover for details.
         </p>
       </div>
