@@ -400,6 +400,12 @@
   background: #182230;
 }
 
+.topo-page .button.secondary:disabled:hover {
+  border-color: var(--border-subtle);
+  background: #101823;
+  color: var(--muted);
+}
+
 .topo-page select:disabled {
   cursor: not-allowed;
   opacity: 0.55;

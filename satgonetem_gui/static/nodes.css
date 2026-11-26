@@ -385,9 +385,6 @@
   overflow-wrap: anywhere;
 }
 
-.path-msg.error {
-  color: var(--bad);
-}
 
 .path-summary {
   margin: 2px 0 0;

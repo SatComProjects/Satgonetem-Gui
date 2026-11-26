@@ -338,3 +338,16 @@
   line-height: 1.5;
 }
 
+/* Responsive head scale (restored after the base.css promotion) -------------- */
+@media (max-width: 760px) {
+  .exp-page-head {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .exp-page-head {
+    padding: 18px;
+    border-radius: 14px;
+  }
+}

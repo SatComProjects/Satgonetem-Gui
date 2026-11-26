@@ -74,9 +74,6 @@
   overflow-wrap: anywhere;
 }
 
-.topo-msg.error {
-  color: var(--bad);
-}
 
 .topo-summary {
   margin: 0 0 4px;

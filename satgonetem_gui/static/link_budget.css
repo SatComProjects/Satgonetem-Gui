@@ -485,7 +485,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .lb-run-btn {
+  .lb-page .lb-run-btn {
     margin-top: 18px;
   }
 

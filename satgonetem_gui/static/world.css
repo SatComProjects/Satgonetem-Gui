@@ -305,9 +305,6 @@
     overflow-wrap: anywhere;
   }
 
-  .path-world-msg.error {
-    color: var(--bad);
-  }
 
   .path-world-summary {
     margin: 2px 0 0;

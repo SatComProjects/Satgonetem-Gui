@@ -458,16 +458,23 @@ not import those dependency internals.
   `.page-eyebrow`, `.page-title`, `.page-lede`, `.status-msg`/`.is-error`,
   `.toolbar`, `.data-table`, `.card-head`, `.empty-state`, shared
   buttons/scroll panels, and responsive gutters.
-- Refactored all page stylesheets to consume the shared primitives and removed
-  duplicated generic rules; page-specific visual accents stay with their pages.
+- Refactored the seven page stylesheets that duplicated page chrome
+  (`experiments`, `topology_graph`, `connectivity`, `coverage`,
+  `traffic_matrix`, `nodes`, `link_budget`) to consume the shared primitives and
+  removed duplicated generic rules; page-specific visual accents stay with
+  their pages.
 - Split the two largest page stylesheets along their component sections:
   `experiments.css` + `experiments_runs.css` + `experiments_detail.css` +
   `experiments_compare.css`, and `topology_graph.css` +
   `topology_graph_panels.css`, so every production stylesheet is under 1,000
   lines and the named target files are under 450 lines.
-- Verified zero visual change: full-page screenshots of the 14 deterministic
-  pages are pixel-identical before/after, including 760/420 px responsive
-  checks.
+- Verified zero visual change against a pre-refactor checkout in a separate
+  worktree: all 13 real page routes are pixel-identical at 1280 px (only
+  environment-specific text differs, such as the configured save-root path and
+  the monitor's live pulse), and the seven refactored pages are pixel-identical
+  at 760/560/420 px. State styling that screenshots cannot cover was checked
+  with computed-style assertions: page-head padding at the 760/560 breakpoints,
+  disabled compare-button colours, and disabled secondary hover.
 
 ## Test strategy
 
