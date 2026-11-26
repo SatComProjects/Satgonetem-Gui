@@ -22,12 +22,13 @@ class APIError(Exception):
         self.message = message
 
 
-def _error_response(
+def error_response(
     status_code: int,
     message: str,
     details=None,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
+    """Build one response using the shared API error envelope."""
     body = ErrorResponse(error=message, details=details)
     return JSONResponse(
         status_code=status_code,
@@ -41,7 +42,7 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(APIError)
     async def handle_api_error(_request: Request, exc: APIError) -> JSONResponse:
-        return _error_response(exc.status_code, exc.message)
+        return error_response(exc.status_code, exc.message)
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(
@@ -55,7 +56,7 @@ def install_error_handlers(app: FastAPI) -> None:
             }
             for error in exc.errors()
         ]
-        return _error_response(
+        return error_response(
             422,
             "Invalid request.",
             jsonable_encoder(details),
@@ -66,9 +67,9 @@ def install_error_handlers(app: FastAPI) -> None:
         _request: Request, exc: StarletteHTTPException
     ) -> JSONResponse:
         message = str(exc.detail) if exc.detail else "Request failed."
-        return _error_response(exc.status_code, message, headers=exc.headers)
+        return error_response(exc.status_code, message, headers=exc.headers)
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(_request: Request, exc: Exception) -> JSONResponse:
         logger.exception("Unhandled API error.", exc_info=exc)
-        return _error_response(500, "Internal server error.")
+        return error_response(500, "Internal server error.")

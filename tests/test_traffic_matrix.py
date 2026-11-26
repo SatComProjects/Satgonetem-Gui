@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from satgonetem_gui.errors import APIError
 from satgonetem_gui.schemas import TrafficMatrixRequest
-from satgonetem_gui.services.traffic_matrix_service import TrafficMatrixService
+from satgonetem_gui.services.traffic_matrix_service import MatrixJob, TrafficMatrixService
 
 
 class FakeMatrixTopology:
@@ -157,6 +157,96 @@ def test_capacity_and_unknown_job() -> None:
     with pytest.raises(APIError) as error:
         service.status("missing")
     assert error.value.status_code == 404
+
+
+def test_thread_start_failure_finalizes_the_job(monkeypatch) -> None:
+    """A worker that never starts must not stay ``running`` and hold a capacity slot."""
+    block = threading.Event()
+    service, _topology, _traffic = _service(FakeMatrixTraffic(block=block))
+    original_start = threading.Thread.start
+    starts = {"count": 0}
+
+    def flaky_start(thread: threading.Thread) -> None:
+        starts["count"] += 1
+        if starts["count"] == 1:
+            raise RuntimeError("can't start new thread")
+        original_start(thread)
+
+    monkeypatch.setattr(threading.Thread, "start", flaky_start)
+
+    failed = service.start(TrafficMatrixRequest(nodes=["Gnd0", "Gnd1"]))
+    failed_status = service.status(failed)
+
+    assert failed_status["status"] == "error"
+    assert failed_status["errors"]
+    assert failed_status["finished_at"]
+
+    try:
+        second = service.start(TrafficMatrixRequest(nodes=["Gnd0", "Gnd1"], timeout_s=5))
+        third = service.start(TrafficMatrixRequest(nodes=["Gnd0", "Gnd1"], timeout_s=5))
+    finally:
+        block.set()
+
+    assert second != third
+    _wait(service, second)
+    _wait(service, third)
+
+
+def test_pair_timeout_cancels_the_underlying_flow() -> None:
+    """A timed-out pair must stop its live iperf3 flow instead of leaking it."""
+    block = threading.Event()
+    traffic = FakeMatrixTraffic(block=block)
+    cancelled: list[str] = []
+
+    def cancel(job_id: str) -> None:
+        cancelled.append(job_id)
+
+    traffic.cancel = cancel
+    service, _topology, _traffic = _service(traffic)
+    job = MatrixJob(
+        job_id="mx-test",
+        nodes=["Gnd0", "Gnd1"],
+        duration_s=1,
+        concurrency=1,
+        timeout_s=0.02,
+        generation=1,
+    )
+
+    result = service._run_pair(job, "Gnd0", "Gnd1")
+
+    assert result["status"] == "error"
+    assert "timed out" in result["error"].lower()
+    assert cancelled == ["j0"]
+
+
+def test_pair_timeout_tolerates_an_already_finished_flow() -> None:
+    """A 409 from cancel means the flow finished first and must not mask the timeout."""
+
+    class CancelConflictTraffic(FakeMatrixTraffic):
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            self.cancelled: list[str] = []
+
+        def cancel(self, job_id: str) -> None:
+            self.cancelled.append(job_id)
+            raise APIError(409, "Traffic job is already finished.")
+
+    traffic = CancelConflictTraffic(block=threading.Event())
+    service, _topology, _traffic = _service(traffic)
+    job = MatrixJob(
+        job_id="mx-test",
+        nodes=["Gnd0", "Gnd1"],
+        duration_s=1,
+        concurrency=1,
+        timeout_s=0.02,
+        generation=1,
+    )
+
+    result = service._run_pair(job, "Gnd0", "Gnd1")
+
+    assert result["status"] == "error"
+    assert "timed out" in result["error"].lower()
+    assert traffic.cancelled == ["j0"]
 
 
 def test_export_csv_and_json() -> None:

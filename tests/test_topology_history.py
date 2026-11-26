@@ -1,5 +1,7 @@
 """Unit tests for bounded topology snapshot history and comparison."""
 
+import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -42,7 +44,12 @@ class FakeHistoryTopology:
         }
 
     def context(self):
-        return SimpleNamespace(current_time_step=self.step, current_time=self.time), self.generation
+        # Deliberately opaque: the service must not read raw core attributes
+        # such as ``current_time_step`` from the topology object.
+        return SimpleNamespace(), self.generation
+
+    def status(self):
+        return {"current_step": self.step, "current_time": self.time}
 
     def nodes(self):
         return list(self.nodes_data)
@@ -68,6 +75,64 @@ def test_record_and_dedupe_by_step() -> None:
     assert second["recorded"] is False
     assert second["reason"] == "step unchanged"
     assert len(service.list_snapshots()["snapshots"]) == 1
+
+
+def test_record_uses_topology_status_not_raw_topology_attributes() -> None:
+    """Step and time come from the service boundary, not core object internals."""
+    service, topology = _service()
+    topology.step = 7
+
+    result = service.record()
+
+    assert result["recorded"] is True
+    assert result["step"] == 7
+    assert service.list_snapshots()["snapshots"][0]["time"] == "T0"
+
+
+def test_concurrent_records_store_a_step_once() -> None:
+    """Overlapping polls must not append duplicate snapshots for one step."""
+    topology = FakeHistoryTopology()
+    service = TopologyHistoryService(topology)
+    original_nodes = topology.nodes
+
+    def slow_nodes():
+        time.sleep(0.05)
+        return original_nodes()
+
+    topology.nodes = slow_nodes
+    threads = [threading.Thread(target=service.record) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert len(service.list_snapshots()["snapshots"]) == 1
+
+
+def test_record_reads_nodes_and_links_without_holding_the_lock() -> None:
+    """Expensive topology reads must not serialize every other history request."""
+    topology = FakeHistoryTopology()
+    service = TopologyHistoryService(topology)
+    original_nodes = topology.nodes
+    original_links = topology.links
+    probes: list[tuple[str, bool]] = []
+
+    def probe(kind, read):
+        def wrapped():
+            acquired = service._lock.acquire(blocking=False)
+            probes.append((kind, acquired))
+            if acquired:
+                service._lock.release()
+            return read()
+
+        return wrapped
+
+    topology.nodes = probe("nodes", original_nodes)
+    topology.links = probe("links", original_links)
+
+    service.record()
+
+    assert probes == [("nodes", True), ("links", True)]
 
 
 def test_compare_reports_added_removed_and_changed_links() -> None:
