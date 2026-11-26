@@ -14,8 +14,10 @@ from .adapters.coverage_adapter import SatGoNetemCoverageAdapter
 from .adapters.environment_doctor import LocalEnvironmentDoctor
 from .adapters.experiment_adapter import SatGoNetemExperimentAdapter
 from .adapters.link_budget_adapter import SatGoNetemLinkBudgetAdapter
-from .adapters.satgonetem_topology import SatGoNetemTopologyAdapter
+from .adapters.network_adapter import NetworkAdapter
+from .adapters.project_adapter import ProjectAdapter
 from .adapters.satgonetem_traffic import SatGoNetemTrafficAdapter
+from .adapters.topology_reader import TopologyReaderAdapter
 from .config import Settings, load_settings
 from .errors import error_response, install_error_handlers
 from .resources import GROUND_STATIONS_DIR
@@ -149,21 +151,23 @@ def _install_request_guards(app: FastAPI, hosts: list[str]) -> None:
 def build_services(settings: Settings) -> ApplicationServices:
     """Build the production service graph for one application instance."""
     runtime = RuntimeState()
-    topology_adapter = SatGoNetemTopologyAdapter(settings)
+    project_adapter = ProjectAdapter(settings)
+    topology_reader = TopologyReaderAdapter()
+    network_adapter = NetworkAdapter()
     traffic_adapter = SatGoNetemTrafficAdapter()
 
     topology = TopologyService(
         runtime.project,
-        topology_adapter,
-        usage_reader=topology_adapter,
+        topology_reader,
+        usage_reader=topology_reader,
     )
     topology_export = TopologyExportService(topology)
     topology_history = TopologyHistoryService(topology)
-    addressability = AddressabilityService(topology, topology_adapter)
-    simulation = SimulationService(topology, topology_adapter)
+    addressability = AddressabilityService(topology, network_adapter)
+    simulation = SimulationService(topology, network_adapter)
     project = ProjectService(
         runtime,
-        topology_adapter,
+        project_adapter,
         settings,
         GROUND_STATIONS_DIR,
         network_running=topology.network_running,
@@ -172,14 +176,14 @@ def build_services(settings: Settings) -> ApplicationServices:
     catalog = ProjectCatalogService(
         runtime,
         project,
-        topology_adapter,
+        project_adapter,
         settings,
     )
-    routing = RoutingService(topology, topology_adapter, reader=topology_adapter)
+    routing = RoutingService(topology, network_adapter, reader=topology_reader)
     traffic = TrafficService(topology, traffic_adapter)
     traffic_matrix = TrafficMatrixService(topology, traffic)
     preflight = PreflightService(LocalEnvironmentDoctor(settings))
-    connectivity_service = ConnectivityService(topology, topology_adapter)
+    connectivity_service = ConnectivityService(topology, network_adapter)
     coverage_service = CoverageService(topology, SatGoNetemCoverageAdapter())
     experiment_service = ExperimentService(
         settings,

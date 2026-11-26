@@ -50,6 +50,34 @@ class OperationResponse(BaseModel):
     ok: bool = True
 
 
+class FileDownloadResponse(BaseModel):
+    """Downloadable export content shared by every file download endpoint."""
+
+    ok: bool = True
+    filename: str
+    content: str
+    content_type: str = Field(default="text/csv")
+
+
+class JobStartResponse(BaseModel):
+    """Identifier of a started background job."""
+
+    ok: bool = True
+    job_id: str
+
+
+# Compatibility aliases: every download endpoint shares one wire shape.
+TopologyExportResponse = FileDownloadResponse
+TrafficMatrixExportResponse = FileDownloadResponse
+ConnectivityExportResponse = FileDownloadResponse
+ExperimentArtifactResponse = FileDownloadResponse
+
+# Compatibility aliases: traffic, matrix, and connectivity starts share a shape.
+TrafficStartResponse = JobStartResponse
+TrafficMatrixStartResponse = JobStartResponse
+ConnectivityStartResponse = JobStartResponse
+
+
 class ProjectCreateRequest(BaseModel):
     """Form payload for creating a constellation project."""
 
@@ -415,15 +443,6 @@ class TopologyHealthResponse(BaseModel):
     checks: list[TopologyHealthCheck]
 
 
-class TopologyExportResponse(BaseModel):
-    """Downloadable serialized topology content."""
-
-    ok: bool = True
-    filename: str
-    content: str
-    content_type: str
-
-
 class TopologySnapshotSummary(BaseModel):
     """One recorded topology step."""
 
@@ -477,24 +496,14 @@ class TopologyLinkChange(BaseModel):
     changes: list[str]
 
 
-class TopologyCompareMeta(BaseModel):
-    """Metadata for one side of a comparison."""
-
-    step: int
-    time: str | None = None
-    recorded_at: str
-    node_count: int
-    link_count: int
-
-
 class TopologyCompareResponse(BaseModel):
     """Added, removed, and changed topology elements between two steps."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     ok: bool = True
-    from_snapshot: TopologyCompareMeta = Field(alias="from")
-    to_snapshot: TopologyCompareMeta = Field(alias="to")
+    from_snapshot: TopologySnapshotSummary = Field(alias="from")
+    to_snapshot: TopologySnapshotSummary = Field(alias="to")
     added_links: list[TopologyLinkDiff] = Field(default_factory=list)
     removed_links: list[TopologyLinkDiff] = Field(default_factory=list)
     changed_links: list[TopologyLinkChange] = Field(default_factory=list)
@@ -515,13 +524,6 @@ class TrafficNodesResponse(BaseModel):
 
     ok: bool = True
     nodes: list[TrafficNode]
-
-
-class TrafficStartResponse(BaseModel):
-    """Started traffic job."""
-
-    ok: bool = True
-    job_id: str
 
 
 class TrafficStatusResponse(BaseModel):
@@ -550,13 +552,6 @@ class TrafficMatrixRequest(BaseModel):
     timeout_s: float = Field(default=30.0, ge=5.0, le=120.0)
 
 
-class TrafficMatrixStartResponse(BaseModel):
-    """Identifier of the started matrix job."""
-
-    ok: bool = True
-    job_id: str
-
-
 class TrafficMatrixPairResult(BaseModel):
     """One ordered pair in a throughput matrix."""
 
@@ -581,15 +576,6 @@ class TrafficMatrixStatusResponse(BaseModel):
     started_at: str
     finished_at: str | None = None
     errors: list[str] = Field(default_factory=list)
-
-
-class TrafficMatrixExportResponse(BaseModel):
-    """Download envelope for matrix CSV/JSON."""
-
-    ok: bool = True
-    filename: str
-    content: str
-    content_type: str
 
 
 class Iperf3Request(BaseModel):
@@ -689,13 +675,6 @@ class ConnectivityStartRequest(BaseModel):
     flow_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
 
 
-class ConnectivityStartResponse(BaseModel):
-    """Started connectivity job."""
-
-    ok: bool = True
-    job_id: str
-
-
 class ConnectivityResultItem(BaseModel):
     """One ordered source/destination connectivity result."""
 
@@ -733,15 +712,6 @@ class ConnectivityStatusResponse(BaseModel):
     started_at: str | None = None
     finished_at: str | None = None
     elapsed_ms: int | None = None
-
-
-class ConnectivityExportResponse(BaseModel):
-    """Downloadable connectivity matrix content."""
-
-    ok: bool = True
-    filename: str
-    content: str
-    content_type: str = "text/csv"
 
 
 class CoverageRequest(BaseModel):
@@ -826,15 +796,6 @@ class ExperimentRunListResponse(BaseModel):
 
     ok: bool = True
     runs: list[ExperimentRunSummary]
-
-
-class ExperimentArtifactResponse(BaseModel):
-    """One stored experiment artifact and its media type."""
-
-    ok: bool = True
-    filename: str
-    content: str
-    content_type: str
 
 
 class ExperimentMetricsResponse(BaseModel):
