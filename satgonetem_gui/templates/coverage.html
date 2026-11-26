@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/coverage.css">
+  <link rel="stylesheet" href="/static/coverage.css?v=1">
 {% endblock %}
 
 {% block content %}
-<div class="cov-page">
-  <header class="cov-page-head">
-    <p class="cov-eyebrow">Constellation analysis</p>
-    <h2 class="cov-title">Coverage Analytics</h2>
-    <p class="muted cov-lede">Measure the fraction of Earth above the elevation mask at the current simulation step, per shell and per ground station.</p>
+<div class="cov-page page-frame">
+  <header class="cov-page-head page-head">
+    <p class="cov-eyebrow page-eyebrow">Constellation analysis</p>
+    <h2 class="cov-title page-title">Coverage Analytics</h2>
+    <p class="muted cov-lede page-lede">Measure the fraction of Earth above the elevation mask at the current simulation step, per shell and per ground station.</p>
   </header>
-  <p class="muted cov-msg" id="coverage-msg" aria-live="polite"></p>
+  <p class="muted cov-msg status-msg" id="coverage-msg" aria-live="polite"></p>
   <div class="cov-layout">
-    <section class="card cov-controls-card" aria-labelledby="coverage-controls-title">
+    <section class="card card-accent cov-controls-card" aria-labelledby="coverage-controls-title">
       <h3 class="card-title" id="coverage-controls-title">Snapshot settings</h3>
       <div class="cov-field cov-range-field">
         <label for="coverage-elevation">Minimum elevation</label>
@@ -32,10 +32,10 @@
       </div>
       <label class="cov-check"><input type="checkbox" id="coverage-shells" checked> Per-shell breakdown</label>
       <label class="cov-check"><input type="checkbox" id="coverage-stations" checked> Ground-station coverage</label>
-      <button type="button" class="button cov-run-btn" id="coverage-run">Analyze coverage</button>
+      <button type="button" class="button primary cov-run-btn" id="coverage-run">Analyze coverage</button>
       <p class="muted cov-hint">Fine grids over large constellations are rejected; choose a coarser resolution.</p>
     </section>
-    <section class="card cov-results-card" aria-labelledby="coverage-results-title">
+    <section class="card card-accent cov-results-card" aria-labelledby="coverage-results-title">
       <h3 class="card-title" id="coverage-results-title">Coverage</h3>
       <p class="cov-empty" id="coverage-empty">
         <strong>No snapshot yet</strong>
@@ -56,7 +56,7 @@
         </div>
         <div class="cov-section">
           <h4>Ground stations</h4>
-          <div class="cov-table-wrap" id="coverage-stations-table"></div>
+          <div class="cov-table-wrap scroll-panel" id="coverage-stations-table"></div>
           <p class="muted" id="coverage-stations-empty" hidden>No ground stations reported.</p>
         </div>
       </div>

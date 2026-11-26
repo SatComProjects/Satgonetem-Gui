@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/topology_graph.css?v=1">
+  <link rel="stylesheet" href="/static/topology_graph.css?v=3">
+  <link rel="stylesheet" href="/static/topology_graph_panels.css?v=1">
 {% endblock %}
 
 {% block content %}
@@ -34,10 +35,10 @@
     <label class="topo-search-field" for="topo-search">Search
       <input type="search" id="topo-search" placeholder="Name, city, or shell" autocomplete="off">
     </label>
-    <label class="topo-check">
+    <label class="topo-check toolbar-check">
       <input type="checkbox" id="topo-partitions"> Highlight partitions
     </label>
-    <span class="muted topo-count" id="topo-count"></span>
+    <span class="muted topo-count toolbar-count" id="topo-count"></span>
     <span class="muted topo-partition-count" id="topo-partition-count"></span>
   </div>
 
@@ -75,7 +76,7 @@
           </label>
         </div>
         <div class="topo-path-actions">
-          <button type="button" class="button small" id="topo-path-trace" disabled>Trace path</button>
+          <button type="button" class="button small primary" id="topo-path-trace" disabled>Trace path</button>
           <button type="button" class="button small secondary" id="topo-path-clear" disabled>Clear</button>
         </div>
         <p class="muted topo-path-msg status-msg" id="topo-path-msg" aria-live="polite"></p>
@@ -99,7 +100,7 @@
         </div>
         <button type="button" class="button small" id="topo-compare" disabled>Compare steps</button>
         <p class="muted topo-compare-msg status-msg" id="topo-compare-msg" aria-live="polite"></p>
-        <div class="topo-compare-table" id="topo-compare-table"></div>
+        <div class="topo-compare-table scroll-panel" id="topo-compare-table"></div>
       </div>
 
       <section class="topo-inspector" id="topo-inspector" hidden aria-labelledby="topo-inspector-title">

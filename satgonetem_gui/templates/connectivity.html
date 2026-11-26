@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/connectivity.css?v=1">
+  <link rel="stylesheet" href="/static/connectivity.css?v=2">
 {% endblock %}
 
 {% block content %}
@@ -20,7 +20,7 @@
 
   <p class="muted conn-msg status-msg" id="connectivity-msg" aria-live="polite"></p>
 
-  <section class="card conn-setup-card" aria-labelledby="connectivity-setup-title">
+  <section class="card card-accent conn-setup-card" aria-labelledby="connectivity-setup-title">
     <div class="conn-card-head card-head">
       <div>
         <h3 class="card-title" id="connectivity-setup-title">Run setup</h3>
@@ -72,7 +72,7 @@
     </div>
 
     <div class="conn-run">
-      <button type="button" class="button conn-start" id="connectivity-start"
+      <button type="button" class="button primary conn-start" id="connectivity-start"
               aria-describedby="connectivity-capacity-note">Run connectivity matrix</button>
       <p class="muted conn-capacity" id="connectivity-capacity-note">
         Runs are capped at 32 nodes and 2,000 ordered pairs.
@@ -80,7 +80,7 @@
     </div>
   </section>
 
-  <section class="card conn-status-card" id="connectivity-status-card"
+  <section class="card card-accent conn-status-card" id="connectivity-status-card"
            aria-labelledby="connectivity-status-title" hidden>
     <div class="conn-card-head card-head">
       <h3 class="card-title" id="connectivity-status-title">Run status</h3>
@@ -120,7 +120,7 @@
         </span>
       </div>
     </div>
-    <div class="conn-heatmap-wrap" id="connectivity-heatmap-wrap" role="region"
+    <div class="conn-heatmap-wrap scroll-panel" id="connectivity-heatmap-wrap" role="region"
          aria-label="Packet loss matrix, scrollable" tabindex="0">
       <div id="connectivity-heatmap" class="conn-heatmap"></div>
     </div>

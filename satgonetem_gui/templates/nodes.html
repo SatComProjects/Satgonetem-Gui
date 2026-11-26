@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block head %}
-  <link rel="stylesheet" href="/static/nodes.css">
+  <link rel="stylesheet" href="/static/nodes.css?v=1">
   <link rel="stylesheet" href="/static/topology_health.css">
 {% endblock %}
 
@@ -11,7 +11,7 @@
 <div id="nodes-msg" class="muted" style="margin-bottom: 16px;" aria-live="polite"></div>
 
 <section class="card path-card" id="path-card">
-  <div class="path-card-head">
+  <div class="path-card-head card-head">
     <h3 class="card-title">Forwarding Path</h3>
     <span class="path-source-note">Routing-graph snapshot · not the live forwarding table</span>
   </div>
@@ -25,8 +25,8 @@
   </form>
   <p class="muted path-msg" id="path-msg" aria-live="polite"></p>
   <p class="path-summary" id="path-summary"></p>
-  <div class="path-table-wrap" id="path-table-wrap" hidden>
-    <table class="path-table">
+  <div class="path-table-wrap scroll-panel" id="path-table-wrap" hidden>
+    <table class="path-table data-table">
       <thead>
         <tr>
           <th scope="col">Hop</th>
@@ -64,7 +64,7 @@
   <p class="muted" id="topology-health-empty" hidden>No structural findings.</p>
 </section>
 
-<div class="node-toolbar" id="node-toolbar" role="group" aria-label="Filter nodes">
+<div class="node-toolbar toolbar" id="node-toolbar" role="group" aria-label="Filter nodes">
   <label class="node-search-field" for="node-search">Search
     <input type="search" id="node-search" placeholder="Name or city" autocomplete="off">
   </label>
@@ -82,8 +82,8 @@
       <option value="type">Type</option>
     </select>
   </label>
-  <label class="node-fav-filter"><input type="checkbox" id="node-favorites-only"> Favorites only</label>
-  <span class="muted node-count" id="node-count" aria-live="polite"></span>
+  <label class="node-fav-filter toolbar-check"><input type="checkbox" id="node-favorites-only"> Favorites only</label>
+  <span class="muted node-count toolbar-count" id="node-count" aria-live="polite"></span>
 </div>
 
 <div class="nodes-grid">
