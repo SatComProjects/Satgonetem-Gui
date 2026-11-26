@@ -6,11 +6,14 @@ PACKAGE = Path(__file__).resolve().parent.parent / "satgonetem_gui"
 BASE_TEMPLATE = PACKAGE / "templates" / "base.html"
 TRAFFIC_MODULE = PACKAGE / "static" / "traffic.js"
 QUEUE_MODULE = PACKAGE / "static" / "queue.js"
+HISTORY_PANEL_MODULE = PACKAGE / "static" / "history_panel.js"
+TRAFFIC_PLOTS_MODULE = PACKAGE / "static" / "traffic_plots.js"
 
-QUEUE_SCRIPT = "/static/queue.js?v=25"
-QUEUE_IMPORT = "./queue.js?v=25"
+QUEUE_SCRIPT = "/static/queue.js?v=26"
+QUEUE_IMPORT = "./queue.js?v=26"
 QUEUE_MODEL_IMPORT = "./queue_model.js?v=4"
 HISTORY_MODEL_IMPORT = "./history_model.js?v=1"
+TRAFFIC_PLOTS_MODEL_IMPORT = "./traffic_plots_model.js?v=1"
 PATH_MODEL_IMPORT = "./path_model.js?v=1"
 LINKS_MODEL_IMPORT = "./links_model.js?v=1"
 WORLD_TEMPLATE = PACKAGE / "templates" / "world.html"
@@ -132,11 +135,14 @@ def test_preflight_pages_import_the_versioned_ui_and_model() -> None:
 
 
 def test_queue_imports_the_versioned_history_and_queue_models() -> None:
-    """Queue module changes stay cache-busted alongside their pure models."""
-    content = QUEUE_MODULE.read_text(encoding="utf-8")
+    """The split queue modules stay cache-busted alongside their pure models."""
+    queue = QUEUE_MODULE.read_text(encoding="utf-8")
+    history = HISTORY_PANEL_MODULE.read_text(encoding="utf-8")
+    plots = TRAFFIC_PLOTS_MODULE.read_text(encoding="utf-8")
 
-    assert f'from "{HISTORY_MODEL_IMPORT}"' in content
-    assert f'from "{QUEUE_MODEL_IMPORT}"' in content
+    assert f'from "{QUEUE_MODEL_IMPORT}"' in queue
+    assert f'from "{HISTORY_MODEL_IMPORT}"' in history
+    assert f'from "{TRAFFIC_PLOTS_MODEL_IMPORT}"' in plots
 
 
 def test_addressability_controls_import_the_versioned_model() -> None:
